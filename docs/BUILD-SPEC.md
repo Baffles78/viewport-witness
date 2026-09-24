@@ -9,8 +9,9 @@ This build is complete when it works locally in free test mode, is container-rea
 ## Naming and addresses
 
 - Service name: ViewportWitness
-- Production payment network: Base mainnet (`eip155:8453`)
-- Production asset: native USDC on Base
+- Production payment networks: Base mainnet (`eip155:8453`) and, when separately enabled and
+  reviewed, Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`)
+- Production asset: native USDC on each enabled network
 - Public revenue destination: `0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400`
 - Public test wallet address: `0xa0c0bca74d9edf0d3da3449b5c9bf785e25633ce`
 - The test address is documentation/evidence only. No signer or private key belongs in the service.
@@ -74,13 +75,20 @@ Apply the target policy before navigation and to every redirect and browser subr
 
 ## Payments
 
-Integrate the current official x402 TypeScript server packages using a facilitator client. The production receiver needs only `PAY_TO`; it must not require a receiver private key.
+Integrate the current official x402 TypeScript server packages using a facilitator client. The
+production receivers need only public `PAY_TO`, `SOLANA_TEST_PAY_TO`, and
+`SOLANA_REVENUE_PAY_TO` destinations; the service must not require receiver private keys.
 
 Payment modes:
 
 - `test`: no payment verification or settlement; local-only by default and clearly labeled.
-- `testnet`: Base Sepolia when facilitator credentials are supplied; never claim mainnet revenue.
-- `production`: Base mainnet, exact `$0.08`, revenue address above. This mode must refuse to start unless `ENABLE_MAINNET_PAYMENTS=true` and required facilitator credentials are present.
+- `testnet`: Base Sepolia plus optional Solana Devnet when facilitator credentials are supplied;
+  never claim mainnet revenue.
+- `production`: Base mainnet plus optional Solana mainnet, exact `$0.08`, and the reviewed revenue
+  addresses. This mode must refuse to start unless `ENABLE_MAINNET_PAYMENTS=true` and required
+  facilitator credentials are present. Solana must remain absent unless
+  `ENABLE_SOLANA_PAYMENTS=true`; the application must select the test or revenue destination from
+  `PAYMENT_MODE` rather than one shared Solana address variable.
 
 Do not invent a successful payment response. Failed or unavailable verification must fail closed. Keep facilitator credentials in environment variables only. `.env.example` contains names and safe defaults, never values.
 
@@ -102,4 +110,3 @@ At minimum:
 - container configuration validation where Docker is available
 
 Keep test artifacts out of Git. Record exact commands and results in `docs/BUILD-EVIDENCE.md`.
-

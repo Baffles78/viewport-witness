@@ -10,11 +10,14 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     DB_PATH: './data/vw.db',
     PAYMENT_MODE: 'test',
     ENABLE_MAINNET_PAYMENTS: false,
+    ENABLE_SOLANA_PAYMENTS: false,
     FACILITATOR_URL: undefined,
     CDP_API_KEY_ID: undefined,
     CDP_API_KEY_SECRET: undefined,
     CUSTOMER_HASH_SECRET: undefined,
     PAY_TO: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
+    SOLANA_TEST_PAY_TO: 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS',
+    SOLANA_REVENUE_PAY_TO: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
     PRICE_USDC: '0.08',
     RETENTION_DAYS: 7,
     MAX_STORAGE_GB: 10,
@@ -57,6 +60,20 @@ describe('paid-mode configuration', () => {
       validateConfig(
         makeConfig({
           PAYMENT_MODE: 'testnet',
+          CDP_API_KEY_ID: 'organizations/org/apiKeys/key',
+          CDP_API_KEY_SECRET: 'secret',
+          CUSTOMER_HASH_SECRET: '0123456789abcdef0123456789abcdef',
+        }),
+      ),
+    ).not.toThrow()
+  })
+
+  it('accepts separately configured Solana test and revenue destinations', () => {
+    expect(() =>
+      validateConfig(
+        makeConfig({
+          PAYMENT_MODE: 'testnet',
+          ENABLE_SOLANA_PAYMENTS: true,
           CDP_API_KEY_ID: 'organizations/org/apiKeys/key',
           CDP_API_KEY_SECRET: 'secret',
           CUSTOMER_HASH_SECRET: '0123456789abcdef0123456789abcdef',

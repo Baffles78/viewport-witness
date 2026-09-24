@@ -13,7 +13,8 @@ errors, failed network requests, layout overflow, and keyboard/focus observation
 ## Payment
 
 - Cost: 0.08 USDC per report
-- Network: Base mainnet (eip155:8453) for production; Base Sepolia (eip155:84532) for testnet
+- Networks: Base mainnet for production or Base Sepolia for testnet; a Solana rail is available
+  only when it appears in the endpoint's live 402 challenge and `/.well-known/x402` response
 - Protocol: x402 upfront — send a valid PAYMENT-SIGNATURE header before the job is created
 - Payment discovery: GET https://qa.honeygate.app/.well-known/x402
 
@@ -52,7 +53,8 @@ Response (202 Accepted):
 2. On success: 202 with job object.
 3. On missing/invalid payment: 402 with PAYMENT-REQUIRED header containing requirements.
 
-See GET https://qa.honeygate.app/.well-known/x402 for price, network, and payTo address.
+See GET https://qa.honeygate.app/.well-known/x402 for the current price and every enabled
+network/payTo choice.
 
 ## Polling
 

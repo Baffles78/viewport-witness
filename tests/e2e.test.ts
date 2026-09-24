@@ -130,7 +130,7 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
     const response = await fetch(`http://127.0.0.1:${appPort}/`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { service: string }
-    expect(body.service).toBe('ViewportWitness')
+    expect(body.service).toBe('ViewportWitness by Apex Labs')
   })
 
   it('returns health at GET /health', async () => {

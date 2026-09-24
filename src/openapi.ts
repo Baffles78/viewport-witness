@@ -124,7 +124,8 @@ export const openApiSpec = {
         description:
           'Submit a public HTTPS URL for browser QA. Returns a job ID for polling. ' +
           'In test mode, no payment is required. In production mode, include a PAYMENT-SIGNATURE header ' +
-          'with a valid $0.08 USDC payment on Base mainnet.',
+          'with a valid $0.08 USDC payment using one of the networks in the live 402 challenge and ' +
+          '/.well-known/x402 discovery response.',
         parameters: [
           {
             name: 'Idempotency-Key',
@@ -321,6 +322,20 @@ export const openApiSpec = {
           asset: { type: 'string', example: 'USDC' },
           network: { type: 'string', example: 'base (eip155:8453)' },
           payTo: { type: 'string', example: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400' },
+          accepts: {
+            type: 'array',
+            description: 'Every payment rail currently accepted by the service',
+            items: {
+              type: 'object',
+              required: ['scheme', 'network', 'asset', 'payTo'],
+              properties: {
+                scheme: { type: 'string', enum: ['exact'] },
+                network: { type: 'string', example: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' },
+                asset: { type: 'string', enum: ['USDC'] },
+                payTo: { type: 'string' },
+              },
+            },
+          },
           testMode: { type: 'boolean' },
           endpoint: { type: 'string', example: 'POST https://qa.honeygate.app/v1/checks' },
           method: { type: 'string', example: 'POST' },

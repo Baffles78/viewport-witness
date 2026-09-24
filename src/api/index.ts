@@ -44,6 +44,9 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
   // Payment middleware (applied to POST /v1/checks in the checks router)
   const paymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.PRICE_USDC,
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,

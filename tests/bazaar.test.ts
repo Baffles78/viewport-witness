@@ -14,7 +14,15 @@ import { vi, afterEach, describe, it, expect } from 'vitest'
 vi.mock('@coinbase/cdp-sdk/x402', () => ({
   createCdpFacilitatorClient: vi.fn(() => ({
     getSupported: vi.fn(async () => ({
-      kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:84532' }],
+      kinds: [
+        { x402Version: 2, scheme: 'exact', network: 'eip155:84532' },
+        {
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4' },
+        },
+      ],
       extensions: [],
     })),
   })),
@@ -50,12 +58,14 @@ afterEach(async () => {
   )
 })
 
-async function makeTestnetApp(): Promise<{ port: number }> {
+async function makeTestnetApp(enableSolana = false): Promise<{ port: number }> {
   const middleware = createPaymentMiddleware({
     payTo: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
     priceUsdc: '0.08',
     mode: 'testnet',
     enableMainnet: false,
+    enableSolana,
+    solanaPayTo: enableSolana ? 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS' : undefined,
     facilitatorUrl: 'https://api.cdp.coinbase.com/platform/v2/x402',
     cdpApiKeyId: 'test-key-id',
     cdpApiKeySecret: 'test-key-secret',
@@ -136,6 +146,21 @@ describe('Bazaar discovery — 402 challenge metadata', () => {
     expect(combined).toContain('84532')
   })
 
+  it('dual-rail 402 challenge contains both Base Sepolia and Solana Devnet', async () => {
+    const { port } = await makeTestnetApp(true)
+    const res = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    })
+
+    expect(res.status).toBe(402)
+    const combined = await challengeText(res)
+    expect(combined).toContain('eip155:84532')
+    expect(combined).toContain('solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1')
+    expect(combined).toContain('AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS')
+  })
+
   it('test mode passes through without 402 — payment mode not regressed', async () => {
     const middleware = createPaymentMiddleware({
       payTo: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
@@ -147,7 +172,12 @@ describe('Bazaar discovery — 402 challenge metadata', () => {
     const app = express()
     app.use(express.json())
     app.post('/v1/checks', middleware, (_req, res) => {
-      res.status(202).json({ id: 'test-id', status: 'queued', pollUrl: '/v1/checks/test-id', paymentMode: 'test' })
+      res.status(202).json({
+        id: 'test-id',
+        status: 'queued',
+        pollUrl: '/v1/checks/test-id',
+        paymentMode: 'test',
+      })
     })
 
     const server = http.createServer(app)

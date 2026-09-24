@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Request, Response, NextFunction } from 'express'
+import { generateKeyPairSigner } from '@solana/kit'
+import { ExactSvmScheme as ExactSvmClient, toClientSvmSigner, USDC_DEVNET_ADDRESS } from '@x402/svm'
 import {
   createPaymentMiddleware,
   customerFingerprint,
@@ -64,6 +66,31 @@ describe('anonymous customer fingerprint', () => {
     expect(customerFingerprint(payment, secret)).toMatch(/^cust_[a-f0-9]{64}$/)
   })
 
+  it('creates a stable HMAC identifier from a verified Solana exact transaction', async () => {
+    const payerSigner = await generateKeyPairSigner()
+    const client = new ExactSvmClient(toClientSvmSigner(payerSigner))
+    const accepted = {
+      scheme: 'exact',
+      network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' as const,
+      asset: USDC_DEVNET_ADDRESS,
+      amount: '80000',
+      payTo: 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS',
+      maxTimeoutSeconds: 60,
+      extra: {
+        feePayer: '2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4',
+        recentBlockhash: '11111111111111111111111111111111',
+        lastValidBlockHeight: '1',
+      },
+    }
+    const payment = await client.createPaymentPayload(2, accepted)
+    const paymentHeader = header({ accepted, payload: payment.payload })
+
+    expect(customerFingerprint(paymentHeader, secret)).toMatch(/^cust_[a-f0-9]{64}$/)
+    expect(customerFingerprint(paymentHeader, secret)).toBe(
+      customerFingerprint(paymentHeader, secret),
+    )
+  })
+
   it('rejects mixed payment variants instead of trusting an unverified payer field', () => {
     const payment = header({
       payload: {
@@ -72,6 +99,12 @@ describe('anonymous customer fingerprint', () => {
       },
     })
     expect(customerFingerprint(payment, secret)).toBeUndefined()
+
+    const mixedSolana = header({
+      accepted: { network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' },
+      payload: { authorization: { from: payer }, transaction: 'not-a-transaction' },
+    })
+    expect(customerFingerprint(mixedSolana, secret)).toBeUndefined()
   })
 
   it('uses the server secret so public wallet enumeration cannot reproduce identifiers', () => {
@@ -86,7 +119,10 @@ describe('anonymous customer fingerprint', () => {
     expect(customerFingerprint('not-base64-json', secret)).toBeUndefined()
     expect(customerFingerprint('x'.repeat(64 * 1024 + 1), secret)).toBeUndefined()
     expect(
-      customerFingerprint(header({ payload: { authorization: { from: 'not-an-address' } } }), secret),
+      customerFingerprint(
+        header({ payload: { authorization: { from: 'not-an-address' } } }),
+        secret,
+      ),
     ).toBeUndefined()
   })
 })
@@ -431,6 +467,35 @@ describe('payment discovery - pricing and network regression', () => {
   it('getPaymentDiscovery preserves payTo address unchanged', () => {
     const discovery = getPaymentDiscovery({ ...baseOpts, mode: 'testnet' })
     expect(discovery.payTo).toBe('0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400')
+  })
+
+  it('advertises Base and Solana together when the second rail is enabled', () => {
+    const discovery = getPaymentDiscovery({
+      ...baseOpts,
+      mode: 'production',
+      enableMainnet: true,
+      enableSolana: true,
+      solanaPayTo: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
+    })
+
+    expect(discovery.accepts).toHaveLength(2)
+    expect(discovery.accepts[0]).toMatchObject({ network: expect.stringContaining('8453') })
+    expect(discovery.accepts[1]).toEqual({
+      scheme: 'exact',
+      network: expect.stringContaining('solana:5eykt4'),
+      asset: 'USDC',
+      payTo: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
+    })
+  })
+
+  it('does not advertise Solana unless the explicit switch is enabled', () => {
+    const discovery = getPaymentDiscovery({
+      ...baseOpts,
+      mode: 'production',
+      enableMainnet: true,
+      solanaPayTo: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
+    })
+    expect(discovery.accepts).toHaveLength(1)
   })
 
   it('testMode flag is true only for test payment mode', () => {

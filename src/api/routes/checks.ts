@@ -136,7 +136,12 @@ export function createChecksRouter(
       // Production mode: payment must have settled
       const paymentResult = (
         req as Request & {
-          paymentResult?: { settled: boolean; mode: string; paymentId?: string; customerId?: string }
+          paymentResult?: {
+            settled: boolean
+            mode: string
+            paymentId?: string
+            customerId?: string
+          }
         }
       ).paymentResult
       if (cfg.PAYMENT_MODE !== 'test' && (!paymentResult || !paymentResult.settled)) {
@@ -148,23 +153,13 @@ export function createChecksRouter(
         return
       }
 
-      const paymentId = paymentResult?.settled
-        ? paymentResult.paymentId
-        : undefined
+      const paymentId = paymentResult?.settled ? paymentResult.paymentId : undefined
       const customerId = paymentResult?.settled ? paymentResult.customerId : undefined
       if (cfg.PAYMENT_MODE !== 'test' && !paymentId) {
         res.status(503).json({
           error: 'payment_identity_unavailable',
           detail: 'The verified payment could not be bound to this job.',
           code: 'payment_identity_unavailable',
-        })
-        return
-      }
-      if (cfg.PAYMENT_MODE !== 'test' && !customerId) {
-        res.status(503).json({
-          error: 'customer_identity_unavailable',
-          detail: 'The verified payer identity could not be bound to this job.',
-          code: 'customer_identity_unavailable',
         })
         return
       }

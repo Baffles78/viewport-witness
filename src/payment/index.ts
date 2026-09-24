@@ -2,8 +2,8 @@
  * x402 payment adapter.
  *
  * Test mode deliberately bypasses payment and never claims settlement. Paid
- * modes use the official x402 v2 packages and request the EVM `upfront` flow,
- * so payment is settled before the job handler may enqueue browser work.
+ * modes use the official x402 v2 packages and request the `upfront` flow on
+ * each enabled rail, so payment settles before the job handler may enqueue work.
  *
  * Testnet and production use Coinbase CDP API key authentication. The official
  * CDP SDK binds a short-lived JWT to each facilitator endpoint. Credentials are
@@ -15,11 +15,16 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { paymentMiddleware } from '@x402/express'
 import { x402ResourceServer } from '@x402/core/server'
+import type { PaymentOption } from '@x402/core/http'
+import type { Network } from '@x402/core/types'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
+import { ExactSvmScheme } from '@x402/svm/exact/server'
 import {
-  bazaarResourceServerExtension,
-  declareDiscoveryExtension,
-} from '@x402/extensions/bazaar'
+  decodeTransactionFromPayload,
+  getTokenPayerFromTransaction,
+  validateSvmAddress,
+} from '@x402/svm'
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 import type { PaymentMode } from '../types.js'
 
 export interface PaymentResult {
@@ -40,6 +45,8 @@ declare global {
 
 export interface PaymentMiddlewareOptions {
   payTo: string
+  solanaPayTo?: string | undefined
+  enableSolana?: boolean | undefined
   priceUsdc: string
   mode: PaymentMode
   enableMainnet: boolean
@@ -56,6 +63,12 @@ export interface PaymentDiscovery {
   asset: string
   network: string
   payTo: string
+  accepts: Array<{
+    scheme: 'exact'
+    network: string
+    asset: 'USDC'
+    payTo: string
+  }>
   facilitatorUrl?: string
   testMode: boolean
   // Crawler-facing discovery fields (present when baseUrl is supplied)
@@ -87,23 +100,48 @@ export function customerFingerprint(
   }
   try {
     const envelope = JSON.parse(Buffer.from(paymentHeader, 'base64').toString('utf8')) as {
+      accepted?: { network?: unknown }
       payload?: {
         authorization?: { from?: unknown }
         permit2Authorization?: { from?: unknown }
+        transaction?: unknown
       }
     }
     const hasAuthorization = envelope.payload?.authorization !== undefined
     const hasPermit2Authorization = envelope.payload?.permit2Authorization !== undefined
-    if (hasAuthorization === hasPermit2Authorization) {
+    const hasSolanaTransaction = envelope.payload?.transaction !== undefined
+    const variantCount =
+      Number(hasAuthorization) + Number(hasPermit2Authorization) + Number(hasSolanaTransaction)
+    if (variantCount !== 1) {
       return undefined
     }
-    const candidate = hasAuthorization
-      ? envelope.payload?.authorization?.from
-      : envelope.payload?.permit2Authorization?.from
-    if (typeof candidate !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(candidate)) {
-      return undefined
+
+    let candidate: string
+    if (hasSolanaTransaction) {
+      if (
+        typeof envelope.accepted?.network !== 'string' ||
+        !envelope.accepted.network.startsWith('solana:') ||
+        typeof envelope.payload?.transaction !== 'string'
+      ) {
+        return undefined
+      }
+      const transaction = decodeTransactionFromPayload({
+        transaction: envelope.payload.transaction,
+      })
+      candidate = getTokenPayerFromTransaction(transaction)
+      if (!validateSvmAddress(candidate)) {
+        return undefined
+      }
+    } else {
+      const evmCandidate = hasAuthorization
+        ? envelope.payload?.authorization?.from
+        : envelope.payload?.permit2Authorization?.from
+      if (typeof evmCandidate !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(evmCandidate)) {
+        return undefined
+      }
+      candidate = evmCandidate.toLowerCase()
     }
-    return `cust_${createHmac('sha256', secret).update(candidate.toLowerCase()).digest('hex')}`
+    return `cust_${createHmac('sha256', secret).update(candidate).digest('hex')}`
   } catch {
     return undefined
   }
@@ -160,6 +198,8 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     cdpApiKeySecret,
     customerHashSecret,
     payTo,
+    solanaPayTo,
+    enableSolana = false,
     priceUsdc,
   } = opts
 
@@ -184,26 +224,54 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     )
   }
 
-  const network = mode === 'production' ? 'eip155:8453' : 'eip155:84532'
+  if (enableSolana && !solanaPayTo) {
+    return unavailable(
+      'payment_not_configured',
+      'A Solana payment destination is required when Solana payments are enabled.',
+    )
+  }
+
+  const network: Network = mode === 'production' ? 'eip155:8453' : 'eip155:84532'
+  const solanaNetwork: Network =
+    mode === 'production'
+      ? 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
+      : 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'
   const facilitator = createCdpFacilitatorClient({
     apiKeyId: cdpApiKeyId,
     apiKeySecret: cdpApiKeySecret,
     ...(facilitatorUrl ? { baseUrl: facilitatorUrl } : {}),
   })
-  const resourceServer = new x402ResourceServer(facilitator)
-    .register(network, new ExactEvmScheme())
-    .registerExtension(bazaarResourceServerExtension)
+  const resourceServer = new x402ResourceServer(facilitator).register(network, new ExactEvmScheme())
+  if (enableSolana) {
+    resourceServer.register(solanaNetwork, new ExactSvmScheme())
+  }
+  resourceServer.registerExtension(bazaarResourceServerExtension)
+
+  const accepts: PaymentOption[] = [
+    {
+      scheme: 'exact' as const,
+      network,
+      payTo,
+      price: `$${priceUsdc}`,
+      // Prevent unpaid browser work if post-handler settlement fails.
+      extra: { paymentFlow: 'upfront' },
+    },
+    ...(enableSolana && solanaPayTo
+      ? [
+          {
+            scheme: 'exact' as const,
+            network: solanaNetwork,
+            payTo: solanaPayTo,
+            price: `$${priceUsdc}`,
+            extra: { paymentFlow: 'upfront' },
+          },
+        ]
+      : []),
+  ]
   const x402 = paymentMiddleware(
     {
       'POST /v1/checks': {
-        accepts: {
-          scheme: 'exact',
-          network,
-          payTo,
-          price: `$${priceUsdc}`,
-          // Prevent unpaid browser work if post-handler settlement fails.
-          extra: { paymentFlow: 'upfront' },
-        },
+        accepts,
         description: 'ViewportWitness browser QA report across three viewports',
         mimeType: 'application/json',
         serviceName: 'ViewportWitness by Apex Labs',
@@ -249,13 +317,31 @@ export function getPaymentDiscovery(
   opts: PaymentMiddlewareOptions,
   baseUrl?: string,
 ): PaymentDiscovery {
+  const baseNetworkId = opts.mode === 'production' ? 'eip155:8453' : 'eip155:84532'
+  const baseNetwork =
+    opts.mode === 'production' ? `base (${baseNetworkId})` : `base-sepolia (${baseNetworkId})`
+  const accepts: PaymentDiscovery['accepts'] = [
+    { scheme: 'exact', network: baseNetworkId, asset: 'USDC', payTo: opts.payTo },
+  ]
+  if (opts.enableSolana && opts.solanaPayTo) {
+    accepts.push({
+      scheme: 'exact',
+      network:
+        opts.mode === 'production'
+          ? 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
+          : 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      asset: 'USDC',
+      payTo: opts.solanaPayTo,
+    })
+  }
   return {
     version: '2',
     paymentRequired: opts.mode !== 'test',
     price: `$${opts.priceUsdc} USDC`,
     asset: 'USDC',
-    network: opts.mode === 'production' ? 'base (eip155:8453)' : 'base-sepolia (eip155:84532)',
+    network: baseNetwork,
     payTo: opts.payTo,
+    accepts,
     ...(opts.facilitatorUrl ? { facilitatorUrl: opts.facilitatorUrl } : {}),
     testMode: opts.mode === 'test',
     ...(baseUrl

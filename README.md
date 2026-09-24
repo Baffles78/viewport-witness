@@ -79,13 +79,17 @@ Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1
 | Mode | Payment required | Network |
 |------|-----------------|---------|
 | `test` | No | — (local dev only) |
-| `testnet` | Yes (x402) | Base Sepolia |
-| `production` | Yes (x402, $0.08 USDC) | Base mainnet |
+| `testnet` | Yes (x402) | Base Sepolia; optional Solana Devnet |
+| `production` | Yes (x402, $0.08 USDC) | Base mainnet; optional Solana mainnet |
 
 Production mode requires `ENABLE_MAINNET_PAYMENTS=true` and a reviewed release.
+Solana is separately off by default. Enabling it requires `ENABLE_SOLANA_PAYMENTS=true`, the
+public test and revenue destinations, facilitator capability confirmation, and its own settlement
+test. The application selects the correct destination from `PAYMENT_MODE`.
 Paid modes also require a private `CUSTOMER_HASH_SECRET` of at least 32 characters. It creates a
 stable, one-way customer label for repeat-use measurements; raw payer wallet addresses are not
-stored. Changing this secret starts a new measurement series and does not rewrite old jobs.
+stored. Attribution is best-effort and never blocks delivery after a verified payment. Changing
+this secret starts a new measurement series and does not rewrite old jobs.
 See [docs/RUNBOOK.md](docs/RUNBOOK.md) for activation steps.
 
 ---

@@ -17,11 +17,14 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     DB_PATH: './data/vw.db',
     PAYMENT_MODE: 'test',
     ENABLE_MAINNET_PAYMENTS: false,
+    ENABLE_SOLANA_PAYMENTS: false,
     FACILITATOR_URL: undefined,
     CDP_API_KEY_ID: undefined,
     CDP_API_KEY_SECRET: undefined,
     CUSTOMER_HASH_SECRET: undefined,
     PAY_TO: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
+    SOLANA_TEST_PAY_TO: 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS',
+    SOLANA_REVENUE_PAY_TO: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
     PRICE_USDC: '0.08',
     RETENTION_DAYS: 7,
     MAX_STORAGE_GB: 10,
@@ -298,6 +301,18 @@ describe('GET /openapi.json', () => {
     expect(props.status).toBeDefined()
     expect(props.pollUrl).toBeDefined()
     expect(props.paymentMode).toBeDefined()
+  })
+
+  it('documents discovery-selected payment rails instead of claiming Base only', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
+    const body = (await res.json()) as {
+      paths: { '/v1/checks': { post: { description: string } } }
+      components: { schemas: { PaymentDiscovery: { properties: Record<string, unknown> } } }
+    }
+    expect(body.paths['/v1/checks'].post.description).toContain('/.well-known/x402')
+    expect(body.paths['/v1/checks'].post.description).not.toContain('on Base mainnet')
+    expect(body.components.schemas.PaymentDiscovery.properties.accepts).toBeDefined()
   })
 
   it('documents the feedback URL on completed reports', async () => {

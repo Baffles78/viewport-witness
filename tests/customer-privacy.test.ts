@@ -19,9 +19,9 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   await Promise.all(
-    servers.splice(0).map(
-      (server) => new Promise<void>((resolve) => server.close(() => resolve())),
-    ),
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   )
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
@@ -35,11 +35,14 @@ function config(screenshotsDir: string, mode: Config['PAYMENT_MODE'] = 'test'): 
     DB_PATH: path.join(screenshotsDir, 'vw.db'),
     PAYMENT_MODE: mode,
     ENABLE_MAINNET_PAYMENTS: mode === 'production',
+    ENABLE_SOLANA_PAYMENTS: false,
     FACILITATOR_URL: undefined,
     CDP_API_KEY_ID: undefined,
     CDP_API_KEY_SECRET: undefined,
     CUSTOMER_HASH_SECRET: undefined,
     PAY_TO: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
+    SOLANA_TEST_PAY_TO: 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS',
+    SOLANA_REVENUE_PAY_TO: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
     PRICE_USDC: '0.08',
     RETENTION_DAYS: 7,
     MAX_STORAGE_GB: 10,
@@ -129,7 +132,7 @@ describe('customer privacy boundary', () => {
     expect(body).not.toHaveProperty('paymentSignature')
   })
 
-  it('refuses a paid job when the verified payer cannot be attributed', async () => {
+  it('delivers a paid job when optional customer attribution is unavailable', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-customer-missing-'))
     tempDirs.push(root)
     const store = {
@@ -149,8 +152,44 @@ describe('customer privacy boundary', () => {
       body: JSON.stringify({ url: 'https://example.com' }),
     })
     const body = (await response.json()) as { error?: string }
-    expect(response.status).toBe(503)
-    expect(body.error).toBe('customer_identity_unavailable')
-    expect(store.createJob).not.toHaveBeenCalled()
+    expect(response.status).toBe(202)
+    expect(body.error).toBeUndefined()
+    expect(store.createJob).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentId: 'verified-payment' }),
+    )
+  })
+
+  it('creates a paid job when verified Solana attribution is present', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-customer-solana-'))
+    tempDirs.push(root)
+    const store = {
+      getJobByIdempotencyKey: vi.fn(() => null),
+      getJobByPaymentId: vi.fn(() => null),
+      createJob: vi.fn(),
+    } as unknown as JobStore
+    const paymentMiddleware: RequestHandler = (req, _res, next) => {
+      req.paymentResult = {
+        settled: true,
+        mode: 'production',
+        paymentId: 'verified-solana-payment',
+        customerId: `cust_${'c'.repeat(64)}`,
+      }
+      next()
+    }
+    const baseUrl = await listen(store, config(root, 'production'), paymentMiddleware)
+
+    const response = await fetch(`${baseUrl}/v1/checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    })
+
+    expect(response.status).toBe(202)
+    expect(store.createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentId: 'verified-solana-payment',
+        customerId: `cust_${'c'.repeat(64)}`,
+      }),
+    )
   })
 })
