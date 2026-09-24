@@ -334,6 +334,16 @@ export class WorkerRunner {
         job.baselineJobId,
         publicViewportResults,
       )
+      if (!reportObj.comparison.evidenceComplete) {
+        reportObj.status = 'INCONCLUSIVE'
+        reportObj.verdict = this.buildVerdict('INCONCLUSIVE', publicViewportResults)
+        reportObj.verdict.reasons.unshift('The baseline comparison evidence is incomplete.')
+        reportObj.verdict.recommendedActions.unshift({
+          code: 'incomplete_comparison',
+          priority: 'high',
+          detail: 'Create a new complete baseline and run the comparison again.',
+        })
+      }
       const changed = Object.values(reportObj.comparison.visual).some(
         (entry) => entry && entry.changedPixels > 0,
       )
@@ -445,15 +455,28 @@ export class WorkerRunner {
     }
     const baseline = JSON.parse(await fs.readFile(baselineJob.reportPath, 'utf8')) as QAReport
     const visual: Partial<Record<Viewport, VisualComparisonResult>> = {}
+    const evidenceLimitations: string[] = []
     for (const viewport of VIEWPORTS_ORDER) {
       const baselineShot = this.store.getScreenshot(baselineJobId, viewport)
       const currentShot = this.store.getScreenshot(jobId, viewport)
       const current = currentViewports[viewport]
-      if (!baselineShot || !currentShot || !current) continue
-      const baselinePng = PNG.sync.read(await fs.readFile(baselineShot.path))
-      const currentPng = PNG.sync.read(await fs.readFile(currentShot.path))
-      if (baselinePng.width !== currentPng.width || baselinePng.height !== currentPng.height)
+      if (!baselineShot || !currentShot || !current) {
+        evidenceLimitations.push(`${viewport}: screenshot evidence is missing.`)
         continue
+      }
+      let baselinePng: PNG
+      let currentPng: PNG
+      try {
+        baselinePng = PNG.sync.read(await fs.readFile(baselineShot.path))
+        currentPng = PNG.sync.read(await fs.readFile(currentShot.path))
+      } catch {
+        evidenceLimitations.push(`${viewport}: screenshot evidence could not be decoded.`)
+        continue
+      }
+      if (baselinePng.width !== currentPng.width || baselinePng.height !== currentPng.height) {
+        evidenceLimitations.push(`${viewport}: screenshot dimensions are incompatible.`)
+        continue
+      }
       const diff = new PNG({ width: currentPng.width, height: currentPng.height })
       const changedPixels = pixelmatch(
         baselinePng.data,
@@ -493,6 +516,9 @@ export class WorkerRunner {
     )
     return {
       baselineJobId,
+      evidenceComplete:
+        evidenceLimitations.length === 0 && Object.keys(visual).length === VIEWPORTS_ORDER.length,
+      evidenceLimitations,
       visual,
       accessibility: {
         newViolationIds: [...currentIds].filter((id) => !baselineIds.has(id)).sort(),

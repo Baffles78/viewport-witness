@@ -35,6 +35,12 @@ const compareSchema = z
   })
   .strict()
 
+const REQUIRED_VIEWPORTS = ['phonePortrait', 'phoneLandscape', 'desktop'] as const
+
+export function hasCompleteBaselineScreenshots(store: JobStore, jobId: string): boolean {
+  return REQUIRED_VIEWPORTS.every((viewport) => store.getScreenshot(jobId, viewport) !== null)
+}
+
 function asyncHandler(
   handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
 ): RequestHandler {
@@ -237,7 +243,8 @@ export function createProductsRouter(
         !baseline ||
         baseline.status !== 'complete' ||
         !baseline.reportPath ||
-        baseline.expiresAt <= Date.now()
+        baseline.expiresAt <= Date.now() ||
+        !hasCompleteBaselineScreenshots(store, baseline.id)
       ) {
         res.status(400).json({
           error: 'baseline_unavailable',

@@ -123,6 +123,8 @@ export interface QAReport {
   }
   comparison?: {
     baselineJobId: string
+    evidenceComplete: boolean
+    evidenceLimitations: string[]
     visual: Partial<Record<Viewport, VisualComparisonResult>>
     accessibility: {
       newViolationIds: string[]

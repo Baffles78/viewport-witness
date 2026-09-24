@@ -1,9 +1,10 @@
 import { promises as fs } from 'node:fs'
+import { createHash } from 'node:crypto'
 import type { Request, Response, Router } from 'express'
 import { Router as createRouter } from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { createPaymentWrapper } from '@x402/mcp'
+import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from '@x402/mcp'
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
@@ -25,6 +26,27 @@ function jsonResult(value: unknown, isError = false): ToolResult {
     content: [{ type: 'text', text: JSON.stringify(value) }],
     ...(isError ? { isError: true } : {}),
   }
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+    .join(',')}}`
+}
+
+export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefined {
+  if (!paymentPayload || typeof paymentPayload !== 'object') return undefined
+  const canonical = canonicalJson(paymentPayload)
+  if (canonical.length > 64 * 1024) return undefined
+  return `mcp_${createHash('sha256').update(canonical).digest('hex')}`
+}
+
+function paymentIdFromContext(context: MCPToolContext): string | undefined {
+  return mcpPaymentFingerprint(context.meta?.[MCP_PAYMENT_META_KEY])
 }
 
 function parseAssertions(value: unknown[]): PageAssertion[] | null {
@@ -104,6 +126,7 @@ async function createMcpPaymentContext(cfg: Config): Promise<{
 
 export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Config): Router {
   const router = createRouter()
+  const inFlightPayments = new Map<string, Promise<void>>()
   let paymentContextPromise: ReturnType<typeof createMcpPaymentContext> | undefined
   const getPaymentContext = (): ReturnType<typeof createMcpPaymentContext> => {
     paymentContextPromise ??= createMcpPaymentContext(cfg)
@@ -113,55 +136,102 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   async function buildServer(): Promise<McpServer> {
     const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.0' })
     const context = await getPaymentContext()
-    const pendingByPayment = new Map<string, string>()
     const wrap = <T extends Record<string, unknown>>(
       tier: 'check' | 'verify' | 'compare',
-      handler: (args: T) => Promise<ToolResult>,
-    ) =>
-      context
-        ? createPaymentWrapper(context.server, {
-            accepts: context.requirements[tier],
-            resource: { url: `mcp://tool/${tier === 'check' ? 'check_page' : `${tier}_page`}` },
-            hooks: {
-              onAfterExecution: ({ paymentPayload, result }) => {
-                if (result.isError) return
-                try {
-                  const parsed = JSON.parse(result.content[0]?.text ?? '{}') as { id?: unknown }
-                  if (typeof parsed.id === 'string')
-                    pendingByPayment.set(JSON.stringify(paymentPayload), parsed.id)
-                } catch {
-                  // A malformed tool result is not activated.
-                }
-              },
-              onAfterSettlement: async ({ paymentPayload }) => {
-                const key = JSON.stringify(paymentPayload)
-                const id = pendingByPayment.get(key)
-                if (!id) return
-                try {
-                  store.updateJobStatus(id, 'queued')
-                  await runner.enqueue(id)
-                } catch (error) {
-                  store.updateJobStatus(id, 'failed', {
-                    completedAt: Date.now(),
-                    error:
-                      error instanceof Error ? error.message.slice(0, 1000) : 'worker_unavailable',
-                  })
-                  throw error
-                } finally {
-                  pendingByPayment.delete(key)
-                }
-              },
-            },
-          })(handler)
-        : handler
+      handler: (args: T, context: MCPToolContext) => Promise<ToolResult>,
+    ) => {
+      if (!context) {
+        return (args: T, extra: unknown): Promise<ToolResult> => {
+          const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
+          return handler(args, {
+            toolName: tier === 'check' ? 'check_page' : `${tier}_page`,
+            arguments: args,
+            ...(meta ? { meta } : {}),
+          })
+        }
+      }
+      const paidHandler = createPaymentWrapper(context.server, {
+        accepts: context.requirements[tier],
+        resource: { url: `mcp://tool/${tier === 'check' ? 'check_page' : `${tier}_page`}` },
+        hooks: {
+          onAfterSettlement: async ({ paymentPayload }) => {
+            const paymentId = mcpPaymentFingerprint(paymentPayload)
+            if (!paymentId) return
+            const job = store.getJobByPaymentId(paymentId)
+            if (!job || !store.activatePaymentPendingJob(job.id)) return
+            try {
+              await runner.enqueue(job.id)
+            } catch (error) {
+              store.updateJobStatus(job.id, 'failed', {
+                completedAt: Date.now(),
+                error: error instanceof Error ? error.message.slice(0, 1000) : 'worker_unavailable',
+              })
+              throw error
+            }
+          },
+        },
+      })(handler)
+      return async (args: T, extra: unknown) => {
+        const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
+        const paymentId = mcpPaymentFingerprint(meta?.[MCP_PAYMENT_META_KEY])
+        if (paymentId) {
+          const existing = store.getJobByPaymentId(paymentId)
+          if (existing) {
+            return jsonResult({
+              id: existing.id,
+              status: existing.status,
+              pollUrl: `/v1/checks/${existing.id}`,
+              paymentMode: cfg.PAYMENT_MODE,
+              paymentReplay: true,
+            })
+          }
+          let inFlight = inFlightPayments.get(paymentId)
+          while (inFlight) {
+            await inFlight
+            const completedRace = store.getJobByPaymentId(paymentId)
+            if (completedRace) {
+              return jsonResult({
+                id: completedRace.id,
+                status: completedRace.status,
+                pollUrl: `/v1/checks/${completedRace.id}`,
+                paymentMode: cfg.PAYMENT_MODE,
+                paymentReplay: true,
+              })
+            }
+            inFlight = inFlightPayments.get(paymentId)
+          }
+        }
+        let releasePayment: (() => void) | undefined
+        if (paymentId) {
+          const lock = new Promise<void>((resolve) => {
+            releasePayment = resolve
+          })
+          inFlightPayments.set(paymentId, lock)
+        }
+        try {
+          const result = await paidHandler(args, extra)
+          if (paymentId) {
+            const pending = store.getJobByPaymentId(paymentId)
+            if (pending?.status === 'payment_pending') {
+              store.failPaymentPendingJob(pending.id, 'payment_not_settled')
+            }
+          }
+          return result
+        } finally {
+          releasePayment?.()
+          if (paymentId) inFlightPayments.delete(paymentId)
+        }
+      }
+    }
 
     mcp.tool(
       'check_page',
       `Run browser QA across three viewports. Costs $${cfg.PRICE_USDC} USDC.`,
       { url: z.string().url().max(2048) },
-      wrap('check', async ({ url }: { url: string }) => {
+      wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
         const valid = await validatePublicHttpsUrl(url)
         if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
+        const paymentId = paymentIdFromContext(toolContext)
         return jsonResult(
           await createProductJob({
             store,
@@ -169,6 +239,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             cfg,
             kind: 'check',
             url,
+            ...(paymentId ? { paymentId } : {}),
             deferEnqueue: Boolean(context),
           }),
         )
@@ -182,52 +253,71 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         url: z.string().url().max(2048),
         assertions: z.array(z.record(z.unknown())).min(1).max(20),
       },
-      wrap('verify', async ({ url, assertions }: { url: string; assertions: unknown[] }) => {
-        const valid = await validatePublicHttpsUrl(url)
-        const parsed = parseAssertions(assertions)
-        if (!valid.valid || !parsed) return jsonResult({ error: 'invalid_input' }, true)
-        return jsonResult(
-          await createProductJob({
-            store,
-            runner,
-            cfg,
-            kind: 'verify',
-            url,
-            assertions: parsed,
-            deferEnqueue: Boolean(context),
-          }),
-        )
-      }),
+      wrap(
+        'verify',
+        async (
+          { url, assertions }: { url: string; assertions: unknown[] },
+          toolContext: MCPToolContext,
+        ) => {
+          const valid = await validatePublicHttpsUrl(url)
+          const parsed = parseAssertions(assertions)
+          if (!valid.valid || !parsed) return jsonResult({ error: 'invalid_input' }, true)
+          const paymentId = paymentIdFromContext(toolContext)
+          return jsonResult(
+            await createProductJob({
+              store,
+              runner,
+              cfg,
+              kind: 'verify',
+              url,
+              assertions: parsed,
+              ...(paymentId ? { paymentId } : {}),
+              deferEnqueue: Boolean(context),
+            }),
+          )
+        },
+      ),
     )
 
     mcp.tool(
       'compare_page',
       `Compare a page to a completed baseline. Costs $${cfg.COMPARE_PRICE_USDC} USDC.`,
       { url: z.string().url().max(2048), baselineJobId: z.string().uuid() },
-      wrap('compare', async ({ url, baselineJobId }: { url: string; baselineJobId: string }) => {
-        const valid = await validatePublicHttpsUrl(url)
-        const baseline = store.getJob(baselineJobId)
-        if (
-          !valid.valid ||
-          !baseline ||
-          baseline.status !== 'complete' ||
-          !baseline.reportPath ||
-          baseline.expiresAt <= Date.now()
-        ) {
-          return jsonResult({ error: 'baseline_or_url_unavailable' }, true)
-        }
-        return jsonResult(
-          await createProductJob({
-            store,
-            runner,
-            cfg,
-            kind: 'compare',
-            url,
-            baselineJobId,
-            deferEnqueue: Boolean(context),
-          }),
-        )
-      }),
+      wrap(
+        'compare',
+        async (
+          { url, baselineJobId }: { url: string; baselineJobId: string },
+          toolContext: MCPToolContext,
+        ) => {
+          const valid = await validatePublicHttpsUrl(url)
+          const baseline = store.getJob(baselineJobId)
+          if (
+            !valid.valid ||
+            !baseline ||
+            baseline.status !== 'complete' ||
+            !baseline.reportPath ||
+            baseline.expiresAt <= Date.now() ||
+            !['phonePortrait', 'phoneLandscape', 'desktop'].every((viewport) =>
+              store.getScreenshot(baseline.id, viewport),
+            )
+          ) {
+            return jsonResult({ error: 'baseline_or_url_unavailable' }, true)
+          }
+          const paymentId = paymentIdFromContext(toolContext)
+          return jsonResult(
+            await createProductJob({
+              store,
+              runner,
+              cfg,
+              kind: 'compare',
+              url,
+              baselineJobId,
+              ...(paymentId ? { paymentId } : {}),
+              deferEnqueue: Boolean(context),
+            }),
+          )
+        },
+      ),
     )
 
     mcp.tool(

@@ -16,6 +16,7 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import { promises as fs } from 'fs'
+import { PNG } from 'pngjs'
 import type { JobStore as JobStoreType } from '../src/db.js'
 import type { WorkerRunner as WorkerRunnerType } from '../src/worker/runner.js'
 
@@ -308,6 +309,20 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       )
       expect(diffResponse.status).toBe(200)
       expect(diffResponse.headers.get('content-type')).toContain('image/png')
+
+      const baselineDesktop = store.getScreenshot(String(baseline['id']), 'desktop')
+      expect(baselineDesktop).not.toBeNull()
+      if (!baselineDesktop) throw new Error('Baseline desktop screenshot missing')
+      await fs.writeFile(baselineDesktop.path, PNG.sync.write(new PNG({ width: 1, height: 1 })))
+      const incomplete = await createAndPoll('/v1/compare', {
+        url: 'https://example.com',
+        baselineJobId: baseline['id'],
+      })
+      expect(incomplete['status']).toBe('INCONCLUSIVE')
+      expect((incomplete['verdict'] as { decision: string }).decision).toBe('review')
+      expect((incomplete['comparison'] as { evidenceComplete: boolean }).evidenceComplete).toBe(
+        false,
+      )
     },
     240000,
   )

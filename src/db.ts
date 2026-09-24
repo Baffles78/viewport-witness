@@ -198,6 +198,22 @@ export class JobStore {
       .run(id)
   }
 
+  activatePaymentPendingJob(id: string): boolean {
+    const result = this.conn
+      .prepare("UPDATE jobs SET status = 'queued' WHERE id = ? AND status = 'payment_pending'")
+      .run(id)
+    return Number(result.changes) === 1
+  }
+
+  failPaymentPendingJob(id: string, error: string): boolean {
+    const result = this.conn
+      .prepare(
+        "UPDATE jobs SET status = 'failed', completed_at = ?, error = ? WHERE id = ? AND status = 'payment_pending'",
+      )
+      .run(Date.now(), error.slice(0, 1000), id)
+    return Number(result.changes) === 1
+  }
+
   listExpiredJobs(beforeMs: number): JobRecord[] {
     const rows = this.conn
       .prepare('SELECT * FROM jobs WHERE expires_at < ?')
