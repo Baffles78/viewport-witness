@@ -26,6 +26,7 @@
   "dependencies": {
     "@axe-core/playwright": "^4.10.1",
     "@coinbase/cdp-sdk": "1.56.0",
+    "@solana/kit": "5.1.0",
     "@x402/core": "2.27.0",
     "@x402/evm": "2.27.0",
     "@x402/express": "2.27.0",

@@ -11,7 +11,8 @@ Protected values belong in `/etc/viewport-witness/viewport-witness.env`, owned b
 root with mode `0600`. Never copy that file into the repository or container image.
 `CUSTOMER_HASH_SECRET` is a separate random secret used only to turn a settled payer address into
 a stable anonymous customer label. Never reuse a wallet key or CDP credential for it. Preserve the
-value across releases; rotating it resets repeat-customer measurement for future jobs.
+value across releases; rotating it resets repeat-customer measurement for future jobs. Attribution
+is best-effort analytics and must never block a job after a verified payment.
 
 Installation order:
 

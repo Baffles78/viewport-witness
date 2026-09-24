@@ -27,8 +27,7 @@ let skillContent: string
 try {
   skillContent = readFileSync(skillPath, 'utf8')
 } catch {
-  skillContent =
-    'ViewportWitness by Apex Labs: see /openapi.json and /llms.txt for documentation.'
+  skillContent = 'ViewportWitness by Apex Labs: see /openapi.json and /llms.txt for documentation.'
 }
 
 export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Config): Router {
@@ -96,6 +95,9 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
     const discovery = getPaymentDiscovery(
       {
         payTo: cfg.PAY_TO,
+        solanaPayTo:
+          cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+        enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
         priceUsdc: cfg.PRICE_USDC,
         mode: cfg.PAYMENT_MODE,
         enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,

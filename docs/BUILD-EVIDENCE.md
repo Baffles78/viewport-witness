@@ -24,6 +24,21 @@ All commands below ran from the repository root.
 
 The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 processes after the job completed. This is one sample, not a worst-case capacity guarantee.
 
+## Solana dual-rail release candidate
+
+The optional Solana rail was prepared on 2026-09-24. It remains disabled until the exact commit
+passes independent release review and a real Devnet settlement creates and completes a job.
+
+- `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check`: passed.
+- Unit and integration suite: 145 passed, including a locally generated Solana exact payload and
+  delivery after a settled payment when optional customer attribution is unavailable.
+- `npm audit --omit=dev`: 0 production vulnerabilities.
+- Codex Security scan `4828126a-9ed4-4258-b941-6380b856b555`: complete with no findings after
+  correcting a pre-release paid-without-delivery defect found by scan
+  `30f98a67-0cb7-49c6-b875-42e1ce4fbf5d`.
+- Live facilitator capability, Devnet settlement, independent exact-source approval, deployment,
+  and mainnet settlement are not claimed by this candidate evidence.
+
 ## Independent review
 
 - Browser worker boundaries: passed for a non-public test deployment after cleanup and timeout hardening.

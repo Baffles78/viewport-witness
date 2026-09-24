@@ -5,8 +5,9 @@ screenshots, accessibility findings, layout analysis, and a structured report ac
 browser viewports (phone portrait, phone landscape, desktop).
 
 The live service runs at https://qa.honeygate.app and requires a $0.08 USDC x402 payment per
-report (Base mainnet in production, Base Sepolia in testnet). Local self-hosted instances can
-run in test mode without any payment.
+report (Base mainnet in production, Base Sepolia in testnet). A separately enabled Solana rail may
+also appear in the live payment requirements. Local self-hosted instances can run in test mode
+without any payment.
 
 ## Base URL
 
@@ -150,8 +151,8 @@ Returns PNG image (Content-Type: image/png). Available once the check is complet
 
 ## Payment modes
 
-- testnet     — Base Sepolia via Coinbase CDP for staging or self-hosted testing.
-- production  — Base mainnet, $0.08 USDC via x402. This is the live service mode.
+- testnet     — Base Sepolia and, when advertised, Solana Devnet via Coinbase CDP.
+- production  — Base mainnet and, when advertised, Solana mainnet; $0.08 USDC via x402.
 - test        — No payment required. Only available in local/self-hosted instances.
                  NOTE: test mode does NOT represent a real payment settlement.
 

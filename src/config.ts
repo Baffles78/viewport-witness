@@ -19,6 +19,11 @@ const configSchema = z.object({
     .optional()
     .transform((v) => v === 'true')
     .pipe(z.boolean()),
+  ENABLE_SOLANA_PAYMENTS: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true')
+    .pipe(z.boolean()),
   FACILITATOR_URL: z.string().url().optional(),
   CDP_API_KEY_ID: z.string().optional(),
   CDP_API_KEY_SECRET: z.string().optional(),
@@ -27,6 +32,14 @@ const configSchema = z.object({
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'PAY_TO must be a 20-byte EVM address')
     .default('0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400'),
+  SOLANA_TEST_PAY_TO: z
+    .string()
+    .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'SOLANA_TEST_PAY_TO must be a base58 Solana address')
+    .default('AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS'),
+  SOLANA_REVENUE_PAY_TO: z
+    .string()
+    .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'SOLANA_REVENUE_PAY_TO must be a base58 Solana address')
+    .default('EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk'),
   PRICE_USDC: z
     .string()
     .refine((value) => /^\d+(\.\d{1,6})?$/.test(value) && Number(value) > 0, {
@@ -59,11 +72,14 @@ export type Config = {
   DB_PATH: string
   PAYMENT_MODE: PaymentMode
   ENABLE_MAINNET_PAYMENTS: boolean
+  ENABLE_SOLANA_PAYMENTS: boolean
   FACILITATOR_URL: string | undefined
   CDP_API_KEY_ID: string | undefined
   CDP_API_KEY_SECRET: string | undefined
   CUSTOMER_HASH_SECRET: string | undefined
   PAY_TO: string
+  SOLANA_TEST_PAY_TO: string
+  SOLANA_REVENUE_PAY_TO: string
   PRICE_USDC: string
   RETENTION_DAYS: number
   MAX_STORAGE_GB: number
@@ -94,7 +110,9 @@ export function validateConfig(cfg: Config): void {
       throw new Error('PAYMENT_MODE=production requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
     }
     if (!cfg.CUSTOMER_HASH_SECRET || cfg.CUSTOMER_HASH_SECRET.length < 32) {
-      throw new Error('PAYMENT_MODE=production requires CUSTOMER_HASH_SECRET with at least 32 characters.')
+      throw new Error(
+        'PAYMENT_MODE=production requires CUSTOMER_HASH_SECRET with at least 32 characters.',
+      )
     }
   }
   if (cfg.PAYMENT_MODE === 'testnet') {
@@ -102,7 +120,9 @@ export function validateConfig(cfg: Config): void {
       throw new Error('PAYMENT_MODE=testnet requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
     }
     if (!cfg.CUSTOMER_HASH_SECRET || cfg.CUSTOMER_HASH_SECRET.length < 32) {
-      throw new Error('PAYMENT_MODE=testnet requires CUSTOMER_HASH_SECRET with at least 32 characters.')
+      throw new Error(
+        'PAYMENT_MODE=testnet requires CUSTOMER_HASH_SECRET with at least 32 characters.',
+      )
     }
   }
 }

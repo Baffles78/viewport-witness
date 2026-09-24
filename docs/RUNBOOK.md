@@ -239,6 +239,7 @@ docker compose exec viewport-witness du -sh /data
 **Do not follow these steps without completing the independent code review gate.**
 
 Production mainnet payments are disabled by default (`ENABLE_MAINNET_PAYMENTS=false`).
+The additional Solana rail is also disabled by default (`ENABLE_SOLANA_PAYMENTS=false`).
 Activating them requires:
 
 1. **Independent code review** completed and recorded by the coordinator.
@@ -254,6 +255,7 @@ Activating them requires:
    ```
    PAYMENT_MODE=production
    ENABLE_MAINNET_PAYMENTS=true
+   ENABLE_SOLANA_PAYMENTS=false
    PRICE_USDC=0.08
    CDP_API_KEY_ID=YOUR_KEY_ID
    CDP_API_KEY_SECRET=YOUR_BASE64_ED25519_PRIVATE_KEY
@@ -263,6 +265,8 @@ Activating them requires:
    credential format or the customer hash secret to git or print them in logs. Generate the
    customer hash secret independently from the CDP key and wallet material. Keep it stable so the
    same payer receives the same anonymous label; rotating it intentionally starts a new series.
+   Attribution is best-effort analytics; a verified payment must still receive its job when a
+   wallet format cannot be attributed.
 5. Restart the service:
    ```bash
    docker compose restart
@@ -274,6 +278,25 @@ Activating them requires:
    ```
 7. Test with a real $0.08 USDC payment on Base mainnet.
 8. Confirm response includes `"paymentMode": "production"` — not `"test"`.
+
+### Add the Solana payment rail
+
+Do this only after the Base release remains healthy and an independent review covers the dual-rail
+change.
+
+1. Set `ENABLE_SOLANA_PAYMENTS=true`. Keep
+   `SOLANA_TEST_PAY_TO=AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS` and
+   `SOLANA_REVENUE_PAY_TO=EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk`; the application
+   selects the correct destination from `PAYMENT_MODE`.
+2. Confirm the facilitator advertises x402 v2 `exact` support for Solana Devnet.
+3. Confirm the 402 challenge contains both Base Sepolia and Solana Devnet, each at 80,000 atomic
+   USDC units.
+4. Complete one real Solana Devnet settlement and retain its transaction and completed job evidence.
+5. For the reviewed production release, change `PAYMENT_MODE` only after confirming discovery
+   automatically selects `EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk`.
+6. Complete one $0.08 Solana mainnet settlement before advertising the rail in registries.
+
+Rollback is `ENABLE_SOLANA_PAYMENTS=false` followed by a service restart; Base remains available.
 
 **If any step fails, revert immediately:**
 ```bash
@@ -293,6 +316,7 @@ ENABLE_MAINNET_PAYMENTS=false
 | `/ready` returns `"db": "fail"` | SQLite file permissions | Check `/data` volume mount and user permissions |
 | Job stuck in `running` | Worker timeout | One retry is automatic; restart requeues persisted retryable work |
 | `payment_not_configured` 503 | Paid mode lacks CDP credentials or the customer hash secret | Set `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and `CUSTOMER_HASH_SECRET` or switch to `test` mode |
+| Solana receiver is unexpected | Wrong payment mode or public destination configuration | Disable the Solana rail and correct the separate test/revenue addresses before retrying |
 | `mainnet_payments_disabled` 503 | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode |
 | Out of disk space | Storage ceiling reached | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB` |
 | High memory usage | Playwright browser leak | Restart service; check for stuck jobs |
