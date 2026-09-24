@@ -22,7 +22,7 @@ All commands below ran from the repository root.
 | Container job against `https://example.com` | `PASS`, three screenshots, `paymentMode: test` |
 | Playwright CLI inspection of `/` | Clean snapshot, 0 console errors, 0 warnings |
 
-The final container smoke run used about 196 MiB of its 1.5 GiB limit and 75 processes after the job completed. This is one sample, not a worst-case capacity guarantee.
+The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 processes after the job completed. This is one sample, not a worst-case capacity guarantee.
 
 ## Independent review
 
