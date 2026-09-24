@@ -7,5 +7,5 @@ coverage/
 data/
 artifacts/
 output/
+.playwright-cli/
 *.log
-

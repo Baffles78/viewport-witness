@@ -1,0 +1,148 @@
+# ViewportWitness — Agent Usage Guide
+
+ViewportWitness is a browser QA API for AI agents. Submit a public HTTPS URL and receive
+screenshots, accessibility findings, layout analysis, and a structured report across three
+browser viewports (phone portrait, phone landscape, desktop).
+
+## Base URL
+
+https://your-host   (replace with the deployed host)
+
+## Quick start
+
+1. POST /v1/checks  — submit a URL, get a job ID
+2. GET  /v1/checks/:id  — poll until status is "complete"
+3. GET  /v1/checks/:id/screenshots/:viewport  — download a PNG screenshot
+
+## Create a check
+
+POST /v1/checks
+Content-Type: application/json
+Idempotency-Key: my-unique-key-123   (optional, prevents duplicate jobs)
+
+{
+  "url": "https://example.com"
+}
+
+Response (202 Accepted):
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "queued",
+  "pollUrl": "/v1/checks/550e8400-e29b-41d4-a716-446655440000",
+  "paymentMode": "test"
+}
+
+## Poll for results
+
+GET /v1/checks/550e8400-e29b-41d4-a716-446655440000
+
+While running:
+{
+  "id": "...",
+  "status": "queued"  | "running",
+  "createdAt": "2026-09-24T12:00:00.000Z",
+  "pollUrl": "/v1/checks/..."
+}
+
+When complete, the full QAReport is returned:
+{
+  "id": "...",
+  "url": "https://example.com",
+  "status": "PASS" | "FAIL" | "INCONCLUSIVE",
+  "paymentMode": "test",
+  "createdAt": "...",
+  "expiresAt": "...",
+  "checksPerformed": ["screenshot", "accessibility:axe-core", ...],
+  "limitations": [],
+  "contentHash": "sha256hex...",
+  "summary": {
+    "totalViolations": 2,
+    "criticalViolations": 0,
+    "totalErrors": 0,
+    "overallLoadStatus": "success"
+  },
+  "viewports": {
+    "phonePortrait":  { ... ViewportResult ... },
+    "phoneLandscape": { ... ViewportResult ... },
+    "desktop":        { ... ViewportResult ... }
+  }
+}
+
+## ViewportResult fields
+
+- viewport: "phonePortrait" | "phoneLandscape" | "desktop"
+- dimensions: { width, height }  (375x812, 812x375, 1440x900)
+- loadStatus: "success" | "timeout" | "error"
+- loadTimeMs: number
+- finalUrl: string (after redirects)
+- redirectCount: number
+- screenshotUrl: "/v1/checks/:id/screenshots/:viewport"
+- screenshotDimensions: { w, h }
+- screenshotBytes: number
+- screenshotSha256: string
+- consoleErrors: string[]  (max 50, URLs redacted)
+- pageCrash: boolean
+- failedRequests: [{ url, status, reason }]  (max 50, paths redacted)
+- overflowDetected: boolean
+- offscreenElements: number
+- accessibility.violations: [{ id, impact, description, helpUrl, nodes, count }]
+- accessibility.completed: boolean
+- accessibility.passes: number
+- accessibility.incomplete: number
+- interactionObservations: { visibleControls, focusableControls, keyboardReachable }
+
+## Get a screenshot
+
+GET /v1/checks/:id/screenshots/phonePortrait
+GET /v1/checks/:id/screenshots/phoneLandscape
+GET /v1/checks/:id/screenshots/desktop
+
+Returns PNG image (Content-Type: image/png).
+
+## Status values
+
+- queued    — job accepted, waiting for worker
+- running   — browser check in progress
+- complete  — report available
+- failed    — check failed permanently (see error field)
+- retryable — check timed out, may be re-submitted
+
+## Report status values
+
+- PASS         — complete evidence with no load, browser, network, layout, or serious accessibility failure
+- FAIL         — a load, browser, network, layout, or critical/serious accessibility failure was found
+- INCONCLUSIVE — partial results or check errors
+
+## Payment modes
+
+- test        — no payment required (default in local/dev mode). Results labeled paymentMode:"test".
+                 NOTE: test mode does NOT represent a real payment settlement.
+- testnet     — Base Sepolia via facilitator; requires FACILITATOR_URL env var.
+- production  — Base mainnet, $0.08 USDC via x402. Requires ENABLE_MAINNET_PAYMENTS=true
+                 and FACILITATOR_URL and FACILITATOR_API_KEY. This mode is disabled by default.
+
+In production mode, include a PAYMENT-SIGNATURE header with a valid x402 payment:
+  PAYMENT-SIGNATURE: <base64-encoded-payment-payload>
+
+See GET /.well-known/x402 for payment requirements.
+
+## Idempotency
+
+Include an Idempotency-Key header to avoid creating duplicate jobs on retries:
+  Idempotency-Key: my-client-generated-key-123
+
+Same key returns the same job ID. Max length 128 characters.
+
+## Error codes
+
+- invalid_url          — URL rejected (not HTTPS, has credentials, etc.)
+- blocked_destination  — URL resolves to a blocked IP range
+- validation_error     — request body failed validation
+- worker_unavailable   — worker is not accepting jobs
+- payment_required     — x402 payment required in production mode
+- not_found            — job or screenshot not found
+- invalid_viewport     — viewport name not recognized
+
+## Full API spec
+
+GET /openapi.json  — OpenAPI 3.1 machine-readable contract

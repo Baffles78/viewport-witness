@@ -1,0 +1,58 @@
+# ViewportWitness - Docker Compose
+#
+# IMPORTANT: mainnet payments are disabled by default (ENABLE_MAINNET_PAYMENTS=false).
+# Mainnet activation is a separate reviewed step. See docs/RUNBOOK.md.
+#
+# Sensitive variables (FACILITATOR_URL, FACILITATOR_API_KEY) must be set in
+# a .env file (gitignored) or as environment variables - NEVER in this file.
+
+services:
+  viewport-witness:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1536m
+    cpus: "1.5"
+    pids_limit: 256
+    ports:
+      - "3000:3000"
+    volumes:
+      - vw-data:/data
+      - vw-tmp:/tmp
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+      SCREENSHOTS_DIR: /data/screenshots
+      DB_PATH: /data/vw.db
+      PAYMENT_MODE: test
+      ENABLE_MAINNET_PAYMENTS: "false"
+      PAY_TO: "0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400"
+      PRICE_USDC: "0.08"
+      RETENTION_DAYS: "7"
+      MAX_STORAGE_GB: "10"
+      WORKER_TIMEOUT_MS: "120000"
+      LOG_LEVEL: info
+    # Sensitive overrides from .env file (gitignored)
+    # env_file:
+    #   - .env
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  vw-data:
+    driver: local
+  vw-tmp:
+    driver: local
