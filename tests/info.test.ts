@@ -303,6 +303,18 @@ describe('GET /openapi.json', () => {
     expect(props.paymentMode).toBeDefined()
   })
 
+  it('documents discovery-selected payment rails instead of claiming Base only', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
+    const body = (await res.json()) as {
+      paths: { '/v1/checks': { post: { description: string } } }
+      components: { schemas: { PaymentDiscovery: { properties: Record<string, unknown> } } }
+    }
+    expect(body.paths['/v1/checks'].post.description).toContain('/.well-known/x402')
+    expect(body.paths['/v1/checks'].post.description).not.toContain('on Base mainnet')
+    expect(body.components.schemas.PaymentDiscovery.properties.accepts).toBeDefined()
+  })
+
   it('documents the feedback URL on completed reports', async () => {
     const { port } = await startServer(makeConfig())
     const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)

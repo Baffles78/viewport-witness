@@ -29,6 +29,7 @@ npm run dev
 The service starts on port 3000 in test mode. No payment is required.
 
 Verify it works:
+
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:3000/
@@ -39,18 +40,21 @@ curl http://localhost:3000/
 ## Test mode
 
 Test mode (`PAYMENT_MODE=test` in `.env`) means:
+
 - No x402 payment required for any request.
 - Every report will include `"paymentMode": "test"`.
 - **Test mode does not represent a real payment settlement.**
 - Safe to run locally, in CI, or on a staging VPS.
 
 To confirm you are in test mode:
+
 ```bash
 curl http://localhost:3000/.well-known/x402
 # Should show: "testMode": true, "paymentRequired": false
 ```
 
 Example check in test mode:
+
 ```bash
 # Create a check
 curl -s -X POST http://localhost:3000/v1/checks \
@@ -82,6 +86,7 @@ Expected: all unit tests pass in a few seconds. The e2e test takes up to 2 minut
 ## Docker deployment
 
 Build and start:
+
 ```bash
 docker compose build
 docker compose up -d
@@ -89,12 +94,14 @@ docker compose logs -f viewport-witness
 ```
 
 Verify:
+
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:3000/ready
 ```
 
 Check container resource usage:
+
 ```bash
 docker stats viewport-witness
 ```
@@ -106,6 +113,7 @@ docker stats viewport-witness
 The service listens on port 3000. Put Nginx or Cloudflare in front.
 
 Example Nginx config snippet:
+
 ```nginx
 server {
     listen 443 ssl;
@@ -121,6 +129,7 @@ server {
 ```
 
 Recommended VPS minimums:
+
 - 2 GB RAM (Playwright Chromium uses ~300-500 MB per check)
 - 2 CPU cores
 - 20 GB disk (screenshots + DB)
@@ -132,6 +141,7 @@ Recommended VPS minimums:
 The data volume (`vw-data`) contains the SQLite database and all screenshots.
 
 Manual snapshot:
+
 ```bash
 docker compose stop viewport-witness
 tar -czf vw-backup-$(date +%Y%m%d).tar.gz /var/lib/docker/volumes/viewport-witness_vw-data
@@ -149,14 +159,17 @@ Or use your VPS provider's volume snapshot feature.
 Reports and screenshots are kept for `RETENTION_DAYS` days (default: 7).
 
 To change:
+
 1. Edit `.env`: `RETENTION_DAYS=14`
 2. Restart the service: `docker compose restart`
 
 Storage ceiling:
+
 - `MAX_STORAGE_GB=10` (default) caps total screenshot storage.
 - When exceeded, oldest jobs are deleted first automatically.
 
 To check current storage:
+
 ```bash
 docker exec viewport-witness du -sh /data
 ```
@@ -173,6 +186,7 @@ docker compose logs --tail 200 viewport-witness
 Log format: `METHOD /path STATUS LATENCYms`
 
 **What is not logged:**
+
 - Full URLs of checked pages (only redacted domain names)
 - Page content or page text
 - Authorization headers or credentials
@@ -193,6 +207,7 @@ docker compose logs -f viewport-witness
 ```
 
 Test after upgrade:
+
 ```bash
 curl http://localhost:3000/health
 npm test  # run from project dir
@@ -203,11 +218,13 @@ npm test  # run from project dir
 ## Rollback
 
 Tag images before major upgrades:
+
 ```bash
 docker tag viewport-witness-viewport-witness:latest viewport-witness-viewport-witness:backup-YYYYMMDD
 ```
 
 To rollback:
+
 ```bash
 docker compose down
 docker tag viewport-witness-viewport-witness:backup-YYYYMMDD viewport-witness-viewport-witness:latest
@@ -296,27 +313,29 @@ change.
    automatically selects `EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk`.
 6. Complete one $0.08 Solana mainnet settlement before advertising the rail in registries.
 
-Rollback is `ENABLE_SOLANA_PAYMENTS=false` followed by a service restart; Base remains available.
+Rollback is `ENABLE_SOLANA_PAYMENTS=false` followed by
+`systemctl restart viewport-witness`; Base remains available.
 
 **If any step fails, revert immediately:**
+
 ```bash
 # In .env:
 PAYMENT_MODE=test
 ENABLE_MAINNET_PAYMENTS=false
-# Then: docker compose restart
+# Then: systemctl restart viewport-witness
 ```
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| `/ready` returns `"worker": "fail"` | Browser not started | Restart service; check logs for Playwright errors |
-| `/ready` returns `"db": "fail"` | SQLite file permissions | Check `/data` volume mount and user permissions |
-| Job stuck in `running` | Worker timeout | One retry is automatic; restart requeues persisted retryable work |
-| `payment_not_configured` 503 | Paid mode lacks CDP credentials or the customer hash secret | Set `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and `CUSTOMER_HASH_SECRET` or switch to `test` mode |
-| Solana receiver is unexpected | Wrong payment mode or public destination configuration | Disable the Solana rail and correct the separate test/revenue addresses before retrying |
-| `mainnet_payments_disabled` 503 | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode |
-| Out of disk space | Storage ceiling reached | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB` |
-| High memory usage | Playwright browser leak | Restart service; check for stuck jobs |
+| Symptom                             | Likely cause                                                  | Fix                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/ready` returns `"worker": "fail"` | Browser not started                                           | Restart service; check logs for Playwright errors                                               |
+| `/ready` returns `"db": "fail"`     | SQLite file permissions                                       | Check `/data` volume mount and user permissions                                                 |
+| Job stuck in `running`              | Worker timeout                                                | One retry is automatic; restart requeues persisted retryable work                               |
+| `payment_not_configured` 503        | Paid mode lacks CDP credentials or the customer hash secret   | Set `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and `CUSTOMER_HASH_SECRET` or switch to `test` mode |
+| Solana receiver is unexpected       | Wrong payment mode or public destination configuration        | Disable the Solana rail and correct the separate test/revenue addresses before retrying         |
+| `mainnet_payments_disabled` 503     | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode                            |
+| Out of disk space                   | Storage ceiling reached                                       | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB`                                          |
+| High memory usage                   | Playwright browser leak                                       | Restart service; check for stuck jobs                                                           |
