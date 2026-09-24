@@ -24,20 +24,35 @@ All commands below ran from the repository root.
 
 The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 processes after the job completed. This is one sample, not a worst-case capacity guarantee.
 
-## Solana dual-rail release candidate
+## Solana dual-rail release
 
-The optional Solana rail was prepared on 2026-09-24. It remains disabled until the exact commit
-passes independent release review and a real Devnet settlement creates and completes a job.
+The optional Solana rail was independently reviewed, tested on Devnet, and enabled in production
+on 2026-09-24 alongside the existing Base rail.
 
 - `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check`: passed.
-- Unit and integration suite: 145 passed, including a locally generated Solana exact payload and
+- Unit and integration suite: 146 passed, including a locally generated Solana exact payload and
   delivery after a settled payment when optional customer attribution is unavailable.
+- Full external browser suite: 10 of 10 passed.
 - `npm audit --omit=dev`: 0 production vulnerabilities.
 - Codex Security scan `4828126a-9ed4-4258-b941-6380b856b555`: complete with no findings after
   correcting a pre-release paid-without-delivery defect found by scan
   `30f98a67-0cb7-49c6-b875-42e1ce4fbf5d`.
-- Live facilitator capability, Devnet settlement, independent exact-source approval, deployment,
-  and mainnet settlement are not claimed by this candidate evidence.
+- Sarah independently approved exact source commit
+  `55f885d0c4422ba019cb52a2bd10280d509dab70` after its full check suite passed. The approved tree
+  is unchanged in deployed merge commit `5808c697bb4aaa39daccd34bf63064750f26167b`. Independent
+  scan `ff3ee632-46b7-4bc3-b805-1b30dece4716` reported no security findings.
+- Coinbase's live facilitator advertised x402 v2 `exact` support for Solana Devnet and mainnet.
+- Devnet transaction
+  `5suFj4Vhkm1fmigXX2bQY6mfSqTQs8p7UwEd1ubvRw5qNTS8H1m6WriBunwiRKWnTdtwzj7ryukmsMWvnMH8Fy4`
+  settled exactly 0.08 test USDC to the configured test receiver. Paid job
+  `b3d22bfd-e7a7-4d7d-a871-0aee5f12bd9a` completed `PASS` across all three viewports.
+- Mainnet transaction
+  `5Y2srL5hD95t8UtzgZk1dCHckpBZzbd4vXbXAUjLgrWLCwKcANzN639wFkxqcd3jAdQdQtB1ybBkYFo2KQtvzhRU`
+  finalized without error in slot `450173625` and moved exactly 0.08 USDC from the isolated smoke
+  payer to `EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk`. Paid production job
+  `e2fd7f04-f24a-4734-b8d0-86ef68552c93` completed `PASS` across all three viewports.
+- Post-release `/health` and `/ready` passed, the container was healthy, no fresh application errors
+  were present, and public discovery advertised Base mainnet plus Solana mainnet at `$0.08 USDC`.
 
 ## Independent review
 
@@ -51,7 +66,8 @@ passes independent release review and a real Devnet settlement creates and compl
 - Live proxy testing found and corrected an `http://` x402 resource URL. Express now trusts forwarded scheme headers only from loopback and the fixed Docker gateway; the exact correction passed independent review and the public challenge advertises `https://qa.honeygate.app/v1/checks`.
 - Mainnet release review passed in focused exact-source packets for the payment/network gates, validation and settlement ordering, durable uniqueness, startup wiring, and deployment binding. The final blocker was fixed by pinning the Docker bridge gateway to the exact trusted proxy address; the immutable one-line fix passed independent review.
 
-The reviewed release is publicly deployed at `https://qa.honeygate.app` with Base mainnet payments active.
+The reviewed release is publicly deployed at `https://qa.honeygate.app` with Base and Solana mainnet
+payments active.
 
 ## Behaviors exercised
 
@@ -63,7 +79,7 @@ The reviewed release is publicly deployed at `https://qa.honeygate.app` with Bas
 - Test mode is always labeled and never claims settlement.
 - Production mode refuses to start without the mainnet flag and facilitator configuration.
 - Official x402 v2 packages are installed and compile against their current types.
-- Paid routes request the EVM `upfront` flow so settlement precedes browser work.
+- Paid routes request the `upfront` flow on every enabled rail so settlement precedes browser work.
 - A payment-signature fingerprint is stored uniquely to prevent one payment from creating multiple jobs.
 - Non-HTTPS URLs, credentials, unsafe ports, local/private/reserved IPs, empty DNS results, and local hostnames are rejected.
 - The complete URL and DNS policy runs for the initial navigation, every redirect, and every subrequest.
