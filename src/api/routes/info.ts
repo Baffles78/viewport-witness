@@ -13,25 +13,37 @@ const startTime = Date.now()
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const llmsPath = join(__dirname, '../../../llms.txt')
+const skillPath = join(__dirname, '../../../skill.md')
 
 let llmsContent: string
 try {
   llmsContent = readFileSync(llmsPath, 'utf8')
 } catch {
-  llmsContent = 'ViewportWitness: see /openapi.json for full API documentation.'
+  llmsContent = 'ViewportWitness by Apex Labs: see /openapi.json for full API documentation.'
 }
+
+let skillContent: string
+try {
+  skillContent = readFileSync(skillPath, 'utf8')
+} catch {
+  skillContent =
+    'ViewportWitness by Apex Labs: see /openapi.json and /llms.txt for documentation.'
+}
+
+const PUBLIC_BASE_URL = 'https://qa.honeygate.app'
 
 export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Config): Router {
   const router = createRouter()
 
   router.get('/', (_req: Request, res: Response) => {
     res.json({
-      service: 'ViewportWitness',
+      service: 'ViewportWitness by Apex Labs',
       version: '0.1.0',
       description:
         'Browser QA API: screenshots, accessibility, and layout checks across three viewports',
       docs: '/openapi.json',
       agentDocs: '/llms.txt',
+      skillDocs: '/skill.md',
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
@@ -76,14 +88,21 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
     res.type('text/plain').send(llmsContent)
   })
 
+  router.get('/skill.md', (_req: Request, res: Response) => {
+    res.type('text/markdown').send(skillContent)
+  })
+
   router.get('/.well-known/x402', (_req: Request, res: Response) => {
-    const discovery = getPaymentDiscovery({
-      payTo: cfg.PAY_TO,
-      priceUsdc: cfg.PRICE_USDC,
-      mode: cfg.PAYMENT_MODE,
-      enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
-      facilitatorUrl: cfg.FACILITATOR_URL,
-    })
+    const discovery = getPaymentDiscovery(
+      {
+        payTo: cfg.PAY_TO,
+        priceUsdc: cfg.PRICE_USDC,
+        mode: cfg.PAYMENT_MODE,
+        enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+        facilitatorUrl: cfg.FACILITATOR_URL,
+      },
+      PUBLIC_BASE_URL,
+    )
     res.json(discovery)
   })
 

@@ -1,35 +1,70 @@
-# ViewportWitness — Agent Usage Guide
+# ViewportWitness by Apex Labs — Agent Usage Guide
 
 ViewportWitness is a browser QA API for AI agents. Submit a public HTTPS URL and receive
 screenshots, accessibility findings, layout analysis, and a structured report across three
 browser viewports (phone portrait, phone landscape, desktop).
 
+The live service runs at https://qa.honeygate.app and requires a $0.08 USDC x402 payment per
+report (Base mainnet in production, Base Sepolia in testnet). Local self-hosted instances can
+run in test mode without any payment.
+
 ## Base URL
 
-https://your-host   (replace with the deployed host)
+Live service: https://qa.honeygate.app
+Local dev default: http://localhost:3000  (test mode, no payment required)
 
 ## Quick start
 
-1. POST /v1/checks  — submit a URL, get a job ID
+1. POST /v1/checks  — submit a URL with an x402 payment header, get a job ID
 2. GET  /v1/checks/:id  — poll until status is "complete"
 3. GET  /v1/checks/:id/screenshots/:viewport  — download a PNG screenshot
+
+### Unpaid probe (see 402 requirements)
+
+```
+curl -X POST https://qa.honeygate.app/v1/checks \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com"}'
+```
+
+Returns HTTP 402 with a PAYMENT-REQUIRED header containing x402 payment requirements.
+
+### Payment-enabled client (x402 SDK)
+
+```js
+import { wrapFetchWithPayment } from '@x402/fetch'
+const fetch402 = wrapFetchWithPayment(fetch, configuredX402Client)
+
+const res = await fetch402('https://qa.honeygate.app/v1/checks', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ url: 'https://example.com' }),
+})
+const job = await res.json()
+// { id, status: 'queued', pollUrl, paymentMode }
+```
+
+No private keys or wallet credentials belong in this service. The payment is made client-side.
 
 ## Create a check
 
 POST /v1/checks
 Content-Type: application/json
+PAYMENT-SIGNATURE: <base64-encoded-x402-payment>
 Idempotency-Key: my-unique-key-123   (optional, prevents duplicate jobs)
 
 {
   "url": "https://example.com"
 }
 
+Strict schema: only `url` is accepted. Extra fields are rejected (422).
+
 Response (202 Accepted):
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "queued",
   "pollUrl": "/v1/checks/550e8400-e29b-41d4-a716-446655440000",
-  "paymentMode": "test"
+  "paymentMode": "testnet" | "production"
 }
 
 ## Poll for results
@@ -49,7 +84,7 @@ When complete, the full QAReport is returned:
   "id": "...",
   "url": "https://example.com",
   "status": "PASS" | "FAIL" | "INCONCLUSIVE",
-  "paymentMode": "test",
+  "paymentMode": "testnet" | "production",
   "createdAt": "...",
   "expiresAt": "...",
   "checksPerformed": ["screenshot", "accessibility:axe-core", ...],
@@ -97,7 +132,7 @@ GET /v1/checks/:id/screenshots/phonePortrait
 GET /v1/checks/:id/screenshots/phoneLandscape
 GET /v1/checks/:id/screenshots/desktop
 
-Returns PNG image (Content-Type: image/png).
+Returns PNG image (Content-Type: image/png). Available once the check is complete.
 
 ## Status values
 
@@ -115,16 +150,15 @@ Returns PNG image (Content-Type: image/png).
 
 ## Payment modes
 
-- test        — no payment required (default in local/dev mode). Results labeled paymentMode:"test".
+- testnet     — Base Sepolia via Coinbase CDP for staging or self-hosted testing.
+- production  — Base mainnet, $0.08 USDC via x402. This is the live service mode.
+- test        — No payment required. Only available in local/self-hosted instances.
                  NOTE: test mode does NOT represent a real payment settlement.
-- testnet     — Base Sepolia via Coinbase CDP; requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.
-- production  — Base mainnet, $0.08 USDC via x402. Requires ENABLE_MAINNET_PAYMENTS=true,
-                 CDP_API_KEY_ID, and CDP_API_KEY_SECRET. Disabled by default.
 
-In production mode, include a PAYMENT-SIGNATURE header with a valid x402 payment:
+In paid modes, include a PAYMENT-SIGNATURE header with a valid x402 payment:
   PAYMENT-SIGNATURE: <base64-encoded-payment-payload>
 
-See GET /.well-known/x402 for payment requirements.
+See GET https://qa.honeygate.app/.well-known/x402 for payment requirements.
 
 ## Idempotency
 
@@ -139,10 +173,11 @@ Same key returns the same job ID. Max length 128 characters.
 - blocked_destination  — URL resolves to a blocked IP range
 - validation_error     — request body failed validation
 - worker_unavailable   — worker is not accepting jobs
-- payment_required     — x402 payment required in production mode
+- payment_required     — x402 payment required (production/testnet mode)
 - not_found            — job or screenshot not found
 - invalid_viewport     — viewport name not recognized
 
 ## Full API spec
 
 GET /openapi.json  — OpenAPI 3.1 machine-readable contract
+GET /skill.md      — Concise agent skill manifest

@@ -16,6 +16,10 @@ import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { paymentMiddleware } from '@x402/express'
 import { x402ResourceServer } from '@x402/core/server'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
+import {
+  bazaarResourceServerExtension,
+  declareDiscoveryExtension,
+} from '@x402/extensions/bazaar'
 import type { PaymentMode } from '../types.js'
 
 export interface PaymentResult {
@@ -52,6 +56,12 @@ export interface PaymentDiscovery {
   payTo: string
   facilitatorUrl?: string
   testMode: boolean
+  // Crawler-facing discovery fields (present when baseUrl is supplied)
+  endpoint?: string
+  method?: string
+  description?: string
+  skillMdUrl?: string
+  openapiUrl?: string
 }
 
 function unavailable(error: string, detail: string): RequestHandler {
@@ -65,6 +75,48 @@ function paymentFingerprint(req: Request): string | undefined {
   if (!signature) return undefined
   return createHash('sha256').update(signature).digest('hex')
 }
+
+// Bazaar discovery extension: describes the request/response schema for marketplace indexing.
+// Request: strict {url:string} only. Response: the accepted 202 job object, not the eventual report.
+const bazaarDiscovery = declareDiscoveryExtension({
+  bodyType: 'json',
+  input: { url: 'https://example.com' },
+  inputSchema: {
+    required: ['url'],
+    additionalProperties: false,
+    properties: {
+      url: {
+        type: 'string',
+        format: 'uri',
+        description: 'Public HTTPS URL to check',
+        example: 'https://example.com',
+      },
+    },
+  },
+  output: {
+    example: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      status: 'queued',
+      pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
+      paymentMode: 'production',
+    },
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Job UUID' },
+        status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
+        pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
+        paymentMode: {
+          type: 'string',
+          enum: ['testnet', 'production'],
+          description: 'Payment mode used for this job',
+        },
+      },
+      required: ['id', 'status', 'pollUrl', 'paymentMode'],
+      additionalProperties: false,
+    },
+  },
+})
 
 export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): RequestHandler {
   const { mode, enableMainnet, facilitatorUrl, cdpApiKeyId, cdpApiKeySecret, payTo, priceUsdc } =
@@ -97,7 +149,9 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     apiKeySecret: cdpApiKeySecret,
     ...(facilitatorUrl ? { baseUrl: facilitatorUrl } : {}),
   })
-  const resourceServer = new x402ResourceServer(facilitator).register(network, new ExactEvmScheme())
+  const resourceServer = new x402ResourceServer(facilitator)
+    .register(network, new ExactEvmScheme())
+    .registerExtension(bazaarResourceServerExtension)
   const x402 = paymentMiddleware(
     {
       'POST /v1/checks': {
@@ -111,8 +165,9 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         },
         description: 'ViewportWitness browser QA report across three viewports',
         mimeType: 'application/json',
-        serviceName: 'ViewportWitness',
-        tags: ['browser-qa', 'accessibility', 'screenshots'],
+        serviceName: 'ViewportWitness by Apex Labs',
+        tags: ['browser-qa', 'accessibility', 'screenshots', 'qa', 'layout'],
+        extensions: bazaarDiscovery,
       },
     },
     resourceServer,
@@ -146,7 +201,10 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
   }
 }
 
-export function getPaymentDiscovery(opts: PaymentMiddlewareOptions): PaymentDiscovery {
+export function getPaymentDiscovery(
+  opts: PaymentMiddlewareOptions,
+  baseUrl?: string,
+): PaymentDiscovery {
   return {
     version: '2',
     paymentRequired: opts.mode !== 'test',
@@ -156,5 +214,15 @@ export function getPaymentDiscovery(opts: PaymentMiddlewareOptions): PaymentDisc
     payTo: opts.payTo,
     ...(opts.facilitatorUrl ? { facilitatorUrl: opts.facilitatorUrl } : {}),
     testMode: opts.mode === 'test',
+    ...(baseUrl
+      ? {
+          endpoint: `POST ${baseUrl}/v1/checks`,
+          method: 'POST',
+          description:
+            'Browser QA report across three viewports — screenshots, accessibility, layout',
+          skillMdUrl: `${baseUrl}/skill.md`,
+          openapiUrl: `${baseUrl}/openapi.json`,
+        }
+      : {}),
   }
 }

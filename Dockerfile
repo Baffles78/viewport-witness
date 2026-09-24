@@ -34,6 +34,7 @@ COPY --chown=pwuser:pwuser --from=builder /app/dist ./dist
 COPY --chown=pwuser:pwuser --from=deps /app/node_modules ./node_modules
 COPY --chown=pwuser:pwuser package.json ./
 COPY --chown=pwuser:pwuser llms.txt ./
+COPY --chown=pwuser:pwuser skill.md ./
 
 # Create data directory owned by the service user
 RUN mkdir -p /data/screenshots && chown -R pwuser:pwuser /data
