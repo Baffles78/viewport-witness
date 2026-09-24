@@ -13,8 +13,8 @@ root with mode `0600`. Never copy that file into the repository or container ima
 Installation order:
 
 1. Install Docker Engine and the Compose plugin from the Ubuntu repository.
-   Keep Docker IPv6 disabled in `/etc/docker/daemon.json`; the Compose network
-   and container also disable IPv6 independently.
+   Install `docker-daemon.json` as `/etc/docker/daemon.json` so Docker IPv6 is
+   disabled. The Compose network and container also disable IPv6 independently.
 2. Place the exact reviewed repository at `/opt/viewport-witness`.
 3. Create the protected environment file from `viewport-witness.env.example`.
 4. Install the egress script, both systemd units, and the Docker service drop-in.
