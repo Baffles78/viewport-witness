@@ -35,8 +35,12 @@ stop the service, restore the previous reviewed commit and image tag, then start
 the service and repeat the origin/public smoke checks. Named data volumes are not
 removed by `docker compose down`.
 
-To remove only this service's egress hook, stop `viewport-witness`, disable the
-egress unit, delete the source-subnet jump from `DOCKER-USER`, then delete the
-empty `VW-EGRESS` chain. Never flush `DOCKER-USER`; it may contain unrelated
-rules. After any Docker or firewall reload, rerun the egress script and verify a
-private-address request is blocked before restarting the application.
+To remove only this service's firewall hooks, stop `viewport-witness`, disable
+the egress unit, remove
+`/etc/systemd/system/docker.service.d/viewport-witness-egress.conf`, and run
+`systemctl daemon-reload` so a Docker restart cannot recreate the hooks. Then
+delete the source-subnet jump from `DOCKER-USER` and `INPUT`, followed by the
+empty `VW-EGRESS` and `VW-HOST-INPUT` chains. Never flush a shared chain; it may
+contain unrelated rules. After any Docker or firewall reload, rerun the egress
+script and verify a private-address request is blocked before restarting the
+application.

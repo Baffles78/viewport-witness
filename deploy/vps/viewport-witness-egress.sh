@@ -3,6 +3,7 @@ set -euo pipefail
 
 source_subnet="172.31.250.0/24"
 chain="VW-EGRESS"
+host_chain="VW-HOST-INPUT"
 
 iptables -w -N "$chain" 2>/dev/null || true
 iptables -w -F "$chain"
@@ -39,3 +40,13 @@ iptables -w -A "$chain" -j RETURN
 
 iptables -w -C DOCKER-USER -s "$source_subnet" -j "$chain" 2>/dev/null || \
   iptables -w -I DOCKER-USER 1 -s "$source_subnet" -j "$chain"
+
+# Traffic addressed to the Docker host itself traverses INPUT rather than
+# DOCKER-USER. Block the worker subnet from every host service, including
+# services reached through the VPS public address.
+iptables -w -N "$host_chain" 2>/dev/null || true
+iptables -w -F "$host_chain"
+iptables -w -A "$host_chain" -j REJECT
+
+iptables -w -C INPUT -s "$source_subnet" -j "$host_chain" 2>/dev/null || \
+  iptables -w -I INPUT 1 -s "$source_subnet" -j "$host_chain"
