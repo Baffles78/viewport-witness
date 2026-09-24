@@ -1,0 +1,13 @@
+[Unit]
+Description=ViewportWitness browser egress protection
+Requires=docker.service
+After=docker.service
+Before=viewport-witness.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/viewport-witness-egress
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=ViewportWitness browser QA API
+Requires=docker.service viewport-witness-egress.service
+After=network-online.target docker.service viewport-witness-egress.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/viewport-witness
+ExecStartPre=/usr/local/sbin/viewport-witness-egress
+ExecStart=/usr/bin/docker compose -f deploy/docker-compose.vps.yml up -d --no-build --remove-orphans
+ExecStop=/usr/bin/docker compose -f deploy/docker-compose.vps.yml down
+TimeoutStartSec=900
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
