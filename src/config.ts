@@ -20,7 +20,8 @@ const configSchema = z.object({
     .transform((v) => v === 'true')
     .pipe(z.boolean()),
   FACILITATOR_URL: z.string().url().optional(),
-  FACILITATOR_API_KEY: z.string().optional(),
+  CDP_API_KEY_ID: z.string().optional(),
+  CDP_API_KEY_SECRET: z.string().optional(),
   PAY_TO: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'PAY_TO must be a 20-byte EVM address')
@@ -58,7 +59,8 @@ export type Config = {
   PAYMENT_MODE: PaymentMode
   ENABLE_MAINNET_PAYMENTS: boolean
   FACILITATOR_URL: string | undefined
-  FACILITATOR_API_KEY: string | undefined
+  CDP_API_KEY_ID: string | undefined
+  CDP_API_KEY_SECRET: string | undefined
   PAY_TO: string
   PRICE_USDC: string
   RETENTION_DAYS: number
@@ -76,6 +78,9 @@ function loadConfig(): Config {
 }
 
 export function validateConfig(cfg: Config): void {
+  if (cfg.PAYMENT_MODE !== 'test' && cfg.PRICE_USDC !== '0.08') {
+    throw new Error('Paid modes require PRICE_USDC=0.08 for the reviewed V1 price.')
+  }
   if (cfg.PAYMENT_MODE === 'production') {
     if (!cfg.ENABLE_MAINNET_PAYMENTS) {
       throw new Error(
@@ -83,13 +88,13 @@ export function validateConfig(cfg: Config): void {
           'This gate must not be bypassed without an independent code review.',
       )
     }
-    if (!cfg.FACILITATOR_URL || !cfg.FACILITATOR_API_KEY) {
-      throw new Error('PAYMENT_MODE=production requires FACILITATOR_URL and FACILITATOR_API_KEY.')
+    if (!cfg.CDP_API_KEY_ID || !cfg.CDP_API_KEY_SECRET) {
+      throw new Error('PAYMENT_MODE=production requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
     }
   }
   if (cfg.PAYMENT_MODE === 'testnet') {
-    if (!cfg.FACILITATOR_URL) {
-      throw new Error('PAYMENT_MODE=testnet requires FACILITATOR_URL.')
+    if (!cfg.CDP_API_KEY_ID || !cfg.CDP_API_KEY_SECRET) {
+      throw new Error('PAYMENT_MODE=testnet requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
     }
   }
 }

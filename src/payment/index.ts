@@ -4,12 +4,17 @@
  * Test mode deliberately bypasses payment and never claims settlement. Paid
  * modes use the official x402 v2 packages and request the EVM `upfront` flow,
  * so payment is settled before the job handler may enqueue browser work.
+ *
+ * Testnet and production use Coinbase CDP API key authentication. The official
+ * CDP SDK binds a short-lived JWT to each facilitator endpoint. Credentials are
+ * never logged and the receiver wallet needs no signing key on this server.
  */
 
 import { createHash } from 'node:crypto'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
+import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { paymentMiddleware } from '@x402/express'
-import { HTTPFacilitatorClient, x402ResourceServer } from '@x402/core/server'
+import { x402ResourceServer } from '@x402/core/server'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import type { PaymentMode } from '../types.js'
 
@@ -34,7 +39,8 @@ export interface PaymentMiddlewareOptions {
   mode: PaymentMode
   enableMainnet: boolean
   facilitatorUrl?: string | undefined
-  facilitatorApiKey?: string | undefined
+  cdpApiKeyId?: string | undefined
+  cdpApiKeySecret?: string | undefined
 }
 
 export interface PaymentDiscovery {
@@ -61,7 +67,8 @@ function paymentFingerprint(req: Request): string | undefined {
 }
 
 export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): RequestHandler {
-  const { mode, enableMainnet, facilitatorUrl, facilitatorApiKey, payTo, priceUsdc } = opts
+  const { mode, enableMainnet, facilitatorUrl, cdpApiKeyId, cdpApiKeySecret, payTo, priceUsdc } =
+    opts
 
   if (mode === 'test') {
     return (req: Request, _res: Response, next: NextFunction): void => {
@@ -77,37 +84,18 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     )
   }
 
-  if (!facilitatorUrl) {
+  if (!cdpApiKeyId || !cdpApiKeySecret) {
     return unavailable(
       'payment_not_configured',
-      'FACILITATOR_URL is required for testnet and production payment modes.',
-    )
-  }
-
-  if (mode === 'production' && !facilitatorApiKey) {
-    return unavailable(
-      'payment_not_configured',
-      'A production facilitator credential is required for mainnet payment mode.',
+      'CDP_API_KEY_ID and CDP_API_KEY_SECRET are required for testnet and production payment modes.',
     )
   }
 
   const network = mode === 'production' ? 'eip155:8453' : 'eip155:84532'
-  const authHeaders = facilitatorApiKey
-    ? { Authorization: `Bearer ${facilitatorApiKey}` }
-    : undefined
-  const facilitator = new HTTPFacilitatorClient({
-    url: facilitatorUrl,
-    timeoutMs: 10_000,
-    ...(authHeaders
-      ? {
-          createAuthHeaders: async () => ({
-            verify: authHeaders,
-            settle: authHeaders,
-            supported: authHeaders,
-            bazaar: authHeaders,
-          }),
-        }
-      : {}),
+  const facilitator = createCdpFacilitatorClient({
+    apiKeyId: cdpApiKeyId,
+    apiKeySecret: cdpApiKeySecret,
+    ...(facilitatorUrl ? { baseUrl: facilitatorUrl } : {}),
   })
   const resourceServer = new x402ResourceServer(facilitator).register(network, new ExactEvmScheme())
   const x402 = paymentMiddleware(

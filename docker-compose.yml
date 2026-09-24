@@ -3,8 +3,8 @@
 # IMPORTANT: mainnet payments are disabled by default (ENABLE_MAINNET_PAYMENTS=false).
 # Mainnet activation is a separate reviewed step. See docs/RUNBOOK.md.
 #
-# Sensitive variables (FACILITATOR_URL, FACILITATOR_API_KEY) must be set in
-# a .env file (gitignored) or as environment variables - NEVER in this file.
+# CDP_API_KEY_ID and CDP_API_KEY_SECRET must be set in a protected env file or
+# secret store for paid modes. Never put their values in this tracked file.
 
 services:
   viewport-witness:

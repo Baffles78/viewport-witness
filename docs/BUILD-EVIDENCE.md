@@ -12,7 +12,7 @@ All commands below ran from the repository root.
 |---|---|
 | `npm run typecheck` | Passed |
 | `npm run lint` | Passed |
-| `npm test` | 81 passed |
+| `npm test` | 86 passed |
 | `ALLOW_EXTERNAL_E2E=true npm run test:e2e` | 10 passed, including a real three-viewport job against `https://example.com` |
 | `npm run build` | Passed |
 | `npm audit --omit=dev` | 0 production vulnerabilities |
@@ -30,6 +30,7 @@ The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 pro
 - Payment boundary: passed for a non-public test deployment; no mainnet settlement was attempted.
 - URL and network filtering: no bypass found. The review's structural findings were corrected, while the DNS rebinding release limit below remains explicit.
 - API safety: an initial review found validation ordering and duplicate-request weaknesses. Those were corrected, and the independent re-review passed at commit `8719379`.
+- CDP money path: a separate read-only review returned a conditional pass for public testnet. Its price and route-order conditions were corrected and verified. The remaining condition was resolved directly against the pinned x402 2.27.0 package source: `extra.paymentFlow: "upfront"` selects `settleBeforeHandler: true`, and the Exact EVM scheme explicitly supports `upfront`. Coinbase CDP SDK 1.56.0 and all x402 packages are pinned exactly.
 
 This is review evidence for a local, non-public test deployment. It is not approval for an Internet-facing or mainnet release.
 
@@ -63,7 +64,7 @@ This is review evidence for a local, non-public test deployment. It is not appro
 
 1. **No public deployment yet.** The image was tested locally and then stopped. VPS capacity, Nginx, Cloudflare DNS, and live TLS remain a release step.
 2. **No live payment test yet.** No USDC was transferred. Base Sepolia can use the public test facilitator. Base mainnet requires choosing and configuring a production facilitator; the public x402.org facilitator must not be assumed to support mainnet.
-3. **Facilitator authentication varies.** The current adapter supports an unauthenticated facilitator or a static bearer token. A provider such as CDP may require its own short-lived signed authentication adapter and must be implemented and reviewed for that provider.
+3. **Facilitator authentication.** The adapter uses the official Coinbase CDP SDK facilitator client with `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET`. The SDK generates endpoint-bound, short-lived authentication; static bearer auth and hand-written signing are not used. Fail-closed configuration guards have unit coverage. Live settlement has not been tested.
 4. **DNS rebinding still needs a network control.** Application checks run before every browser request, but DNS can theoretically change between the check and Chromium's connection. Before public launch, add an outbound proxy/firewall policy that independently blocks private and metadata networks.
 5. **No receiver signer is present.** The VPS stores only the public revenue address. This is intentional.
 6. **Evidence is hashed, not signed.** A signing key and signed receipts are outside V1 until a reviewed key-custody design exists.

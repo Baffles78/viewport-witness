@@ -242,18 +242,22 @@ Production mainnet payments are disabled by default (`ENABLE_MAINNET_PAYMENTS=fa
 Activating them requires:
 
 1. **Independent code review** completed and recorded by the coordinator.
-2. Select a production facilitator that explicitly supports Base mainnet. The public
-   x402.org facilitator is for testnet development and must not be assumed to support mainnet.
-3. Confirm the service's authentication adapter matches that provider. The current adapter
-   supports no auth or a static bearer token; providers with signed short-lived credentials
-   require a provider-specific reviewed adapter.
+2. Create a Coinbase CDP API key at the Coinbase Developer Platform dashboard.
+   - The key name looks like `organizations/ORG_ID/apiKeys/KEY_ID`.
+   - Download the PEM private key (EC P-256). Store it securely — it is not recoverable.
+3. The official CDP SDK uses Coinbase's hosted facilitator at
+   `https://api.cdp.coinbase.com/platform/v2/x402` and binds authentication to each
+   operation path. Do not hand-build or reuse a static bearer token.
 4. Create/edit `.env` (never `docker-compose.yml`):
    ```
    PAYMENT_MODE=production
    ENABLE_MAINNET_PAYMENTS=true
-   FACILITATOR_URL=https://your-facilitator.example.com
-   FACILITATOR_API_KEY=your_api_key_here
+   PRICE_USDC=0.08
+   CDP_API_KEY_ID=organizations/YOUR_ORG/apiKeys/YOUR_KEY
+   CDP_API_KEY_SECRET="-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n"
    ```
+   `CDP_API_KEY_SECRET` must be the full PEM key on one line with literal `\n` characters,
+   or a multi-line value wrapped in double quotes. Never commit this file to git.
 5. Restart the service:
    ```bash
    docker compose restart
@@ -283,7 +287,7 @@ ENABLE_MAINNET_PAYMENTS=false
 | `/ready` returns `"worker": "fail"` | Browser not started | Restart service; check logs for Playwright errors |
 | `/ready` returns `"db": "fail"` | SQLite file permissions | Check `/data` volume mount and user permissions |
 | Job stuck in `running` | Worker timeout | One retry is automatic; restart requeues persisted retryable work |
-| `payment_not_configured` 503 | Payment mode set but facilitator not configured | Set `FACILITATOR_URL` or switch to `test` mode |
+| `payment_not_configured` 503 | Paid mode lacks CDP credentials | Set `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` or switch to `test` mode |
 | `mainnet_payments_disabled` 503 | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode |
 | Out of disk space | Storage ceiling reached | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB` |
 | High memory usage | Playwright browser leak | Restart service; check for stuck jobs |

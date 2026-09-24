@@ -117,9 +117,9 @@ Returns PNG image (Content-Type: image/png).
 
 - test        — no payment required (default in local/dev mode). Results labeled paymentMode:"test".
                  NOTE: test mode does NOT represent a real payment settlement.
-- testnet     — Base Sepolia via facilitator; requires FACILITATOR_URL env var.
-- production  — Base mainnet, $0.08 USDC via x402. Requires ENABLE_MAINNET_PAYMENTS=true
-                 and FACILITATOR_URL and FACILITATOR_API_KEY. This mode is disabled by default.
+- testnet     — Base Sepolia via Coinbase CDP; requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.
+- production  — Base mainnet, $0.08 USDC via x402. Requires ENABLE_MAINNET_PAYMENTS=true,
+                 CDP_API_KEY_ID, and CDP_API_KEY_SECRET. Disabled by default.
 
 In production mode, include a PAYMENT-SIGNATURE header with a valid x402 payment:
   PAYMENT-SIGNATURE: <base64-encoded-payment-payload>

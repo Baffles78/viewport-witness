@@ -140,7 +140,7 @@ describe('payment middleware - production mode guards', () => {
       ...baseOpts,
       mode: 'production',
       enableMainnet: true,
-      // no facilitatorUrl or facilitatorApiKey
+      // no facilitatorUrl or CDP keys
     })
 
     const req = makeReq()
@@ -250,5 +250,102 @@ describe('payment middleware - fail closed behavior', () => {
 
     expect(next).not.toHaveBeenCalled()
     expect(statusCalled).toBeGreaterThanOrEqual(400)
+  })
+})
+
+describe('payment middleware - CDP configuration fail-closed', () => {
+  it('returns 503 with payment_not_configured when testnet has URL but no CDP keys', async () => {
+    const middleware = createPaymentMiddleware({
+      ...baseOpts,
+      mode: 'testnet',
+      facilitatorUrl: 'https://api.cdp.coinbase.com/platform/v2/x402',
+      // cdpApiKeyId and cdpApiKeySecret absent
+    })
+
+    const req = makeReq()
+    let statusCalled = 0
+    let responseBody: unknown
+    const res = {
+      status(code: number) {
+        statusCalled = code
+        return res
+      },
+      json(b: unknown) {
+        responseBody = b
+        return res
+      },
+      headersSent: true,
+    } as unknown as Response
+    const next = vi.fn()
+
+    const result = middleware(req, res, next)
+    if (result instanceof Promise) await result
+
+    expect(next).not.toHaveBeenCalled()
+    expect(statusCalled).toBe(503)
+    expect((responseBody as { error?: string })?.error).toBe('payment_not_configured')
+  })
+
+  it('returns 503 with payment_not_configured when testnet has URL but only key ID', async () => {
+    const middleware = createPaymentMiddleware({
+      ...baseOpts,
+      mode: 'testnet',
+      facilitatorUrl: 'https://api.cdp.coinbase.com/platform/v2/x402',
+      cdpApiKeyId: 'organizations/org/apiKeys/key',
+      // cdpApiKeySecret absent
+    })
+
+    const req = makeReq()
+    let statusCalled = 0
+    const res = {
+      status(code: number) {
+        statusCalled = code
+        return res
+      },
+      json() {
+        return res
+      },
+      headersSent: true,
+    } as unknown as Response
+    const next = vi.fn()
+
+    const result = middleware(req, res, next)
+    if (result instanceof Promise) await result
+
+    expect(next).not.toHaveBeenCalled()
+    expect(statusCalled).toBe(503)
+  })
+
+  it('returns 503 with payment_not_configured when production has URL but no CDP keys', async () => {
+    const middleware = createPaymentMiddleware({
+      ...baseOpts,
+      mode: 'production',
+      enableMainnet: true,
+      facilitatorUrl: 'https://api.cdp.coinbase.com/platform/v2/x402',
+      // cdpApiKeyId and cdpApiKeySecret absent
+    })
+
+    const req = makeReq()
+    let statusCalled = 0
+    let responseBody: unknown
+    const res = {
+      status(code: number) {
+        statusCalled = code
+        return res
+      },
+      json(b: unknown) {
+        responseBody = b
+        return res
+      },
+      headersSent: true,
+    } as unknown as Response
+    const next = vi.fn()
+
+    const result = middleware(req, res, next)
+    if (result instanceof Promise) await result
+
+    expect(next).not.toHaveBeenCalled()
+    expect(statusCalled).toBe(503)
+    expect((responseBody as { error?: string })?.error).toBe('payment_not_configured')
   })
 })

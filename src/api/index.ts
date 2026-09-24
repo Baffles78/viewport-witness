@@ -42,7 +42,8 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
-    facilitatorApiKey: cfg.FACILITATOR_API_KEY,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
   })
 
   // Mount routers
