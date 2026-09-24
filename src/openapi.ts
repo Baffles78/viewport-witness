@@ -1,17 +1,21 @@
 export const openApiSpec = {
   openapi: '3.1.0',
   info: {
-    title: 'ViewportWitness',
+    title: 'ViewportWitness by Apex Labs',
     version: '0.1.0',
     description:
       'Machine-facing browser QA API. Submit a public HTTPS URL and receive screenshots, ' +
       'accessibility findings, layout analysis, and a structured report across three browser viewports. ' +
-      'In test mode, no payment is required. In production mode, a $0.08 USDC x402 payment is required.',
+      'A $0.08 USDC x402 payment on Base is required per report on the live service. ' +
+      'Self-hosted instances can run in test mode without payment.',
     contact: {
       url: 'https://github.com/viewport-witness',
     },
   },
-  servers: [{ url: 'https://your-host', description: 'Production (replace with your host)' }],
+  servers: [
+    { url: 'https://qa.honeygate.app', description: 'Live service' },
+    { url: 'http://localhost:3000', description: 'Local development (test mode, no payment)' },
+  ],
   paths: {
     '/': {
       get: {
@@ -81,6 +85,18 @@ export const openApiSpec = {
                 schema: { $ref: '#/components/schemas/PaymentDiscovery' },
               },
             },
+          },
+        },
+      },
+    },
+    '/skill.md': {
+      get: {
+        summary: 'Agent skill manifest',
+        operationId: 'getSkillMd',
+        responses: {
+          '200': {
+            description: 'Concise agent-facing instructions for this service',
+            content: { 'text/markdown': {} },
           },
         },
       },
@@ -252,11 +268,13 @@ export const openApiSpec = {
       ServiceInfo: {
         type: 'object',
         properties: {
-          service: { type: 'string', example: 'ViewportWitness' },
+          service: { type: 'string', example: 'ViewportWitness by Apex Labs' },
           version: { type: 'string', example: '0.1.0' },
           docs: { type: 'string', example: '/openapi.json' },
           agentDocs: { type: 'string', example: '/llms.txt' },
+          skillDocs: { type: 'string', example: '/skill.md' },
           health: { type: 'string', example: '/health' },
+          paymentDiscovery: { type: 'string', example: '/.well-known/x402' },
         },
       },
       HealthResponse: {
@@ -284,6 +302,11 @@ export const openApiSpec = {
           network: { type: 'string', example: 'base (eip155:8453)' },
           payTo: { type: 'string', example: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400' },
           testMode: { type: 'boolean' },
+          endpoint: { type: 'string', example: 'POST https://qa.honeygate.app/v1/checks' },
+          method: { type: 'string', example: 'POST' },
+          description: { type: 'string' },
+          skillMdUrl: { type: 'string', example: 'https://qa.honeygate.app/skill.md' },
+          openapiUrl: { type: 'string', example: 'https://qa.honeygate.app/openapi.json' },
         },
       },
       CreateCheckRequest: {
