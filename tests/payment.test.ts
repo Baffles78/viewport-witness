@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Request, Response, NextFunction } from 'express'
-import { createPaymentMiddleware, getPaymentDiscovery } from '../src/payment/index.js'
+import {
+  createPaymentMiddleware,
+  customerFingerprint,
+  getPaymentDiscovery,
+} from '../src/payment/index.js'
 import type { PaymentMiddlewareOptions } from '../src/payment/index.js'
 
 function makeReq(): Request {
@@ -37,6 +41,55 @@ const baseOpts: PaymentMiddlewareOptions = {
   mode: 'test',
   enableMainnet: false,
 }
+
+describe('anonymous customer fingerprint', () => {
+  const secret = '0123456789abcdef0123456789abcdef'
+  const payer = '0x1234567890abcdef1234567890abcdef12345678'
+
+  function header(payload: Record<string, unknown>): string {
+    return Buffer.from(JSON.stringify(payload)).toString('base64')
+  }
+
+  it('creates a stable HMAC identifier from an EIP-3009 payer after decoding', () => {
+    const lower = header({ payload: { authorization: { from: payer } } })
+    const upper = header({
+      payload: { authorization: { from: `0x${payer.slice(2).toUpperCase()}` } },
+    })
+    expect(customerFingerprint(lower, secret)).toMatch(/^cust_[a-f0-9]{64}$/)
+    expect(customerFingerprint(lower, secret)).toBe(customerFingerprint(upper, secret))
+  })
+
+  it('supports Permit2 payer envelopes', () => {
+    const payment = header({ payload: { permit2Authorization: { from: payer } } })
+    expect(customerFingerprint(payment, secret)).toMatch(/^cust_[a-f0-9]{64}$/)
+  })
+
+  it('rejects mixed payment variants instead of trusting an unverified payer field', () => {
+    const payment = header({
+      payload: {
+        authorization: { from: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+        permit2Authorization: { from: payer },
+      },
+    })
+    expect(customerFingerprint(payment, secret)).toBeUndefined()
+  })
+
+  it('uses the server secret so public wallet enumeration cannot reproduce identifiers', () => {
+    const payment = header({ payload: { authorization: { from: payer } } })
+    expect(customerFingerprint(payment, secret)).not.toBe(
+      customerFingerprint(payment, 'abcdef0123456789abcdef0123456789'),
+    )
+  })
+
+  it('returns undefined for missing, malformed, oversized, or non-address input', () => {
+    expect(customerFingerprint(undefined, secret)).toBeUndefined()
+    expect(customerFingerprint('not-base64-json', secret)).toBeUndefined()
+    expect(customerFingerprint('x'.repeat(64 * 1024 + 1), secret)).toBeUndefined()
+    expect(
+      customerFingerprint(header({ payload: { authorization: { from: 'not-an-address' } } }), secret),
+    ).toBeUndefined()
+  })
+})
 
 describe('payment middleware - test mode', () => {
   it('passes through without payment in test mode', async () => {

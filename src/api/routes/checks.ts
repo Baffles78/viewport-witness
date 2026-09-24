@@ -9,6 +9,7 @@ import type { JobStore } from '../../db.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
 import type { QAReport, Viewport } from '../../types.js'
+import { FEEDBACK_URL } from '../../public.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -134,7 +135,9 @@ export function createChecksRouter(
 
       // Production mode: payment must have settled
       const paymentResult = (
-        req as Request & { paymentResult?: { settled: boolean; mode: string } }
+        req as Request & {
+          paymentResult?: { settled: boolean; mode: string; paymentId?: string; customerId?: string }
+        }
       ).paymentResult
       if (cfg.PAYMENT_MODE !== 'test' && (!paymentResult || !paymentResult.settled)) {
         res.status(402).json({
@@ -146,13 +149,22 @@ export function createChecksRouter(
       }
 
       const paymentId = paymentResult?.settled
-        ? (paymentResult as { paymentId?: string }).paymentId
+        ? paymentResult.paymentId
         : undefined
+      const customerId = paymentResult?.settled ? paymentResult.customerId : undefined
       if (cfg.PAYMENT_MODE !== 'test' && !paymentId) {
         res.status(503).json({
           error: 'payment_identity_unavailable',
           detail: 'The verified payment could not be bound to this job.',
           code: 'payment_identity_unavailable',
+        })
+        return
+      }
+      if (cfg.PAYMENT_MODE !== 'test' && !customerId) {
+        res.status(503).json({
+          error: 'customer_identity_unavailable',
+          detail: 'The verified payer identity could not be bound to this job.',
+          code: 'customer_identity_unavailable',
         })
         return
       }
@@ -195,6 +207,7 @@ export function createChecksRouter(
           url,
           idempotencyKey: idempotencyKey ?? null,
           ...(paymentId ? { paymentId } : {}),
+          ...(customerId ? { customerId } : {}),
           expiresAt,
         })
       } catch {
@@ -278,6 +291,7 @@ export function createChecksRouter(
             contentHash: report.contentHash,
             viewports: report.viewports,
             summary: report.summary,
+            feedbackUrl: FEEDBACK_URL,
             jobStatus: 'complete',
           })
           return

@@ -1,0 +1,37 @@
+name: ViewportWitness customer feedback
+description: Tell us what an agent needed, what worked, or what blocked the job.
+title: "[Customer feedback] "
+labels:
+  - customer-feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve ViewportWitness. Do not post private URLs, wallet details, payment signatures, API keys, or other secrets. A public example URL is optional.
+  - type: textarea
+    id: need
+    attributes:
+      label: What did your agent need to accomplish?
+      description: Describe the desired outcome rather than confidential implementation details.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened?
+      description: Tell us what was useful, missing, unclear, or failed.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: What would help most?
+      options:
+        - Easier payment or first call
+        - Faster completion
+        - More browser checks
+        - Better report format
+        - Callback or notification when complete
+        - Other
+    validations:
+      required: true

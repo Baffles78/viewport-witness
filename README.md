@@ -83,6 +83,9 @@ Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1
 | `production` | Yes (x402, $0.08 USDC) | Base mainnet |
 
 Production mode requires `ENABLE_MAINNET_PAYMENTS=true` and a reviewed release.
+Paid modes also require a private `CUSTOMER_HASH_SECRET` of at least 32 characters. It creates a
+stable, one-way customer label for repeat-use measurements; raw payer wallet addresses are not
+stored. Changing this secret starts a new measurement series and does not rewrite old jobs.
 See [docs/RUNBOOK.md](docs/RUNBOOK.md) for activation steps.
 
 ---
@@ -113,6 +116,7 @@ curl http://localhost:3000/health
 - [Runbook](docs/RUNBOOK.md) — operations, backups, upgrades, mainnet activation
 - [Agent guide](llms.txt) — machine-readable usage instructions
 - [Skill manifest](skill.md) — concise agent skill guide
+- [Customer feedback](https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml) — request a capability or report a result without posting secrets
 - [Build evidence](docs/BUILD-EVIDENCE.md) — test results and known limits
 
 ---

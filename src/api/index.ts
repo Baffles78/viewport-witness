@@ -50,6 +50,7 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
   })
 
   // Mount routers

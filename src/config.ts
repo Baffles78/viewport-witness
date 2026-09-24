@@ -22,6 +22,7 @@ const configSchema = z.object({
   FACILITATOR_URL: z.string().url().optional(),
   CDP_API_KEY_ID: z.string().optional(),
   CDP_API_KEY_SECRET: z.string().optional(),
+  CUSTOMER_HASH_SECRET: z.string().min(32).optional(),
   PAY_TO: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'PAY_TO must be a 20-byte EVM address')
@@ -61,6 +62,7 @@ export type Config = {
   FACILITATOR_URL: string | undefined
   CDP_API_KEY_ID: string | undefined
   CDP_API_KEY_SECRET: string | undefined
+  CUSTOMER_HASH_SECRET: string | undefined
   PAY_TO: string
   PRICE_USDC: string
   RETENTION_DAYS: number
@@ -91,10 +93,16 @@ export function validateConfig(cfg: Config): void {
     if (!cfg.CDP_API_KEY_ID || !cfg.CDP_API_KEY_SECRET) {
       throw new Error('PAYMENT_MODE=production requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
     }
+    if (!cfg.CUSTOMER_HASH_SECRET || cfg.CUSTOMER_HASH_SECRET.length < 32) {
+      throw new Error('PAYMENT_MODE=production requires CUSTOMER_HASH_SECRET with at least 32 characters.')
+    }
   }
   if (cfg.PAYMENT_MODE === 'testnet') {
     if (!cfg.CDP_API_KEY_ID || !cfg.CDP_API_KEY_SECRET) {
       throw new Error('PAYMENT_MODE=testnet requires CDP_API_KEY_ID and CDP_API_KEY_SECRET.')
+    }
+    if (!cfg.CUSTOMER_HASH_SECRET || cfg.CUSTOMER_HASH_SECRET.length < 32) {
+      throw new Error('PAYMENT_MODE=testnet requires CUSTOMER_HASH_SECRET with at least 32 characters.')
     }
   }
 }

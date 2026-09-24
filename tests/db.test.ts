@@ -3,6 +3,7 @@ import { JobStore } from '../src/db.js'
 import os from 'os'
 import path from 'path'
 import { promises as fs } from 'fs'
+import { DatabaseSync } from 'node:sqlite'
 
 let store: JobStore
 let tmpFile: string
@@ -73,6 +74,15 @@ describe('JobStore - createJob and getJob', () => {
     }).toThrow()
   })
 
+  it('stores an anonymous customer identifier without exposing a wallet field', () => {
+    const params = makeJob({ customerId: `cust_${'a'.repeat(64)}` })
+    store.createJob(params)
+    const job = store.getJob(params.id)
+    expect(job?.customerId).toBe(params.customerId)
+    expect(job).not.toHaveProperty('wallet')
+    expect(job).not.toHaveProperty('payer')
+  })
+
   it('lists recoverable jobs by status in creation order', () => {
     const queued = makeJob()
     const failed = makeJob()
@@ -80,6 +90,37 @@ describe('JobStore - createJob and getJob', () => {
     store.createJob(failed)
     store.updateJobStatus(failed.id, 'failed')
     expect(store.listJobsByStatuses(['queued']).map((job) => job.id)).toEqual([queued.id])
+  })
+})
+
+describe('JobStore - customer identity migration', () => {
+  it('adds the nullable customer_id column to an existing jobs table', () => {
+    store.close()
+    const legacy = new DatabaseSync(tmpFile)
+    legacy.exec(`
+      DROP TABLE jobs;
+      CREATE TABLE jobs (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'queued',
+        idempotency_key TEXT UNIQUE,
+        payment_id TEXT,
+        created_at INTEGER NOT NULL,
+        started_at INTEGER,
+        completed_at INTEGER,
+        expires_at INTEGER NOT NULL,
+        report_path TEXT,
+        error TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0
+      );
+    `)
+    legacy.close()
+
+    store = new JobStore(tmpFile)
+    store.init()
+    const params = makeJob({ customerId: `cust_${'b'.repeat(64)}` })
+    store.createJob(params)
+    expect(store.getJob(params.id)?.customerId).toBe(params.customerId)
   })
 })
 

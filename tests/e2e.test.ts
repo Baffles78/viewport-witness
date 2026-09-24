@@ -212,6 +212,11 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       }
 
       expect(report).toBeDefined()
+      expect(report?.['feedbackUrl']).toBe(
+        'https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml',
+      )
+      expect(report).not.toHaveProperty('customerId')
+      expect(report).not.toHaveProperty('paymentId')
       const viewports = report?.['viewports'] as Record<
         string,
         { screenshotBytes: number; screenshotPath?: string }

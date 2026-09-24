@@ -5,6 +5,7 @@ import type { WorkerRunner } from '../../worker/runner.js'
 import type { JobStore } from '../../db.js'
 import type { Config } from '../../config.js'
 import { getPaymentDiscovery } from '../../payment/index.js'
+import { FEEDBACK_URL, PUBLIC_BASE_URL } from '../../public.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -30,8 +31,6 @@ try {
     'ViewportWitness by Apex Labs: see /openapi.json and /llms.txt for documentation.'
 }
 
-const PUBLIC_BASE_URL = 'https://qa.honeygate.app'
-
 export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Config): Router {
   const router = createRouter()
 
@@ -47,6 +46,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
+      feedback: FEEDBACK_URL,
     })
   })
 

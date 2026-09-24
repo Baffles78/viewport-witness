@@ -16,6 +16,7 @@ const config: Config = {
   FACILITATOR_URL: undefined,
   CDP_API_KEY_ID: undefined,
   CDP_API_KEY_SECRET: undefined,
+  CUSTOMER_HASH_SECRET: undefined,
   PAY_TO: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
   PRICE_USDC: '0.08',
   RETENTION_DAYS: 7,

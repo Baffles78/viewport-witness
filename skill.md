@@ -114,3 +114,7 @@ Same key returns the same job ID if the job already exists.
 - Payment discovery: https://qa.honeygate.app/.well-known/x402
 - Full usage guide: https://qa.honeygate.app/llms.txt
 - Skill manifest: https://qa.honeygate.app/skill.md
+- Customer feedback: https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml
+
+Do not include private target URLs, wallet details, payment signatures, API keys, or other
+secrets in public feedback.
