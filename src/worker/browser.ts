@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
-import { resolveAndCheck, validateUrl } from '../ssrf.js'
+import { validatePublicHttpsUrl } from '../ssrf.js'
 import type { Viewport, ViewportResult, AccessibilityViolation } from '../types.js'
 import { VIEWPORTS as VP } from '../types.js'
 
@@ -50,7 +50,6 @@ export async function runViewportCheck(
     javaScriptEnabled: true,
   })
 
-  const page: Page = await context.newPage()
   const abortHandler = (): void => {
     void context.close().catch(() => undefined)
   }
@@ -61,6 +60,7 @@ export async function runViewportCheck(
   }
 
   try {
+    const page: Page = await context.newPage()
     const consoleErrors: string[] = []
     let pageCrash = false
     const failedRequests: Array<{ url: string; status: number | null; reason: string }> = []
@@ -134,7 +134,7 @@ export async function runViewportCheck(
       // every subrequest. This includes schemes, ports, URL credentials, local
       // names, inline IPs, and DNS-resolved IPs.
       try {
-        const urlCheck = validateUrl(reqUrl)
+        const urlCheck = await validatePublicHttpsUrl(reqUrl)
         if (!urlCheck.valid) {
           await route.abort('blockedbyclient')
           if (failedRequests.length < MAX_FAILED_REQUESTS) {
@@ -142,20 +142,6 @@ export async function runViewportCheck(
               url: redactUrl(reqUrl),
               status: null,
               reason: urlCheck.reason ?? 'blocked_url',
-            })
-          }
-          return
-        }
-
-        const u = new URL(reqUrl)
-        const check = await resolveAndCheck(u.hostname)
-        if (!check.safe) {
-          await route.abort('blockedbyclient')
-          if (failedRequests.length < MAX_FAILED_REQUESTS) {
-            failedRequests.push({
-              url: redactUrl(reqUrl),
-              status: null,
-              reason: check.reason ?? 'blocked_ssrf',
             })
           }
           return

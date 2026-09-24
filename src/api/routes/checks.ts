@@ -3,7 +3,7 @@ import type { Request, Response, Router, RequestHandler, NextFunction } from 'ex
 import { Router as createRouter } from 'express'
 import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
-import { validateUrl, resolveAndCheck } from '../../ssrf.js'
+import { validatePublicHttpsUrl } from '../../ssrf.js'
 import type { JobStore } from '../../db.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
@@ -68,25 +68,13 @@ export function createChecksRouter(
 
       const { url } = parsed.data
 
-      // SSRF: URL-level checks
-      const urlCheck = validateUrl(url)
+      // Apply URL syntax, scheme, port, hostname, inline-IP, and DNS checks together.
+      const urlCheck = await validatePublicHttpsUrl(url)
       if (!urlCheck.valid) {
         res.status(400).json({
           error: 'invalid_url',
           detail: `URL rejected: ${urlCheck.reason ?? 'blocked_destination'}`,
           code: urlCheck.reason ?? 'blocked_destination',
-        })
-        return
-      }
-
-      // SSRF: DNS resolution check
-      const hostname = new URL(url).hostname
-      const dnsCheck = await resolveAndCheck(hostname)
-      if (!dnsCheck.safe) {
-        res.status(400).json({
-          error: 'blocked_destination',
-          detail: `Host resolves to a blocked address: ${dnsCheck.reason ?? 'unsafe_ip'}`,
-          code: dnsCheck.reason ?? 'unsafe_ip',
         })
         return
       }

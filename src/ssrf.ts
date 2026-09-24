@@ -75,18 +75,18 @@ export function validateUrl(rawUrl: string): ValidationResult {
     }
   }
 
-  // IP address checks (inline)
-  const ipResult = checkIp(hostname)
-  if (!ipResult.safe) {
-    return { valid: false, reason: ipResult.reason ?? 'blocked_ip' }
-  }
-
   // IPv6 literal in brackets
   if (hostname.startsWith('[') && hostname.endsWith(']')) {
     const ipv6 = hostname.slice(1, -1)
     const ipv6Result = checkIpv6(ipv6)
     if (!ipv6Result.safe) {
       return { valid: false, reason: ipv6Result.reason ?? 'blocked_ipv6' }
+    }
+  } else {
+    // IP address checks (inline)
+    const ipResult = checkIp(hostname)
+    if (!ipResult.safe) {
+      return { valid: false, reason: ipResult.reason ?? 'blocked_ip' }
     }
   }
 
@@ -124,7 +124,8 @@ function ipv4ToInt(ip: string): number {
 function inCidr(ip: string, cidr: string): boolean {
   const [network, bits] = cidr.split('/')
   if (!network || !bits) return false
-  const mask = ~((1 << (32 - parseInt(bits, 10))) - 1) >>> 0
+  const prefix = parseInt(bits, 10)
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0
   return (ipv4ToInt(ip) & mask) === (ipv4ToInt(network) & mask)
 }
 
@@ -217,14 +218,14 @@ function checkIpv6(addr: string): SafetyResult {
     }
   }
 
-  for (const cidr of BLOCKED_IPV6_CIDRS) {
-    try {
+  try {
+    for (const cidr of BLOCKED_IPV6_CIDRS) {
       if (inIpv6Cidr(addr, cidr)) {
         return { safe: false, reason: `blocked_ipv6_range:${cidr}` }
       }
-    } catch {
-      // ignore parse errors for this cidr
     }
+  } catch {
+    return { safe: false, reason: 'invalid_ipv6' }
   }
   return { safe: true }
 }
@@ -284,4 +285,22 @@ export async function resolveAndCheck(hostname: string): Promise<SafetyResult> {
   }
 
   return { safe: true }
+}
+
+/** Apply the complete public-target policy in one fail-closed operation. */
+export async function validatePublicHttpsUrl(rawUrl: string): Promise<ValidationResult> {
+  const urlResult = validateUrl(rawUrl)
+  if (!urlResult.valid) return urlResult
+
+  let hostname: string
+  try {
+    hostname = new URL(rawUrl).hostname
+  } catch {
+    return { valid: false, reason: 'invalid_url' }
+  }
+
+  const dnsResult = await resolveAndCheck(hostname)
+  return dnsResult.safe
+    ? { valid: true }
+    : { valid: false, reason: dnsResult.reason ?? 'blocked_destination' }
 }

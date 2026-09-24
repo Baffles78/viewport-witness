@@ -21,8 +21,16 @@ const configSchema = z.object({
     .pipe(z.boolean()),
   FACILITATOR_URL: z.string().url().optional(),
   FACILITATOR_API_KEY: z.string().optional(),
-  PAY_TO: z.string().default('0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400'),
-  PRICE_USDC: z.string().default('0.08'),
+  PAY_TO: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, 'PAY_TO must be a 20-byte EVM address')
+    .default('0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400'),
+  PRICE_USDC: z
+    .string()
+    .refine((value) => /^\d+(\.\d{1,6})?$/.test(value) && Number(value) > 0, {
+      message: 'PRICE_USDC must be a positive USDC amount with at most 6 decimals',
+    })
+    .default('0.08'),
   RETENTION_DAYS: z
     .string()
     .optional()
