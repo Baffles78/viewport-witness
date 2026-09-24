@@ -1,6 +1,6 @@
 # ViewportWitness V1 build evidence
 
-Branch: `feat/browser-qa-v1`
+Release commit: `c4c9d14d9fcc50827128e29203e19a6393140579`
 Build date: 2026-09-24
 Implementation: bounded Claude build, then coordinator correction and verification
 
@@ -12,7 +12,7 @@ All commands below ran from the repository root.
 |---|---|
 | `npm run typecheck` | Passed |
 | `npm run lint` | Passed |
-| `npm test` | 86 passed |
+| `npm test` | 88 passed |
 | `ALLOW_EXTERNAL_E2E=true npm run test:e2e` | 10 passed, including a real three-viewport job against `https://example.com` |
 | `npm run build` | Passed |
 | `npm audit --omit=dev` | 0 production vulnerabilities |
@@ -32,8 +32,10 @@ The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 pro
 - API safety: an initial review found validation ordering and duplicate-request weaknesses. Those were corrected, and the independent re-review passed at commit `8719379`.
 - CDP money path: a separate read-only review returned a conditional pass for public testnet. Its price and route-order conditions were corrected and verified. The remaining condition was resolved directly against the pinned x402 2.27.0 package source: `extra.paymentFlow: "upfront"` selects `settleBeforeHandler: true`, and the Exact EVM scheme explicitly supports `upfront`. Coinbase CDP SDK 1.56.0 and all x402 packages are pinned exactly.
 - VPS deployment: an initial independent review found three public-testnet blockers (swap headroom, a proxy hop-by-hop header, and IPv6 egress). All three were corrected. The exact corrected Docker, Nginx, firewall, and systemd package then passed independent re-review for public testnet. Compose parsing, firewall-script syntax, and an origin-side `nginx -t` also passed.
+- Live firewall testing found and corrected a host-public-IP loopback path. The final rules block metadata, private, loopback, and same-VPS destinations while preserving host-initiated health and reverse-proxy replies. Both corrections passed exact-source independent review.
+- Live proxy testing found and corrected an `http://` x402 resource URL. Express now trusts forwarded scheme headers only from loopback and the fixed Docker gateway; the exact correction passed independent review and the public challenge advertises `https://qa.honeygate.app/v1/checks`.
 
-The code and deployment package are approved for a public Base Sepolia testnet release. Mainnet activation remains separately gated and unapproved.
+The reviewed release is publicly deployed at `https://qa.honeygate.app` in Base Sepolia testnet mode. Mainnet activation remains separately gated and unapproved.
 
 ## Behaviors exercised
 
@@ -63,12 +65,21 @@ The code and deployment package are approved for a public Base Sepolia testnet r
 
 ## Remaining release limits
 
-1. **No public deployment yet.** The image was tested locally and then stopped. VPS capacity, Nginx, Cloudflare DNS, and live TLS remain a release step.
-2. **No live payment test yet.** No USDC was transferred. Base Sepolia can use the public test facilitator. Base mainnet requires choosing and configuring a production facilitator; the public x402.org facilitator must not be assumed to support mainnet.
-3. **Facilitator authentication.** The adapter uses the official Coinbase CDP SDK facilitator client with `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET`. The SDK generates endpoint-bound, short-lived authentication; static bearer auth and hand-written signing are not used. Fail-closed configuration guards have unit coverage. Live settlement has not been tested.
-4. **DNS rebinding still needs a network control.** Application checks run before every browser request, but DNS can theoretically change between the check and Chromium's connection. Before public launch, add an outbound proxy/firewall policy that independently blocks private and metadata networks.
-5. **No receiver signer is present.** The VPS stores only the public revenue address. This is intentional.
-6. **Evidence is hashed, not signed.** A signing key and signed receipts are outside V1 until a reviewed key-custody design exists.
+1. **Mainnet is disabled.** The public service requires Base Sepolia test USDC. `ENABLE_MAINNET_PAYMENTS=false` remains in the protected server environment.
+2. **Mainnet funding has not moved.** No real USDC was transferred. A separate reviewed activation and an action-time transaction confirmation remain required.
+3. **No receiver signer is present.** The VPS stores only the public revenue address. This is intentional.
+4. **Evidence is hashed, not signed.** A signing key and signed receipts are outside V1 until a reviewed key-custody design exists.
+
+## Public Base Sepolia release evidence
+
+- Cloudflare proxied A record: `qa.honeygate.app` -> origin `5.161.82.9`.
+- Public `/health`, `/ready`, and `/.well-known/x402` passed through Cloudflare TLS.
+- CDP credential is restricted to project `ViewportWitness`, VPS IP `5.161.82.9/32`, and View access; Trade, Transfer, Receive, Export, and Manage remain disabled.
+- The VPS authenticated to Coinbase's facilitator and confirmed exact x402 support for `eip155:84532`.
+- A dedicated root-only test payer completed a real protocol payment of 80,000 atomic test USDC (0.08 USDC).
+- Settlement transaction: `0x4404814645f75ecbc30d58a3bdde3184adf8e10fc06cef01c408812677493aee`, successful in Base Sepolia block `47251956`.
+- The public revenue address received exactly 0.08 test USDC.
+- Paid job `c323de23-f76c-48bc-aa44-4ac7c060fe03` completed `PASS` with three retained screenshots and `paymentMode: testnet`.
 
 ## Re-run commands
 

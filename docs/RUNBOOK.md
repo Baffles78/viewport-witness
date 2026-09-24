@@ -243,8 +243,10 @@ Activating them requires:
 
 1. **Independent code review** completed and recorded by the coordinator.
 2. Create a Coinbase CDP API key at the Coinbase Developer Platform dashboard.
-   - The key name looks like `organizations/ORG_ID/apiKeys/KEY_ID`.
-   - Download the PEM private key (EC P-256). Store it securely — it is not recoverable.
+   - Restrict it to the ViewportWitness project and the VPS public IP.
+   - Leave Trade, Transfer, Receive, private-key Export, and policy Manage disabled.
+   - Prefer Ed25519 unless the pinned SDK explicitly requires the legacy ECDSA format.
+   - Download the one-time key file and store it securely; it is not recoverable.
 3. The official CDP SDK uses Coinbase's hosted facilitator at
    `https://api.cdp.coinbase.com/platform/v2/x402` and binds authentication to each
    operation path. Do not hand-build or reuse a static bearer token.
@@ -253,11 +255,11 @@ Activating them requires:
    PAYMENT_MODE=production
    ENABLE_MAINNET_PAYMENTS=true
    PRICE_USDC=0.08
-   CDP_API_KEY_ID=organizations/YOUR_ORG/apiKeys/YOUR_KEY
-   CDP_API_KEY_SECRET="-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n"
+   CDP_API_KEY_ID=YOUR_KEY_ID
+   CDP_API_KEY_SECRET=YOUR_BASE64_ED25519_PRIVATE_KEY
    ```
-   `CDP_API_KEY_SECRET` must be the full PEM key on one line with literal `\n` characters,
-   or a multi-line value wrapped in double quotes. Never commit this file to git.
+   The pinned CDP SDK also accepts the legacy PEM ECDSA format. Never commit either
+   credential format to git or print it in logs.
 5. Restart the service:
    ```bash
    docker compose restart
