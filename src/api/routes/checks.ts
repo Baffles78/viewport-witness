@@ -173,14 +173,6 @@ export function createChecksRouter(
       // Idempotency key
       const idempotencyKey = readIdempotencyKey(req)
       if (idempotencyKey) {
-        if (idempotencyKey.length > 128) {
-          res.status(400).json({
-            error: 'invalid_idempotency_key',
-            detail: 'Key too long',
-            code: 'key_too_long',
-          })
-          return
-        }
         const existing = store.getJobByIdempotencyKey(idempotencyKey)
         if (existing) {
           res.status(202).json({

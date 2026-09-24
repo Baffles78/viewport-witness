@@ -12,7 +12,7 @@ All commands below ran from the repository root.
 |---|---|
 | `npm run typecheck` | Passed |
 | `npm run lint` | Passed |
-| `npm test` | 80 passed |
+| `npm test` | 81 passed |
 | `ALLOW_EXTERNAL_E2E=true npm run test:e2e` | 10 passed, including a real three-viewport job against `https://example.com` |
 | `npm run build` | Passed |
 | `npm audit --omit=dev` | 0 production vulnerabilities |
@@ -23,6 +23,15 @@ All commands below ran from the repository root.
 | Playwright CLI inspection of `/` | Clean snapshot, 0 console errors, 0 warnings |
 
 The final container smoke run used about 196 MiB of its 1.5 GiB limit and 75 processes after the job completed. This is one sample, not a worst-case capacity guarantee.
+
+## Independent review
+
+- Browser worker boundaries: passed for a non-public test deployment after cleanup and timeout hardening.
+- Payment boundary: passed for a non-public test deployment; no mainnet settlement was attempted.
+- URL and network filtering: no bypass found. The review's structural findings were corrected, while the DNS rebinding release limit below remains explicit.
+- API safety: an initial review found validation ordering and duplicate-request weaknesses. Those were corrected, and the independent re-review passed at commit `8719379`.
+
+This is review evidence for a local, non-public test deployment. It is not approval for an Internet-facing or mainnet release.
 
 ## Behaviors exercised
 
