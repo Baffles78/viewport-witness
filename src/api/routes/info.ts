@@ -36,7 +36,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
   router.get('/', (_req: Request, res: Response) => {
     res.json({
       service: 'ViewportWitness by Apex Labs',
-      version: '0.1.0',
+      version: '0.2.0',
       description:
         'Browser QA API: screenshots, accessibility, and layout checks across three viewports',
       docs: '/openapi.json',
@@ -45,6 +45,12 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
+      mcp: '/mcp',
+      products: {
+        check: { endpoint: 'POST /v1/checks', price: '$0.08 USDC' },
+        verify: { endpoint: 'POST /v1/verify', price: '$0.10 USDC' },
+        compare: { endpoint: 'POST /v1/compare', price: '$0.12 USDC' },
+      },
       feedback: FEEDBACK_URL,
     })
   })

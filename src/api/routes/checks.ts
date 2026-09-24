@@ -230,7 +230,7 @@ export function createChecksRouter(
       }
 
       try {
-        await runner.enqueue(jobId, url)
+        await runner.enqueue(jobId)
       } catch (err: unknown) {
         store.updateJobStatus(jobId, 'failed', {
           completedAt: Date.now(),
@@ -277,6 +277,7 @@ export function createChecksRouter(
           res.json({
             id: report.id,
             url: report.url,
+            kind: report.kind,
             status: report.status,
             paymentMode: report.paymentMode,
             createdAt: report.createdAt,
@@ -286,6 +287,9 @@ export function createChecksRouter(
             contentHash: report.contentHash,
             viewports: report.viewports,
             summary: report.summary,
+            verdict: report.verdict,
+            ...(report.assertions ? { assertions: report.assertions } : {}),
+            ...(report.comparison ? { comparison: report.comparison } : {}),
             feedbackUrl: FEEDBACK_URL,
             jobStatus: 'complete',
           })
@@ -374,6 +378,44 @@ export function createChecksRouter(
           detail: 'Screenshot file not found on disk.',
           code: 'screenshot_file_missing',
         })
+      }
+    }),
+  )
+
+  router.get(
+    '/v1/checks/:id/diffs/:viewport',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { id, viewport } = req.params
+      if (!id || !viewport || !VALID_VIEWPORTS.has(viewport)) {
+        res.status(400).json({ error: 'invalid_params', code: 'invalid_params' })
+        return
+      }
+      const job = store.getJob(id)
+      if (!job || job.kind !== 'compare') {
+        res.status(404).json({ error: 'not_found', code: 'not_found' })
+        return
+      }
+      const jobRoot = path.join(cfg.SCREENSHOTS_DIR, job.id)
+      const diffPath = path.join(jobRoot, `diff-${viewport}.png`)
+      if (!isPathInside(jobRoot, diffPath)) {
+        res.status(404).json({ error: 'not_found', code: 'not_found' })
+        return
+      }
+      try {
+        const data = await fs.readFile(diffPath)
+        res
+          .status(200)
+          .set({
+            'Content-Type': 'image/png',
+            'Content-Security-Policy': "default-src 'none'",
+            'X-Content-Type-Options': 'nosniff',
+            'Cache-Control': 'private, max-age=3600',
+            'Content-Disposition': `inline; filename="${viewport}-diff.png"`,
+            'Content-Length': String(data.length),
+          })
+          .send(data)
+      } catch {
+        res.status(404).json({ error: 'diff_not_found', code: 'diff_not_found' })
       }
     }),
   )

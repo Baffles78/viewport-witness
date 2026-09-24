@@ -4,7 +4,13 @@ import path from 'path'
 import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
-import type { Viewport, ViewportResult, AccessibilityViolation } from '../types.js'
+import type {
+  Viewport,
+  ViewportResult,
+  AccessibilityViolation,
+  PageAssertion,
+  AssertionResult,
+} from '../types.js'
 import { VIEWPORTS as VP } from '../types.js'
 
 const MAX_REQUESTS = 100
@@ -41,6 +47,7 @@ export async function runViewportCheck(
   screenshotsDir: string,
   jobId: string,
   signal?: AbortSignal,
+  assertions: PageAssertion[] = [],
 ): Promise<ViewportResult & { screenshotPath: string }> {
   const dimensions = VP[viewport]
   const context = await browser.newContext({
@@ -275,6 +282,82 @@ export async function runViewportCheck(
       // ignore
     }
 
+    // Declarative, read-only assertions. These only inspect the loaded DOM and
+    // observations already collected above; they never click, type, or submit.
+    let assertionResults: AssertionResult[] | undefined
+    if (assertions.length > 0) {
+      assertionResults = []
+      for (const assertion of assertions) {
+        try {
+          let passed = false
+          let detail = ''
+          if (assertion.type === 'noHorizontalOverflow') {
+            passed = !overflowDetected
+            detail = passed ? 'No horizontal overflow detected.' : 'Horizontal overflow detected.'
+          } else if (assertion.type === 'noConsoleErrors') {
+            passed = consoleErrors.length === 0
+            detail = passed
+              ? 'No console errors observed.'
+              : `${consoleErrors.length} console error(s) observed.`
+          } else if (assertion.type === 'titleIncludes') {
+            passed = await withTimeout(
+              page.evaluate((value) => document.title.includes(value), assertion.value),
+              2_000,
+              'assertion_timeout',
+            )
+            detail = passed
+              ? 'Page title contains the expected text.'
+              : 'Expected title text not found.'
+          } else if (assertion.type === 'textVisible') {
+            passed = await withTimeout(
+              page.evaluate(
+                (value) => (document.body?.innerText ?? '').includes(value),
+                assertion.value,
+              ),
+              2_000,
+              'assertion_timeout',
+            )
+            detail = passed ? 'Expected visible text found.' : 'Expected visible text not found.'
+          } else {
+            const found = await withTimeout(
+              page.evaluate((selector) => {
+                const element = document.querySelector(selector)
+                if (!element) return { exists: false, visible: false }
+                const rect = element.getBoundingClientRect()
+                const style = window.getComputedStyle(element)
+                return {
+                  exists: true,
+                  visible:
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    style.opacity !== '0',
+                }
+              }, assertion.selector),
+              2_000,
+              'assertion_timeout',
+            )
+            passed = assertion.type === 'selectorExists' ? found.exists : found.visible
+            detail = passed
+              ? assertion.type === 'selectorExists'
+                ? 'Selector exists.'
+                : 'Selector is visible.'
+              : assertion.type === 'selectorExists'
+                ? 'Selector not found.'
+                : 'Selector not found or not visible.'
+          }
+          assertionResults.push({ assertion, passed, detail })
+        } catch {
+          assertionResults.push({
+            assertion,
+            passed: false,
+            detail: 'Assertion could not be evaluated.',
+          })
+        }
+      }
+    }
+
     // Interaction observations
     let interactionObservations: ViewportResult['interactionObservations'] = {
       visibleControls: 0,
@@ -371,6 +454,7 @@ export async function runViewportCheck(
       offscreenElements,
       accessibility: accessibilityResult,
       interactionObservations,
+      ...(assertionResults ? { assertions: assertionResults } : {}),
     }
   } finally {
     signal?.removeEventListener('abort', abortHandler)

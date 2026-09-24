@@ -18,7 +18,7 @@ export const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'ViewportWitness by Apex Labs',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
       'Machine-facing browser QA API. Submit a public HTTPS URL and receive screenshots, ' +
       'accessibility findings, layout analysis, and a structured report across three browser viewports. ' +
@@ -114,6 +114,63 @@ export const openApiSpec = {
             description: 'Concise agent-facing instructions for this service',
             content: { 'text/markdown': {} },
           },
+        },
+      },
+    },
+    '/mcp': {
+      post: {
+        summary: 'Remote MCP interface for AI agents',
+        operationId: 'mcp',
+        description:
+          'Stateless Streamable HTTP MCP endpoint. Paid tools use the x402 MCP payment transport.',
+        responses: { '200': { description: 'MCP JSON-RPC response' } },
+      },
+    },
+    '/v1/verify': {
+      post: {
+        summary: 'Create a read-only assertion job',
+        operationId: 'verifyPage',
+        description:
+          'Checks up to 20 declarative assertions across all three viewports. Costs $0.10 USDC live.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/VerifyRequest' } },
+          },
+        },
+        responses: {
+          '202': {
+            description: 'Job accepted',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateCheckResponse' } },
+            },
+          },
+          '402': { description: 'Payment required' },
+          '422': { description: 'Invalid assertions' },
+        },
+      },
+    },
+    '/v1/compare': {
+      post: {
+        summary: 'Compare a page with a baseline job',
+        operationId: 'comparePage',
+        description:
+          'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Costs $0.12 USDC live.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CompareRequest' } },
+          },
+        },
+        responses: {
+          '202': {
+            description: 'Job accepted',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateCheckResponse' } },
+            },
+          },
+          '400': { description: 'Baseline or URL unavailable' },
+          '402': { description: 'Payment required' },
         },
       },
     },
@@ -285,6 +342,33 @@ export const openApiSpec = {
   },
   components: {
     schemas: {
+      VerifyRequest: {
+        type: 'object',
+        required: ['url', 'assertions'],
+        additionalProperties: false,
+        properties: {
+          url: { type: 'string', format: 'uri' },
+          assertions: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 20,
+            items: {
+              type: 'object',
+              description:
+                'One of textVisible, selectorExists, selectorVisible, titleIncludes, noHorizontalOverflow, or noConsoleErrors.',
+            },
+          },
+        },
+      },
+      CompareRequest: {
+        type: 'object',
+        required: ['url', 'baselineJobId'],
+        additionalProperties: false,
+        properties: {
+          url: { type: 'string', format: 'uri' },
+          baselineJobId: { type: 'string', format: 'uuid' },
+        },
+      },
       ServiceInfo: {
         type: 'object',
         properties: {
@@ -384,6 +468,7 @@ export const openApiSpec = {
         properties: {
           id: { type: 'string' },
           url: { type: 'string' },
+          kind: { type: 'string', enum: ['check', 'verify', 'compare'] },
           status: { type: 'string', enum: ['PASS', 'FAIL', 'INCONCLUSIVE'] },
           paymentMode: { type: 'string', enum: ['test', 'testnet', 'production'] },
           createdAt: { type: 'string', format: 'date-time' },
@@ -403,6 +488,17 @@ export const openApiSpec = {
               criticalViolations: { type: 'integer' },
               totalErrors: { type: 'integer' },
               overallLoadStatus: { type: 'string' },
+            },
+          },
+          verdict: {
+            type: 'object',
+            required: ['decision', 'blockingIssues', 'warnings', 'reasons', 'recommendedActions'],
+            properties: {
+              decision: { type: 'string', enum: ['safe_to_ship', 'review', 'failed'] },
+              blockingIssues: { type: 'integer' },
+              warnings: { type: 'integer' },
+              reasons: { type: 'array', items: { type: 'string' } },
+              recommendedActions: { type: 'array', items: { type: 'object' } },
             },
           },
           viewports: {

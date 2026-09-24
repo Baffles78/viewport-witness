@@ -12,7 +12,7 @@ errors, failed network requests, layout overflow, and keyboard/focus observation
 
 ## Payment
 
-- Cost: 0.08 USDC per report
+- Costs: 0.08 USDC for `check_page`, 0.10 for `verify_page`, 0.12 for `compare_page`
 - Networks: Base mainnet for production or Base Sepolia for testnet; a Solana rail is available
   only when it appears in the endpoint's live 402 challenge and `/.well-known/x402` response
 - Protocol: x402 upfront — send a valid PAYMENT-SIGNATURE header before the job is created
@@ -32,6 +32,24 @@ PAYMENT-SIGNATURE: <x402-payment>
 
 Strict schema: only `url` (a public HTTPS string) is accepted; extra fields are rejected (422).
 Non-HTTPS, loopback, private, and link-local addresses are blocked (400).
+
+## Read-only assertions
+
+`POST /v1/verify` accepts `url` plus 1–20 assertions. Supported types are `textVisible`,
+`selectorExists`, `selectorVisible`, `titleIncludes`, `noHorizontalOverflow`, and
+`noConsoleErrors`. String assertions use `value`; selector assertions use `selector`.
+
+## Compare with a baseline
+
+`POST /v1/compare` accepts `url` and `baselineJobId`. The baseline must be a completed,
+unexpired ViewportWitness job. The report includes visual diff percentages and images,
+new/resolved accessibility issue IDs, and the browser-error count change.
+
+## MCP
+
+Connect an MCP Streamable HTTP client to `https://qa.honeygate.app/mcp`. Tools are
+`check_page`, `verify_page`, `compare_page`, and the free `get_report`. Paid tools use the
+standard x402 MCP payment exchange in `_meta`; payment settles before browser work is activated.
 
 Response (202 Accepted):
 
@@ -73,6 +91,8 @@ While running:
 
 When complete, the full QAReport is returned. The top-level `status` field becomes
 `"PASS"` | `"FAIL"` | `"INCONCLUSIVE"`.
+Every report also includes a compact `verdict` with `decision`, issue counts, short reasons, and
+recommended actions.
 
 ## Screenshots
 

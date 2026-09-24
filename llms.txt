@@ -4,8 +4,8 @@ ViewportWitness is a browser QA API for AI agents. Submit a public HTTPS URL and
 screenshots, accessibility findings, layout analysis, and a structured report across three
 browser viewports (phone portrait, phone landscape, desktop).
 
-The live service runs at https://qa.honeygate.app and requires a $0.08 USDC x402 payment per
-report (Base mainnet in production, Base Sepolia in testnet). A separately enabled Solana rail may
+The live service runs at https://qa.honeygate.app. Standard checks cost $0.08 USDC, read-only
+assertion checks cost $0.10, and baseline comparisons cost $0.12. Base and a separately enabled Solana rail may
 also appear in the live payment requirements. Local self-hosted instances can run in test mode
 without any payment.
 
@@ -19,6 +19,10 @@ Local dev default: http://localhost:3000  (test mode, no payment required)
 1. POST /v1/checks  — submit a URL with an x402 payment header, get a job ID
 2. GET  /v1/checks/:id  — poll until status is "complete"
 3. GET  /v1/checks/:id/screenshots/:viewport  — download a PNG screenshot
+
+Agent-native alternative: connect a Streamable HTTP MCP client to POST /mcp and use
+check_page, verify_page, compare_page, or the free get_report tool. Paid MCP tools use the
+standard x402 MCP payment metadata exchange.
 
 ### Unpaid probe (see 402 requirements)
 
@@ -68,6 +72,16 @@ Response (202 Accepted):
   "paymentMode": "testnet" | "production"
 }
 
+## Additional products
+
+POST /v1/verify with `{ "url": "https://example.com", "assertions": [...] }` runs 1–20
+read-only assertions across all viewports. Types: textVisible, selectorExists, selectorVisible,
+titleIncludes, noHorizontalOverflow, noConsoleErrors.
+
+POST /v1/compare with `{ "url": "https://example.com", "baselineJobId": "..." }` compares
+new screenshots and QA findings with a completed, unexpired baseline job. Diff PNGs are at
+GET /v1/checks/:id/diffs/:viewport.
+
 ## Poll for results
 
 GET /v1/checks/550e8400-e29b-41d4-a716-446655440000
@@ -96,6 +110,13 @@ When complete, the full QAReport is returned:
     "criticalViolations": 0,
     "totalErrors": 0,
     "overallLoadStatus": "success"
+  },
+  "verdict": {
+    "decision": "safe_to_ship" | "review" | "failed",
+    "blockingIssues": 0,
+    "warnings": 0,
+    "reasons": [],
+    "recommendedActions": []
   },
   "viewports": {
     "phonePortrait":  { ... ViewportResult ... },
