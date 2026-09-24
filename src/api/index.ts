@@ -10,6 +10,11 @@ import { createPaymentMiddleware } from '../payment/index.js'
 export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): Express {
   const app = express()
 
+  // Nginx is the only supported proxy and connects over loopback. Trust its
+  // forwarded scheme so x402 binds payment requirements to the public HTTPS
+  // resource without trusting spoofed forwarding headers from other peers.
+  app.set('trust proxy', 'loopback')
+
   // Body parsing - strict 10KB limit
   app.use(express.json({ limit: '10kb' }))
 
