@@ -82,6 +82,7 @@ export interface JobRecord {
   status: JobStatus
   idempotencyKey: string | null
   paymentId: string | null
+  customerId: string | null
   createdAt: number
   startedAt: number | null
   completedAt: number | null

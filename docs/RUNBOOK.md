@@ -257,9 +257,12 @@ Activating them requires:
    PRICE_USDC=0.08
    CDP_API_KEY_ID=YOUR_KEY_ID
    CDP_API_KEY_SECRET=YOUR_BASE64_ED25519_PRIVATE_KEY
+   CUSTOMER_HASH_SECRET=AT_LEAST_32_RANDOM_CHARACTERS
    ```
    The pinned CDP SDK also accepts the legacy PEM ECDSA format. Never commit either
-   credential format to git or print it in logs.
+   credential format or the customer hash secret to git or print them in logs. Generate the
+   customer hash secret independently from the CDP key and wallet material. Keep it stable so the
+   same payer receives the same anonymous label; rotating it intentionally starts a new series.
 5. Restart the service:
    ```bash
    docker compose restart
@@ -289,7 +292,7 @@ ENABLE_MAINNET_PAYMENTS=false
 | `/ready` returns `"worker": "fail"` | Browser not started | Restart service; check logs for Playwright errors |
 | `/ready` returns `"db": "fail"` | SQLite file permissions | Check `/data` volume mount and user permissions |
 | Job stuck in `running` | Worker timeout | One retry is automatic; restart requeues persisted retryable work |
-| `payment_not_configured` 503 | Paid mode lacks CDP credentials | Set `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` or switch to `test` mode |
+| `payment_not_configured` 503 | Paid mode lacks CDP credentials or the customer hash secret | Set `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and `CUSTOMER_HASH_SECRET` or switch to `test` mode |
 | `mainnet_payments_disabled` 503 | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode |
 | Out of disk space | Storage ceiling reached | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB` |
 | High memory usage | Playwright browser leak | Restart service; check for stuck jobs |

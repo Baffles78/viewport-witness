@@ -20,6 +20,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     FACILITATOR_URL: undefined,
     CDP_API_KEY_ID: undefined,
     CDP_API_KEY_SECRET: undefined,
+    CUSTOMER_HASH_SECRET: undefined,
     PAY_TO: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
     PRICE_USDC: '0.08',
     RETENTION_DAYS: 7,
@@ -88,6 +89,15 @@ describe('GET /', () => {
     const res = await fetch(`http://127.0.0.1:${port}/`)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.paymentDiscovery).toBe('/.well-known/x402')
+  })
+
+  it('advertises the public customer feedback form', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/`)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.feedback).toBe(
+      'https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml',
+    )
   })
 })
 
@@ -288,5 +298,14 @@ describe('GET /openapi.json', () => {
     expect(props.status).toBeDefined()
     expect(props.pollUrl).toBeDefined()
     expect(props.paymentMode).toBeDefined()
+  })
+
+  it('documents the feedback URL on completed reports', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
+    const body = (await res.json()) as {
+      components: { schemas: { QAReport: { properties: Record<string, unknown> } } }
+    }
+    expect(body.components.schemas.QAReport.properties.feedbackUrl).toBeDefined()
   })
 })

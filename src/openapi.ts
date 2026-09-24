@@ -1,3 +1,5 @@
+import { FEEDBACK_URL } from './public.js'
+
 const createCheckRequestSchema = {
   type: 'object',
   required: ['url'],
@@ -23,7 +25,7 @@ export const openApiSpec = {
       'A $0.08 USDC x402 payment on Base is required per report on the live service. ' +
       'Self-hosted instances can run in test mode without payment.',
     contact: {
-      url: 'https://github.com/viewport-witness',
+      url: FEEDBACK_URL,
     },
   },
   servers: [
@@ -292,6 +294,7 @@ export const openApiSpec = {
           skillDocs: { type: 'string', example: '/skill.md' },
           health: { type: 'string', example: '/health' },
           paymentDiscovery: { type: 'string', example: '/.well-known/x402' },
+          feedback: { type: 'string', example: FEEDBACK_URL },
         },
       },
       HealthResponse: {
@@ -377,6 +380,7 @@ export const openApiSpec = {
             description:
               'SHA-256 of report content. Evidence of integrity, not a cryptographic signature.',
           },
+          feedbackUrl: { type: 'string', example: FEEDBACK_URL },
           summary: {
             type: 'object',
             properties: {

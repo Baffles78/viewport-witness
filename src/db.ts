@@ -27,6 +27,7 @@ export class JobStore {
         status TEXT NOT NULL DEFAULT 'queued',
         idempotency_key TEXT UNIQUE,
         payment_id TEXT,
+        customer_id TEXT,
         created_at INTEGER NOT NULL,
         started_at INTEGER,
         completed_at INTEGER,
@@ -56,6 +57,15 @@ export class JobStore {
         created_at INTEGER NOT NULL
       );
     `)
+    const columns = this.conn.prepare('PRAGMA table_info(jobs)').all() as unknown as Array<{
+      name: string
+    }>
+    if (!columns.some((column) => column.name === 'customer_id')) {
+      this.conn.exec('ALTER TABLE jobs ADD COLUMN customer_id TEXT')
+    }
+    this.conn.exec(
+      'CREATE INDEX IF NOT EXISTS idx_jobs_customer_id ON jobs(customer_id) WHERE customer_id IS NOT NULL',
+    )
   }
 
   createJob(params: {
@@ -63,19 +73,21 @@ export class JobStore {
     url: string
     idempotencyKey: string | null
     paymentId?: string
+    customerId?: string
     expiresAt: number
   }): JobRecord {
     const now = Date.now()
     this.conn
       .prepare(
-        `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, created_at, expires_at)
-         VALUES (?, ?, 'queued', ?, ?, ?, ?)`,
+        `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at, expires_at)
+         VALUES (?, ?, 'queued', ?, ?, ?, ?, ?)`,
       )
       .run(
         params.id,
         params.url,
         params.idempotencyKey,
         params.paymentId ?? null,
+        params.customerId ?? null,
         now,
         params.expiresAt,
       )
@@ -179,9 +191,16 @@ export class JobStore {
   }
 
   deleteJob(id: string): void {
-    this.conn.prepare('DELETE FROM screenshots WHERE job_id = ?').run(id)
-    this.conn.prepare('DELETE FROM idempotency_keys WHERE job_id = ?').run(id)
-    this.conn.prepare('DELETE FROM jobs WHERE id = ?').run(id)
+    this.conn.exec('BEGIN IMMEDIATE')
+    try {
+      this.conn.prepare('DELETE FROM screenshots WHERE job_id = ?').run(id)
+      this.conn.prepare('DELETE FROM idempotency_keys WHERE job_id = ?').run(id)
+      this.conn.prepare('DELETE FROM jobs WHERE id = ?').run(id)
+      this.conn.exec('COMMIT')
+    } catch (error) {
+      this.conn.exec('ROLLBACK')
+      throw error
+    }
   }
 
   recordScreenshot(
@@ -235,6 +254,7 @@ interface RawJobRow {
   status: string
   idempotency_key: string | null
   payment_id: string | null
+  customer_id: string | null
   created_at: number
   started_at: number | null
   completed_at: number | null
@@ -251,6 +271,7 @@ function rowToRecord(row: RawJobRow): JobRecord {
     status: row.status as JobStatus,
     idempotencyKey: row.idempotency_key,
     paymentId: row.payment_id,
+    customerId: row.customer_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,

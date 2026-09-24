@@ -181,3 +181,10 @@ Same key returns the same job ID. Max length 128 characters.
 
 GET /openapi.json  — OpenAPI 3.1 machine-readable contract
 GET /skill.md      — Concise agent skill manifest
+
+## Customer feedback
+
+https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml
+
+Do not include private target URLs, wallet details, payment signatures, API keys, or other
+secrets in public feedback. Completed reports also return this URL as `feedbackUrl`.

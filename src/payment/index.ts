@@ -10,7 +10,7 @@
  * never logged and the receiver wallet needs no signing key on this server.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { paymentMiddleware } from '@x402/express'
@@ -25,6 +25,7 @@ import type { PaymentMode } from '../types.js'
 export interface PaymentResult {
   settled: boolean
   paymentId?: string
+  customerId?: string
   mode: PaymentMode
 }
 
@@ -45,6 +46,7 @@ export interface PaymentMiddlewareOptions {
   facilitatorUrl?: string | undefined
   cdpApiKeyId?: string | undefined
   cdpApiKeySecret?: string | undefined
+  customerHashSecret?: string | undefined
 }
 
 export interface PaymentDiscovery {
@@ -74,6 +76,37 @@ function paymentFingerprint(req: Request): string | undefined {
   const signature = req.header('payment-signature') ?? req.header('x-payment')
   if (!signature) return undefined
   return createHash('sha256').update(signature).digest('hex')
+}
+
+export function customerFingerprint(
+  paymentHeader: string | undefined,
+  secret: string | undefined,
+): string | undefined {
+  if (!paymentHeader || !secret || secret.length < 32 || paymentHeader.length > 64 * 1024) {
+    return undefined
+  }
+  try {
+    const envelope = JSON.parse(Buffer.from(paymentHeader, 'base64').toString('utf8')) as {
+      payload?: {
+        authorization?: { from?: unknown }
+        permit2Authorization?: { from?: unknown }
+      }
+    }
+    const hasAuthorization = envelope.payload?.authorization !== undefined
+    const hasPermit2Authorization = envelope.payload?.permit2Authorization !== undefined
+    if (hasAuthorization === hasPermit2Authorization) {
+      return undefined
+    }
+    const candidate = hasAuthorization
+      ? envelope.payload?.authorization?.from
+      : envelope.payload?.permit2Authorization?.from
+    if (typeof candidate !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(candidate)) {
+      return undefined
+    }
+    return `cust_${createHmac('sha256', secret).update(candidate.toLowerCase()).digest('hex')}`
+  } catch {
+    return undefined
+  }
 }
 
 // Bazaar discovery extension: describes the request/response schema for marketplace indexing.
@@ -119,8 +152,16 @@ const bazaarDiscovery = declareDiscoveryExtension({
 })
 
 export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): RequestHandler {
-  const { mode, enableMainnet, facilitatorUrl, cdpApiKeyId, cdpApiKeySecret, payTo, priceUsdc } =
-    opts
+  const {
+    mode,
+    enableMainnet,
+    facilitatorUrl,
+    cdpApiKeyId,
+    cdpApiKeySecret,
+    customerHashSecret,
+    payTo,
+    priceUsdc,
+  } = opts
 
   if (mode === 'test') {
     return (req: Request, _res: Response, next: NextFunction): void => {
@@ -181,10 +222,13 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
           return
         }
         const paymentId = paymentFingerprint(req)
+        const paymentHeader = req.header('payment-signature') ?? req.header('x-payment')
+        const customerId = customerFingerprint(paymentHeader, customerHashSecret)
         req.paymentResult = {
           settled: true,
           mode,
           ...(paymentId ? { paymentId } : {}),
+          ...(customerId ? { customerId } : {}),
         }
         next()
       })
