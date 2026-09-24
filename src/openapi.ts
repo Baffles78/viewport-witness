@@ -1,3 +1,17 @@
+const createCheckRequestSchema = {
+  type: 'object',
+  required: ['url'],
+  additionalProperties: false,
+  properties: {
+    url: {
+      type: 'string',
+      format: 'uri',
+      description: 'Public HTTPS URL to check. Must not be a private/loopback address.',
+      example: 'https://example.com',
+    },
+  },
+} as const
+
 export const openApiSpec = {
   openapi: '3.1.0',
   info: {
@@ -129,7 +143,10 @@ export const openApiSpec = {
           required: true,
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/CreateCheckRequest' },
+              // Keep this schema inline as well as in components. Discovery crawlers
+              // deliberately avoid resolving third-party $ref values when building
+              // an unpaid probe request.
+              schema: createCheckRequestSchema,
               example: { url: 'https://example.com' },
             },
           },
@@ -309,19 +326,7 @@ export const openApiSpec = {
           openapiUrl: { type: 'string', example: 'https://qa.honeygate.app/openapi.json' },
         },
       },
-      CreateCheckRequest: {
-        type: 'object',
-        required: ['url'],
-        additionalProperties: false,
-        properties: {
-          url: {
-            type: 'string',
-            format: 'uri',
-            description: 'Public HTTPS URL to check. Must not be a private/loopback address.',
-            example: 'https://example.com',
-          },
-        },
-      },
+      CreateCheckRequest: createCheckRequestSchema,
       CreateCheckResponse: {
         type: 'object',
         properties: {

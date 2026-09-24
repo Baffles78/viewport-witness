@@ -251,6 +251,32 @@ describe('GET /openapi.json', () => {
     expect(body.components.schemas.CreateCheckRequest.additionalProperties).toBe(false)
   })
 
+  it('declares the required URL inline for safe discovery probes', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
+    const body = (await res.json()) as {
+      paths: {
+        '/v1/checks': {
+          post: {
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    required: string[]
+                    properties: Record<string, unknown>
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const schema = body.paths['/v1/checks'].post.requestBody.content['application/json'].schema
+    expect(schema.required).toEqual(['url'])
+    expect(schema.properties.url).toBeDefined()
+  })
+
   it('CreateCheckResponse has id, status, pollUrl, paymentMode', async () => {
     const { port } = await startServer(makeConfig())
     const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
