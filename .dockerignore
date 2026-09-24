@@ -12,4 +12,5 @@ tests
 .eslintrc*
 eslint.config.*
 *.md
+!skill.md
 vitest.config.ts
