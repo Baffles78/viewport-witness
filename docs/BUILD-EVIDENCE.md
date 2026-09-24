@@ -1,6 +1,6 @@
 # ViewportWitness V1 build evidence
 
-Release commit: `c4c9d14d9fcc50827128e29203e19a6393140579`
+Runtime release commit: `462aad58fbf37f55fa3265f963206eab84421a71`
 Build date: 2026-09-24
 Implementation: bounded Claude build, then coordinator correction and verification
 
@@ -34,8 +34,9 @@ The final container smoke run used about 316 MiB of its 1.5 GiB limit and 71 pro
 - VPS deployment: an initial independent review found three public-testnet blockers (swap headroom, a proxy hop-by-hop header, and IPv6 egress). All three were corrected. The exact corrected Docker, Nginx, firewall, and systemd package then passed independent re-review for public testnet. Compose parsing, firewall-script syntax, and an origin-side `nginx -t` also passed.
 - Live firewall testing found and corrected a host-public-IP loopback path. The final rules block metadata, private, loopback, and same-VPS destinations while preserving host-initiated health and reverse-proxy replies. Both corrections passed exact-source independent review.
 - Live proxy testing found and corrected an `http://` x402 resource URL. Express now trusts forwarded scheme headers only from loopback and the fixed Docker gateway; the exact correction passed independent review and the public challenge advertises `https://qa.honeygate.app/v1/checks`.
+- Mainnet release review passed in focused exact-source packets for the payment/network gates, validation and settlement ordering, durable uniqueness, startup wiring, and deployment binding. The final blocker was fixed by pinning the Docker bridge gateway to the exact trusted proxy address; the immutable one-line fix passed independent review.
 
-The reviewed release is publicly deployed at `https://qa.honeygate.app` in Base Sepolia testnet mode. Mainnet activation remains separately gated and unapproved.
+The reviewed release is publicly deployed at `https://qa.honeygate.app` with Base mainnet payments active.
 
 ## Behaviors exercised
 
@@ -61,14 +62,14 @@ The reviewed release is publicly deployed at `https://qa.honeygate.app` in Base 
 - `no-new-privileges` and all Linux capabilities dropped.
 - 1.5 GiB memory, 1.5 CPU, and 256 process limits.
 - Health check in the image and Compose configuration.
-- Mainnet payments disabled in the committed configuration.
+- Mainnet payments disabled by default in committed example configuration; the protected production environment enables them after the recorded review gate.
 
 ## Remaining release limits
 
-1. **Mainnet is disabled.** The public service requires Base Sepolia test USDC. `ENABLE_MAINNET_PAYMENTS=false` remains in the protected server environment.
-2. **Mainnet funding has not moved.** No real USDC was transferred. A separate reviewed activation and an action-time transaction confirmation remain required.
-3. **No receiver signer is present.** The VPS stores only the public revenue address. This is intentional.
-4. **Evidence is hashed, not signed.** A signing key and signed receipts are outside V1 until a reviewed key-custody design exists.
+1. **No receiver signer is present.** The VPS stores only the public revenue address. This is intentional.
+2. **The smoke payer is deliberately low balance.** It held 4.92 USDC after the single paid smoke and is not a revenue or treasury wallet.
+3. **Evidence is hashed, not signed.** A signing key and signed receipts are outside V1 until a reviewed key-custody design exists.
+4. **Capacity is bounded, not proven at high volume.** The service has container limits and monitoring, but the launch evidence is a single-job production proof rather than a load test.
 
 ## Public Base Sepolia release evidence
 
@@ -80,6 +81,16 @@ The reviewed release is publicly deployed at `https://qa.honeygate.app` in Base 
 - Settlement transaction: `0x4404814645f75ecbc30d58a3bdde3184adf8e10fc06cef01c408812677493aee`, successful in Base Sepolia block `47251956`.
 - The public revenue address received exactly 0.08 test USDC.
 - Paid job `c323de23-f76c-48bc-aa44-4ac7c060fe03` completed `PASS` with three retained screenshots and `paymentMode: testnet`.
+
+## Public Base mainnet release evidence
+
+- The protected environment was changed to `PAYMENT_MODE=production` and `ENABLE_MAINNET_PAYMENTS=true` only after the exact-source release reviews passed.
+- The VPS authenticated to Coinbase's facilitator and confirmed x402 v2 `exact` support for `eip155:8453`.
+- Public `/health` and `/ready` passed, and `/.well-known/x402` advertised `$0.08 USDC`, Base `eip155:8453`, the intended revenue address, and `testMode: false`.
+- An unauthenticated public request returned HTTP 402 with HTTPS resource binding, the Base USDC contract, and exactly 80,000 atomic USDC.
+- The isolated root-only smoke payer sent exactly 0.08 USDC through the live x402 flow. Settlement transaction: `0x68cec2895b4bcbb3141dcca17cdf681d359cebd10a52ffc456d01bac6dd0b4c1`, successful in Base block `51742143`.
+- The payer balance moved from 5.00 to 4.92 USDC and the revenue address received exactly 0.08 USDC.
+- Paid production job `d185bd84-a0da-49de-bc3f-4057b972337c` completed `PASS` across all three viewports with three retained screenshots and `paymentMode: production`.
 
 ## Re-run commands
 
