@@ -46,6 +46,9 @@ iptables -w -C DOCKER-USER -s "$source_subnet" -j "$chain" 2>/dev/null || \
 # services reached through the VPS public address.
 iptables -w -N "$host_chain" 2>/dev/null || true
 iptables -w -F "$host_chain"
+# Permit replies to health checks and reverse-proxy connections that the host
+# initiated. New connections initiated by the worker are still rejected.
+iptables -w -A "$host_chain" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
 iptables -w -A "$host_chain" -j REJECT
 
 iptables -w -C INPUT -s "$source_subnet" -j "$host_chain" 2>/dev/null || \
