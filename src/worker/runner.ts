@@ -15,7 +15,8 @@ import type {
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
 import { buildDiagnosis } from '../report-guidance.js'
-import { buildExtractReport, buildSecurityReport, fetchBoundedHtml } from '../web-products.js'
+import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
+import { runBoundedWebAnalysis } from '../web-analysis-runner.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
@@ -203,18 +204,22 @@ export class WorkerRunner {
     if (!job) throw new Error(`Job ${item.jobId} not found`)
 
     if (job.kind === 'extract' || job.kind === 'security') {
+      const startedAt = Date.now()
       const fetched = await fetchBoundedHtml(job.url, signal)
       const paymentMode = item.paymentMode as QAReport['paymentMode']
-      return job.kind === 'extract'
-        ? buildExtractReport(
-            job.id,
-            job.createdAt,
-            job.expiresAt,
-            paymentMode,
-            fetched,
-            job.request.maxOutputTokens ?? 4000,
-          )
-        : buildSecurityReport(job.id, job.createdAt, job.expiresAt, paymentMode, fetched)
+      return await runBoundedWebAnalysis(
+        {
+          kind: job.kind,
+          id: job.id,
+          createdAt: job.createdAt,
+          expiresAt: job.expiresAt,
+          paymentMode,
+          fetched,
+          maxOutputTokens: job.request.maxOutputTokens ?? 4000,
+        },
+        WEB_JOB_BUDGET_MS - (Date.now() - startedAt),
+        signal,
+      )
     }
 
     if (!this.browser) throw new Error('Browser not initialized')

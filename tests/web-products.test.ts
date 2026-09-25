@@ -1,16 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildExtractReport,
   buildSecurityReport,
+  createPinnedLookup,
   fetchBoundedHtml,
   htmlToMarkdown,
+  type PinnedRequester,
+  type PublicResolver,
 } from '../src/web-products.js'
 
-vi.mock('../src/ssrf.js', () => ({
-  validatePublicHttpsUrl: vi.fn(async (url: string) => ({ valid: !url.includes('blocked') })),
-}))
+const publicResolver: PublicResolver = vi.fn(async (hostname: string) =>
+  hostname.includes('blocked')
+    ? { safe: false, reason: 'blocked_ipv4_range:127.0.0.0/8', addresses: [] }
+    : { safe: true, addresses: [{ address: '93.184.216.34', family: 4 }] },
+)
 
-afterEach(() => vi.unstubAllGlobals())
+function requester(status: number, body: string, headers: Record<string, string>): PinnedRequester {
+  return vi.fn(async (url) => ({
+    status,
+    url: url.toString(),
+    headers: new Headers(headers),
+    body: Buffer.from(body),
+  }))
+}
 
 describe('deterministic extraction', () => {
   it('selects main content, removes active chrome, and reduces tokens', () => {
@@ -42,62 +54,91 @@ describe('deterministic extraction', () => {
 
 describe('bounded HTML fetch', () => {
   it('validates every manual redirect and blocks an unsafe destination', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(null, {
-            status: 302,
-            headers: { location: 'https://blocked.invalid/private' },
-          }),
-      ),
-    )
-    await expect(fetchBoundedHtml('https://public.example/page')).rejects.toThrow(
-      'blocked_destination',
-    )
-    expect(fetch).toHaveBeenCalledTimes(1)
+    const request = requester(302, '', { location: 'https://blocked.invalid/private' })
+    await expect(
+      fetchBoundedHtml('https://public.example.com/page', undefined, {
+        resolver: publicResolver,
+        requester: request,
+      }),
+    ).rejects.toThrow('blocked_destination')
+    expect(request).toHaveBeenCalledTimes(1)
   })
 
   it('rejects non-HTML and oversized declared responses', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response('x', { status: 200, headers: { 'content-type': 'application/json' } }),
-      ),
-    )
-    await expect(fetchBoundedHtml('https://public.example/page')).rejects.toThrow(
-      'unsupported_content_type',
-    )
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response('x', {
-            status: 200,
-            headers: { 'content-type': 'text/html', 'content-length': String(1024 * 1024 + 1) },
-          }),
-      ),
-    )
-    await expect(fetchBoundedHtml('https://public.example/page')).rejects.toThrow(
-      'response_too_large',
-    )
+    await expect(
+      fetchBoundedHtml('https://public.example.com/page', undefined, {
+        resolver: publicResolver,
+        requester: requester(200, 'x', { 'content-type': 'application/json' }),
+      }),
+    ).rejects.toThrow('unsupported_content_type')
+    await expect(
+      fetchBoundedHtml('https://public.example.com/page', undefined, {
+        resolver: publicResolver,
+        requester: requester(200, 'x', {
+          'content-type': 'text/html',
+          'content-length': String(1024 * 1024 + 1),
+        }),
+      }),
+    ).rejects.toThrow('response_too_large')
   })
 
   it('redacts query values from returned provenance URLs', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response('<main>ok</main>', {
-            status: 200,
-            headers: { 'content-type': 'text/html' },
-          }),
-      ),
+    const fetched = await fetchBoundedHtml(
+      'https://public.example.com/page?token=secret',
+      undefined,
+      {
+        resolver: publicResolver,
+        requester: requester(200, '<main>ok</main>', { 'content-type': 'text/html' }),
+      },
     )
-    const fetched = await fetchBoundedHtml('https://public.example/page?token=secret')
     expect(fetched.finalUrl).not.toContain('secret')
     expect(fetched.finalUrl).toContain('token=%5Bredacted%5D')
+  })
+
+  it('pins the request to the validated address even if later DNS could rebind privately', async () => {
+    const resolver: PublicResolver = vi.fn(async () => ({
+      safe: true,
+      addresses: [{ address: '93.184.216.34', family: 4 }],
+    }))
+    const seen: string[] = []
+    const request: PinnedRequester = vi.fn(async (url, pinned) => {
+      seen.push(pinned.address)
+      return {
+        status: 200,
+        url: url.toString(),
+        headers: new Headers({ 'content-type': 'text/html' }),
+        body: Buffer.from('<main>safe</main>'),
+      }
+    })
+    await fetchBoundedHtml('https://rebind.example.net', undefined, {
+      resolver,
+      requester: request,
+    })
+    expect(seen).toEqual(['93.184.216.34'])
+    expect(seen).not.toContain('127.0.0.1')
+    expect(resolver).toHaveBeenCalledTimes(1)
+    const lookup = createPinnedLookup({ address: '93.184.216.34', family: 4 })
+    await new Promise<void>((resolve, reject) => {
+      lookup('rebind.example.net', { family: 0, hints: 0, all: false }, (error, address) => {
+        if (error) reject(error)
+        else {
+          expect(address).toBe('93.184.216.34')
+          expect(address).not.toBe('127.0.0.1')
+          resolve()
+        }
+      })
+    })
+  })
+
+  it('preserves an outer job abort instead of reporting a fetch timeout', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      fetchBoundedHtml('https://public.example.com/page', controller.signal, {
+        resolver: publicResolver,
+        requester: requester(200, '<main>unused</main>', { 'content-type': 'text/html' }),
+      }),
+    ).rejects.toThrow('job_aborted')
   })
 })
 
