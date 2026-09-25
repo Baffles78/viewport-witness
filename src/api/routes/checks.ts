@@ -10,6 +10,7 @@ import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
 import type { QAReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
+import { challengeIfUnsigned } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -123,6 +124,7 @@ export function createChecksRouter(
 
   router.post(
     '/v1/checks',
+    challengeIfUnsigned(paymentMiddleware, cfg),
     validationPreflight,
     idempotencyPreflight,
     paymentMiddleware,
