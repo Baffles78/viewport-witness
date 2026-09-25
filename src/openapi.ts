@@ -114,6 +114,19 @@ export const openApiSpec = {
         },
       },
     },
+    '/.well-known/mcp.json': {
+      get: {
+        summary: 'MCP registry manifest for directory crawlers',
+        operationId: 'getMcpDiscovery',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Official-registry metadata exposed for compatible directory probes',
+            content: { 'application/json': {} },
+          },
+        },
+      },
+    },
     '/skill.md': {
       get: {
         summary: 'Agent skill manifest',

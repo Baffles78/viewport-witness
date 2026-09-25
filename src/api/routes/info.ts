@@ -19,6 +19,35 @@ const privacyPath = join(__dirname, '../../../docs/PRIVACY.md')
 const termsPath = join(__dirname, '../../../docs/TERMS.md')
 const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
 
+// mcpub.dev probes this location before accepting a remote MCP listing.
+// Keep this payload aligned with the validated official MCP Registry manifest in server.json.
+const mcpRegistryManifest = {
+  $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
+  name: 'io.github.Baffles78/viewport-witness',
+  title: 'ViewportWitness by Apex Labs',
+  description: 'Paid browser QA for AI agents across phone and desktop viewports, using x402.',
+  version: '0.2.0',
+  repository: {
+    url: 'https://github.com/Baffles78/viewport-witness',
+    source: 'github',
+    id: '1386004607',
+  },
+  websiteUrl: PUBLIC_BASE_URL,
+  icons: [
+    {
+      src: `${PUBLIC_BASE_URL}/logo.png`,
+      mimeType: 'image/png',
+      sizes: ['1254x1254'],
+    },
+  ],
+  remotes: [
+    {
+      type: 'streamable-http',
+      url: `${PUBLIC_BASE_URL}/mcp`,
+    },
+  ],
+}
+
 let llmsContent: string
 try {
   llmsContent = readFileSync(llmsPath, 'utf8')
@@ -62,6 +91,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
+      mcpDiscovery: '/.well-known/mcp.json',
       mcp: '/mcp',
       privacy: '/privacy',
       terms: '/terms',
@@ -144,6 +174,10 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       PUBLIC_BASE_URL,
     )
     res.json(discovery)
+  })
+
+  router.get('/.well-known/mcp.json', (_req: Request, res: Response) => {
+    res.json(mcpRegistryManifest)
   })
 
   return router
