@@ -47,27 +47,17 @@ export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefin
   const scheme = envelope.x402Version === 1 ? envelope.scheme : envelope.accepted.scheme
   const payload = envelope.payload
   let signedIdentity: Record<string, unknown>
-  if (typeof payload['transaction'] === 'string') {
+  if (network.startsWith('solana:') && typeof payload['transaction'] === 'string') {
     signedIdentity = { transaction: payload['transaction'] }
   } else if (
-    payload['authorization'] &&
-    typeof payload['authorization'] === 'object' &&
-    typeof payload['signature'] === 'string'
-  ) {
-    const authorization = payload['authorization'] as Record<string, unknown>
-    const fields = ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce'] as const
-    if (!fields.every((field) => typeof authorization[field] === 'string')) return undefined
-    signedIdentity = {
-      authorization: Object.fromEntries(fields.map((field) => [field, authorization[field]])),
-      signature: payload['signature'],
-    }
-  } else if (
+    network.startsWith('eip155:') &&
     payload['permit2Authorization'] &&
     typeof payload['permit2Authorization'] === 'object' &&
     typeof payload['signature'] === 'string'
   ) {
     const authorization = payload['permit2Authorization'] as Record<string, unknown>
     const permitted = authorization['permitted']
+    const witness = authorization['witness']
     if (
       typeof authorization['from'] !== 'string' ||
       !permitted ||
@@ -76,7 +66,11 @@ export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefin
       typeof (permitted as Record<string, unknown>)['amount'] !== 'string' ||
       typeof authorization['spender'] !== 'string' ||
       typeof authorization['nonce'] !== 'string' ||
-      typeof authorization['deadline'] !== 'string'
+      typeof authorization['deadline'] !== 'string' ||
+      !witness ||
+      typeof witness !== 'object' ||
+      typeof (witness as Record<string, unknown>)['to'] !== 'string' ||
+      typeof (witness as Record<string, unknown>)['validAfter'] !== 'string'
     )
       return undefined
     signedIdentity = {
@@ -89,7 +83,24 @@ export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefin
         spender: authorization['spender'],
         nonce: authorization['nonce'],
         deadline: authorization['deadline'],
+        witness: {
+          to: (witness as Record<string, unknown>)['to'],
+          validAfter: (witness as Record<string, unknown>)['validAfter'],
+        },
       },
+      signature: payload['signature'],
+    }
+  } else if (
+    network.startsWith('eip155:') &&
+    payload['authorization'] &&
+    typeof payload['authorization'] === 'object' &&
+    typeof payload['signature'] === 'string'
+  ) {
+    const authorization = payload['authorization'] as Record<string, unknown>
+    const fields = ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce'] as const
+    if (!fields.every((field) => typeof authorization[field] === 'string')) return undefined
+    signedIdentity = {
+      authorization: Object.fromEntries(fields.map((field) => [field, authorization[field]])),
       signature: payload['signature'],
     }
   } else return undefined

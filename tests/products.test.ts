@@ -211,6 +211,7 @@ describe('agent QA products', () => {
       ignoredTopLevel: 'does-not-change-payment',
       accepted: { ...accepted, ignoredAcceptedField: true },
       payload: {
+        transaction: 'ignored-on-an-eip155-network',
         ignoredPayloadField: 'not-signed',
         signature: `0x${'a'.repeat(130)}`,
         authorization: { ignoredAuthorizationField: 123, ...authorization },
@@ -218,6 +219,54 @@ describe('agent QA products', () => {
     })
     expect(first).toMatch(/^mcp_[a-f0-9]{64}$/)
     expect(semanticVariant).toBe(first)
+
+    const permit2Authorization = {
+      from: authorization.from,
+      permitted: { token: accepted.asset, amount: accepted.amount },
+      spender: '0x5555555555555555555555555555555555555555',
+      nonce: '42',
+      deadline: '9999999999',
+      witness: { to: accepted.payTo, validAfter: '0' },
+    }
+    const permit2 = mcpPaymentFingerprint({
+      x402Version: 2,
+      accepted: { ...accepted, extra: { assetTransferMethod: 'permit2' } },
+      payload: { permit2Authorization, signature: `0x${'b'.repeat(130)}` },
+    })
+    const permit2WithInjectedShapes = mcpPaymentFingerprint({
+      x402Version: 2,
+      accepted: { ...accepted, extra: { assetTransferMethod: 'permit2' } },
+      payload: {
+        permit2Authorization,
+        signature: `0x${'b'.repeat(130)}`,
+        authorization,
+        transaction: 'also-ignored-on-an-eip155-network',
+      },
+    })
+    expect(permit2WithInjectedShapes).toBe(permit2)
+
+    const solanaAccepted = {
+      ...accepted,
+      network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+      asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      payTo: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
+    }
+    const solana = mcpPaymentFingerprint({
+      x402Version: 2,
+      accepted: solanaAccepted,
+      payload: { transaction: 'signed-solana-transaction' },
+    })
+    const solanaWithInjectedEvm = mcpPaymentFingerprint({
+      x402Version: 2,
+      accepted: solanaAccepted,
+      payload: {
+        transaction: 'signed-solana-transaction',
+        authorization,
+        permit2Authorization,
+        signature: `0x${'c'.repeat(130)}`,
+      },
+    })
+    expect(solanaWithInjectedEvm).toBe(solana)
     expect(mcpPaymentFingerprint(undefined)).toBeUndefined()
   })
 })
