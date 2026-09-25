@@ -17,7 +17,8 @@ export async function runBoundedWebAnalysis(
   timeoutMs: number,
   signal: AbortSignal,
 ): Promise<StoredReport> {
-  if (timeoutMs <= 0 || signal.aborted) throw new Error('parser_timeout')
+  if (signal.aborted) throw new Error('job_aborted')
+  if (timeoutMs <= 0) throw new Error('parser_timeout')
   const sourceMode = import.meta.url.endsWith('.ts')
   const headerEntries: Array<[string, string]> = []
   params.fetched.headers.forEach((value, name) => headerEntries.push([name, value]))

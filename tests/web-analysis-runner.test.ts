@@ -13,6 +13,44 @@ const fetched = {
 }
 
 describe('isolated parser budget', () => {
+  it('preserves a pre-existing outer job abort', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      runBoundedWebAnalysis(
+        {
+          kind: 'extract',
+          id: 'pre-aborted',
+          createdAt: 0,
+          expiresAt: 1000,
+          paymentMode: 'test',
+          fetched,
+          maxOutputTokens: 500,
+        },
+        1000,
+        controller.signal,
+      ),
+    ).rejects.toThrow('job_aborted')
+  })
+
+  it('reports an exhausted parser budget separately', async () => {
+    await expect(
+      runBoundedWebAnalysis(
+        {
+          kind: 'extract',
+          id: 'no-budget',
+          createdAt: 0,
+          expiresAt: 1000,
+          paymentMode: 'test',
+          fetched,
+          maxOutputTokens: 500,
+        },
+        0,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('parser_timeout')
+  })
+
   for (const kind of ['extract', 'security'] as const) {
     it(`terminates adversarial nested markup for ${kind}`, async () => {
       await expect(
