@@ -308,6 +308,11 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       })
       expect((verified['assertions'] as { failed: number }).failed).toBe(0)
       expect(verified['verdict']).toBeDefined()
+      expect(
+        (verified['diagnosis'] as { findings: Array<{ code: string }> }).findings.some(
+          (finding) => finding.code === 'failed-assertions',
+        ),
+      ).toBe(false)
 
       const compared = await createAndPoll('/v1/compare', {
         url: 'https://example.com',
@@ -338,6 +343,11 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       expect((incomplete['comparison'] as { evidenceComplete: boolean }).evidenceComplete).toBe(
         false,
       )
+      expect(
+        (incomplete['diagnosis'] as { findings: Array<{ code: string }> }).findings.some(
+          (finding) => finding.code === 'incomplete-comparison-evidence',
+        ),
+      ).toBe(true)
     },
     240000,
   )

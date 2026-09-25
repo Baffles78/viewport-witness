@@ -6,6 +6,11 @@ const MAX_LOCATORS = 5
 
 type Finding = QAReport['diagnosis']['findings'][number]
 
+export interface DiagnosisEvidence {
+  assertions?: NonNullable<QAReport['assertions']>
+  comparison?: NonNullable<QAReport['comparison']>
+}
+
 const ACCESSIBILITY_FIXES: Record<string, string> = {
   'button-name':
     'Give each button a short visible label or an aria-label that describes its action.',
@@ -43,6 +48,7 @@ function severityForImpact(impact: string | null): Finding['severity'] {
 export function buildDiagnosis(
   status: QAReport['status'],
   viewports: Partial<Record<Viewport, ViewportResult>>,
+  evidence: DiagnosisEvidence = {},
 ): QAReport['diagnosis'] {
   const findings: Finding[] = []
 
@@ -104,6 +110,50 @@ export function buildDiagnosis(
         locatorHints: violation.nodes
           .flatMap((node) => (node.locator ? [node.locator] : []))
           .slice(0, MAX_LOCATORS),
+      })
+    }
+  }
+
+  if (evidence.assertions && evidence.assertions.failed > 0) {
+    const failedViewports = VIEWPORTS.filter((viewport) =>
+      (evidence.assertions?.results[viewport] ?? []).some((assertion) => !assertion.passed),
+    )
+    addFinding(findings, {
+      code: 'failed-assertions',
+      severity: 'high',
+      viewports: failedViewports,
+      diagnosis: `${evidence.assertions.failed} requested assertion${evidence.assertions.failed === 1 ? '' : 's'} failed across the tested viewports.`,
+      fix: 'Review the failed assertion results, correct the page behavior or expectation, and rerun the same verification.',
+      locatorHints: [],
+    })
+  }
+
+  if (evidence.comparison && !evidence.comparison.evidenceComplete) {
+    const missingViewports = VIEWPORTS.filter((viewport) => !evidence.comparison?.visual[viewport])
+    addFinding(findings, {
+      code: 'incomplete-comparison-evidence',
+      severity: 'high',
+      viewports: missingViewports,
+      diagnosis:
+        'The baseline comparison is missing or could not decode required screenshot evidence.',
+      fix: 'Create a fresh complete baseline, confirm all three baseline screenshots are available, and run the comparison again.',
+      locatorHints: [],
+    })
+  }
+
+  if (evidence.comparison) {
+    const changedViewports = VIEWPORTS.filter(
+      (viewport) => (evidence.comparison?.visual[viewport]?.changedPixels ?? 0) > 0,
+    )
+    if (changedViewports.length > 0) {
+      addFinding(findings, {
+        code: 'visual-changes',
+        severity: 'medium',
+        viewports: changedViewports,
+        diagnosis:
+          'The current page differs visually from the saved baseline in one or more viewports.',
+        fix: 'Inspect the supplied diff images, approve intentional changes, and repair unexpected changes before replacing the baseline.',
+        locatorHints: [],
       })
     }
   }
