@@ -3,8 +3,9 @@
 Browser QA API for AI agents. Submit a public HTTPS URL and receive screenshots, accessibility
 findings, layout analysis, and a structured JSON report across three browser viewports.
 
-The live service is at **https://qa.honeygate.app** and requires a $0.08 USDC x402 payment per
-report. Local instances can run in test mode without payment.
+The live service is at **https://qa.honeygate.app**. A standard report costs $0.08 USDC,
+read-only assertions cost $0.10, and a baseline comparison costs $0.12. Local instances can run
+in test mode without payment.
 
 ---
 
@@ -67,8 +68,12 @@ Local defaults to `PAYMENT_MODE=test`. No CDP keys needed for test mode. Results
 | GET | `/skill.md` | Concise agent skill manifest |
 | GET | `/.well-known/x402` | Payment discovery |
 | POST | `/v1/checks` | Create a QA check job |
+| POST | `/v1/verify` | Check explicit read-only assertions |
+| POST | `/v1/compare` | Compare against an unexpired baseline job |
+| POST | `/mcp` | Remote MCP interface with x402-paid tools |
 | GET | `/v1/checks/:id` | Poll job status / get report |
 | GET | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG |
+| GET | `/v1/checks/:id/diffs/:viewport` | Download comparison diff PNG |
 
 Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1440×900)
 

@@ -2,6 +2,8 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import { v4 as uuidv4 } from 'uuid'
 import { createInfoRouter } from './routes/info.js'
 import { createChecksRouter } from './routes/checks.js'
+import { createProductsRouter } from './routes/products.js'
+import { createMcpRouter } from '../mcp.js'
 import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
 import type { Config } from '../config.js'
@@ -55,10 +57,46 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
   })
+  const verifyPaymentMiddleware = createPaymentMiddleware({
+    payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
+    priceUsdc: cfg.VERIFY_PRICE_USDC,
+    route: 'POST /v1/verify',
+    description: 'Read-only browser assertions across three viewports',
+    mode: cfg.PAYMENT_MODE,
+    enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+    facilitatorUrl: cfg.FACILITATOR_URL,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+  })
+  const comparePaymentMiddleware = createPaymentMiddleware({
+    payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
+    priceUsdc: cfg.COMPARE_PRICE_USDC,
+    route: 'POST /v1/compare',
+    description: 'Visual and QA comparison against a completed baseline job',
+    mode: cfg.PAYMENT_MODE,
+    enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+    facilitatorUrl: cfg.FACILITATOR_URL,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+  })
 
   // Mount routers
   const infoRouter = createInfoRouter(store, runner, cfg)
   app.use(infoRouter)
+
+  app.use(createMcpRouter(store, runner, cfg))
+
+  app.use(
+    createProductsRouter(store, runner, cfg, verifyPaymentMiddleware, comparePaymentMiddleware),
+  )
 
   const checksRouter = createChecksRouter(store, runner, cfg, paymentMiddleware)
   app.use(checksRouter)

@@ -2,6 +2,11 @@ import { z } from 'zod'
 import type { PaymentMode } from './types.js'
 
 const paymentModeSchema = z.enum(['test', 'testnet', 'production'])
+const usdcPriceSchema = z
+  .string()
+  .refine((value) => /^\d+(\.\d{1,6})?$/.test(value) && Number(value) > 0, {
+    message: 'Price must be a positive USDC amount with at most 6 decimals',
+  })
 
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -40,12 +45,9 @@ const configSchema = z.object({
     .string()
     .regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'SOLANA_REVENUE_PAY_TO must be a base58 Solana address')
     .default('EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk'),
-  PRICE_USDC: z
-    .string()
-    .refine((value) => /^\d+(\.\d{1,6})?$/.test(value) && Number(value) > 0, {
-      message: 'PRICE_USDC must be a positive USDC amount with at most 6 decimals',
-    })
-    .default('0.08'),
+  PRICE_USDC: usdcPriceSchema.default('0.08'),
+  VERIFY_PRICE_USDC: usdcPriceSchema.default('0.10'),
+  COMPARE_PRICE_USDC: usdcPriceSchema.default('0.12'),
   RETENTION_DAYS: z
     .string()
     .optional()
@@ -81,6 +83,8 @@ export type Config = {
   SOLANA_TEST_PAY_TO: string
   SOLANA_REVENUE_PAY_TO: string
   PRICE_USDC: string
+  VERIFY_PRICE_USDC: string
+  COMPARE_PRICE_USDC: string
   RETENTION_DAYS: number
   MAX_STORAGE_GB: number
   WORKER_TIMEOUT_MS: number
@@ -98,6 +102,12 @@ function loadConfig(): Config {
 export function validateConfig(cfg: Config): void {
   if (cfg.PAYMENT_MODE !== 'test' && cfg.PRICE_USDC !== '0.08') {
     throw new Error('Paid modes require PRICE_USDC=0.08 for the reviewed V1 price.')
+  }
+  if (
+    cfg.PAYMENT_MODE !== 'test' &&
+    (cfg.VERIFY_PRICE_USDC !== '0.10' || cfg.COMPARE_PRICE_USDC !== '0.12')
+  ) {
+    throw new Error('Paid modes require the reviewed prices: verify=0.10 and compare=0.12 USDC.')
   }
   if (cfg.PAYMENT_MODE === 'production') {
     if (!cfg.ENABLE_MAINNET_PAYMENTS) {

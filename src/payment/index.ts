@@ -54,6 +54,8 @@ export interface PaymentMiddlewareOptions {
   cdpApiKeyId?: string | undefined
   cdpApiKeySecret?: string | undefined
   customerHashSecret?: string | undefined
+  route?: 'POST /v1/checks' | 'POST /v1/verify' | 'POST /v1/compare'
+  description?: string
 }
 
 export interface PaymentDiscovery {
@@ -77,6 +79,7 @@ export interface PaymentDiscovery {
   description?: string
   skillMdUrl?: string
   openapiUrl?: string
+  products?: Array<{ name: string; endpoint: string; price: string; description: string }>
 }
 
 function unavailable(error: string, detail: string): RequestHandler {
@@ -149,45 +152,68 @@ export function customerFingerprint(
 
 // Bazaar discovery extension: describes the request/response schema for marketplace indexing.
 // Request: strict {url:string} only. Response: the accepted 202 job object, not the eventual report.
-const bazaarDiscovery = declareDiscoveryExtension({
-  bodyType: 'json',
-  input: { url: 'https://example.com' },
-  inputSchema: {
-    required: ['url'],
-    additionalProperties: false,
-    properties: {
-      url: {
-        type: 'string',
-        format: 'uri',
-        description: 'Public HTTPS URL to check',
-        example: 'https://example.com',
-      },
+function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
+  const input =
+    route === 'POST /v1/verify'
+      ? { url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }] }
+      : route === 'POST /v1/compare'
+        ? { url: 'https://example.com', baselineJobId: '550e8400-e29b-41d4-a716-446655440000' }
+        : { url: 'https://example.com' }
+  const properties: Record<string, unknown> = {
+    url: {
+      type: 'string',
+      format: 'uri',
+      description: 'Public HTTPS URL to check',
+      example: 'https://example.com',
     },
-  },
-  output: {
-    example: {
-      id: '550e8400-e29b-41d4-a716-446655440000',
-      status: 'queued',
-      pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
-      paymentMode: 'production',
-    },
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: 'Job UUID' },
-        status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
-        pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
-        paymentMode: {
-          type: 'string',
-          enum: ['testnet', 'production'],
-          description: 'Payment mode used for this job',
-        },
-      },
-      required: ['id', 'status', 'pollUrl', 'paymentMode'],
+  }
+  const required = ['url']
+  if (route === 'POST /v1/verify') {
+    properties['assertions'] = {
+      type: 'array',
+      minItems: 1,
+      maxItems: 20,
+      items: { type: 'object' },
+    }
+    required.push('assertions')
+  }
+  if (route === 'POST /v1/compare') {
+    properties['baselineJobId'] = { type: 'string', format: 'uuid' }
+    required.push('baselineJobId')
+  }
+  return declareDiscoveryExtension({
+    bodyType: 'json',
+    input,
+    inputSchema: {
+      required,
       additionalProperties: false,
+      properties,
     },
-  },
-})
+    output: {
+      example: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        status: 'queued',
+        pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
+        paymentMode: 'production',
+      },
+      schema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Job UUID' },
+          status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
+          pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
+          paymentMode: {
+            type: 'string',
+            enum: ['testnet', 'production'],
+            description: 'Payment mode used for this job',
+          },
+        },
+        required: ['id', 'status', 'pollUrl', 'paymentMode'],
+        additionalProperties: false,
+      },
+    },
+  })
+}
 
 export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): RequestHandler {
   const {
@@ -201,6 +227,8 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     solanaPayTo,
     enableSolana = false,
     priceUsdc,
+    route = 'POST /v1/checks',
+    description = 'ViewportWitness browser QA report across three viewports',
   } = opts
 
   if (mode === 'test') {
@@ -246,6 +274,7 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     resourceServer.register(solanaNetwork, new ExactSvmScheme())
   }
   resourceServer.registerExtension(bazaarResourceServerExtension)
+  const bazaarDiscovery = createBazaarDiscovery(route)
 
   const accepts: PaymentOption[] = [
     {
@@ -270,9 +299,9 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
   ]
   const x402 = paymentMiddleware(
     {
-      'POST /v1/checks': {
+      [route]: {
         accepts,
-        description: 'ViewportWitness browser QA report across three viewports',
+        description,
         mimeType: 'application/json',
         serviceName: 'ViewportWitness by Apex Labs',
         tags: ['browser-qa', 'accessibility', 'screenshots', 'qa', 'layout'],
@@ -352,6 +381,32 @@ export function getPaymentDiscovery(
             'Browser QA report across three viewports — screenshots, accessibility, layout',
           skillMdUrl: `${baseUrl}/skill.md`,
           openapiUrl: `${baseUrl}/openapi.json`,
+          products: [
+            {
+              name: 'check_page',
+              endpoint: `POST ${baseUrl}/v1/checks`,
+              price: '$0.08 USDC',
+              description: 'Three-viewport browser QA report',
+            },
+            {
+              name: 'verify_page',
+              endpoint: `POST ${baseUrl}/v1/verify`,
+              price: '$0.10 USDC',
+              description: 'Read-only assertions across three viewports',
+            },
+            {
+              name: 'compare_page',
+              endpoint: `POST ${baseUrl}/v1/compare`,
+              price: '$0.12 USDC',
+              description: 'Visual and QA comparison to a baseline report',
+            },
+            {
+              name: 'mcp',
+              endpoint: `POST ${baseUrl}/mcp`,
+              price: 'per tool',
+              description: 'Remote MCP interface for AI agents',
+            },
+          ],
         }
       : {}),
   }

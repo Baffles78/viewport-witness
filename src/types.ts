@@ -1,8 +1,25 @@
 export type PaymentMode = 'test' | 'testnet' | 'production'
 
-export type JobStatus = 'queued' | 'running' | 'complete' | 'failed' | 'retryable'
+export type JobStatus =
+  'payment_pending' | 'queued' | 'running' | 'complete' | 'failed' | 'retryable'
 
 export type Viewport = 'phonePortrait' | 'phoneLandscape' | 'desktop'
+
+export type JobKind = 'check' | 'verify' | 'compare'
+
+export type PageAssertion =
+  | { type: 'textVisible'; value: string }
+  | { type: 'selectorExists'; selector: string }
+  | { type: 'selectorVisible'; selector: string }
+  | { type: 'titleIncludes'; value: string }
+  | { type: 'noHorizontalOverflow' }
+  | { type: 'noConsoleErrors' }
+
+export interface AssertionResult {
+  assertion: PageAssertion
+  passed: boolean
+  detail: string
+}
 
 export interface ViewportDimensions {
   width: number
@@ -55,11 +72,35 @@ export interface ViewportResult {
     focusableControls: number
     keyboardReachable: boolean
   }
+  assertions?: AssertionResult[]
+}
+
+export interface MachineVerdict {
+  decision: 'safe_to_ship' | 'review' | 'failed'
+  blockingIssues: number
+  warnings: number
+  reasons: string[]
+  recommendedActions: Array<{
+    code: string
+    priority: 'high' | 'medium' | 'low'
+    viewport?: Viewport
+    detail: string
+  }>
+}
+
+export interface VisualComparisonResult {
+  viewport: Viewport
+  changedPixels: number
+  changedPercent: number
+  diffImageUrl: string
+  baselineScreenshotSha256: string
+  currentScreenshotSha256: string
 }
 
 export interface QAReport {
   id: string
   url: string
+  kind: JobKind
   status: 'PASS' | 'FAIL' | 'INCONCLUSIVE'
   paymentMode: PaymentMode
   createdAt: string
@@ -73,6 +114,23 @@ export interface QAReport {
     criticalViolations: number
     totalErrors: number
     overallLoadStatus: string
+  }
+  verdict: MachineVerdict
+  assertions?: {
+    passed: number
+    failed: number
+    results: Partial<Record<Viewport, AssertionResult[]>>
+  }
+  comparison?: {
+    baselineJobId: string
+    evidenceComplete: boolean
+    evidenceLimitations: string[]
+    visual: Partial<Record<Viewport, VisualComparisonResult>>
+    accessibility: {
+      newViolationIds: string[]
+      resolvedViolationIds: string[]
+    }
+    errors: { baseline: number; current: number; delta: number }
   }
 }
 
@@ -90,4 +148,7 @@ export interface JobRecord {
   reportPath: string | null
   error: string | null
   retryCount: number
+  kind: JobKind
+  request: { assertions?: PageAssertion[] }
+  baselineJobId: string | null
 }

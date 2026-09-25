@@ -26,6 +26,8 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     SOLANA_TEST_PAY_TO: 'AwnqYWr32DUJvk4XKxfUSpVVYcoUuMFNp8XoBShm5qSS',
     SOLANA_REVENUE_PAY_TO: 'EcgBX5ydNsGfJDrmW2qzNtJenDud8sNGSZBtt3XH2WJk',
     PRICE_USDC: '0.08',
+    VERIFY_PRICE_USDC: '0.10',
+    COMPARE_PRICE_USDC: '0.12',
     RETENTION_DAYS: 7,
     MAX_STORAGE_GB: 10,
     WORKER_TIMEOUT_MS: 120_000,

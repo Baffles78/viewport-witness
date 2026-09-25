@@ -16,6 +16,7 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import { promises as fs } from 'fs'
+import { PNG } from 'pngjs'
 import type { JobStore as JobStoreType } from '../src/db.js'
 import type { WorkerRunner as WorkerRunnerType } from '../src/worker/runner.js'
 
@@ -161,6 +162,29 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
     expect(body.paymentRequired).toBe(false)
   })
 
+  it('serves an MCP initialize response over Streamable HTTP', async () => {
+    const response = await fetch(`http://127.0.0.1:${appPort}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'viewport-witness-test', version: '1.0.0' },
+        },
+      }),
+    })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { result?: { serverInfo?: { name?: string } } }
+    expect(body.result?.serverInfo?.name).toBe('ViewportWitness')
+  })
+
   it('rejects extra fields in POST /v1/checks body', async () => {
     const response = await fetch(`http://127.0.0.1:${appPort}/v1/checks`, {
       method: 'POST',
@@ -230,5 +254,76 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       }
     },
     180000,
+  )
+
+  it.skipIf(process.env['ALLOW_EXTERNAL_E2E'] !== 'true')(
+    'runs assertions and an identical visual comparison against https://example.com',
+    async () => {
+      const createAndPoll = async (
+        endpoint: string,
+        payload: unknown,
+      ): Promise<Record<string, unknown>> => {
+        const createdResponse = await fetch(`http://127.0.0.1:${appPort}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        expect(createdResponse.status).toBe(202)
+        const created = (await createdResponse.json()) as { id: string }
+        const deadline = Date.now() + 150000
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+          const response = await fetch(`http://127.0.0.1:${appPort}/v1/checks/${created.id}`)
+          const body = (await response.json()) as Record<string, unknown>
+          if (body['jobStatus'] === 'complete') return body
+          if (body['status'] === 'failed') throw new Error(`Job failed: ${JSON.stringify(body)}`)
+        }
+        throw new Error('Job did not complete before the test deadline')
+      }
+
+      const baseline = await createAndPoll('/v1/checks', { url: 'https://example.com' })
+      const verified = await createAndPoll('/v1/verify', {
+        url: 'https://example.com',
+        assertions: [
+          { type: 'titleIncludes', value: 'Example Domain' },
+          { type: 'selectorVisible', selector: 'h1' },
+          { type: 'noHorizontalOverflow' },
+          { type: 'noConsoleErrors' },
+        ],
+      })
+      expect((verified['assertions'] as { failed: number }).failed).toBe(0)
+      expect(verified['verdict']).toBeDefined()
+
+      const compared = await createAndPoll('/v1/compare', {
+        url: 'https://example.com',
+        baselineJobId: baseline['id'],
+      })
+      const comparison = compared['comparison'] as {
+        visual: Record<string, { diffImageUrl: string }>
+      }
+      expect(Object.keys(comparison.visual).sort()).toEqual(
+        ['desktop', 'phoneLandscape', 'phonePortrait'].sort(),
+      )
+      const diffResponse = await fetch(
+        `http://127.0.0.1:${appPort}${comparison.visual.desktop.diffImageUrl}`,
+      )
+      expect(diffResponse.status).toBe(200)
+      expect(diffResponse.headers.get('content-type')).toContain('image/png')
+
+      const baselineDesktop = store.getScreenshot(String(baseline['id']), 'desktop')
+      expect(baselineDesktop).not.toBeNull()
+      if (!baselineDesktop) throw new Error('Baseline desktop screenshot missing')
+      await fs.writeFile(baselineDesktop.path, PNG.sync.write(new PNG({ width: 1, height: 1 })))
+      const incomplete = await createAndPoll('/v1/compare', {
+        url: 'https://example.com',
+        baselineJobId: baseline['id'],
+      })
+      expect(incomplete['status']).toBe('INCONCLUSIVE')
+      expect((incomplete['verdict'] as { decision: string }).decision).toBe('review')
+      expect((incomplete['comparison'] as { evidenceComplete: boolean }).evidenceComplete).toBe(
+        false,
+      )
+    },
+    240000,
   )
 })

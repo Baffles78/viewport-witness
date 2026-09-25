@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import type { JobRecord, JobStatus } from './types.js'
+import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
 
 export class JobStore {
   private db: DatabaseSync | null = null
@@ -63,6 +63,15 @@ export class JobStore {
     if (!columns.some((column) => column.name === 'customer_id')) {
       this.conn.exec('ALTER TABLE jobs ADD COLUMN customer_id TEXT')
     }
+    if (!columns.some((column) => column.name === 'kind')) {
+      this.conn.exec("ALTER TABLE jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'check'")
+    }
+    if (!columns.some((column) => column.name === 'request_json')) {
+      this.conn.exec("ALTER TABLE jobs ADD COLUMN request_json TEXT NOT NULL DEFAULT '{}'")
+    }
+    if (!columns.some((column) => column.name === 'baseline_job_id')) {
+      this.conn.exec('ALTER TABLE jobs ADD COLUMN baseline_job_id TEXT')
+    }
     this.conn.exec(
       'CREATE INDEX IF NOT EXISTS idx_jobs_customer_id ON jobs(customer_id) WHERE customer_id IS NOT NULL',
     )
@@ -75,21 +84,29 @@ export class JobStore {
     paymentId?: string
     customerId?: string
     expiresAt: number
+    kind?: JobKind
+    request?: { assertions?: PageAssertion[] }
+    baselineJobId?: string
+    initialStatus?: 'queued' | 'payment_pending'
   }): JobRecord {
     const now = Date.now()
     this.conn
       .prepare(
-        `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at, expires_at)
-         VALUES (?, ?, 'queued', ?, ?, ?, ?, ?)`,
+        `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at, expires_at, kind, request_json, baseline_job_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         params.id,
         params.url,
+        params.initialStatus ?? 'queued',
         params.idempotencyKey,
         params.paymentId ?? null,
         params.customerId ?? null,
         now,
         params.expiresAt,
+        params.kind ?? 'check',
+        JSON.stringify(params.request ?? {}),
+        params.baselineJobId ?? null,
       )
 
     if (params.idempotencyKey) {
@@ -183,6 +200,22 @@ export class JobStore {
       .run(id)
   }
 
+  activatePaymentPendingJob(id: string): boolean {
+    const result = this.conn
+      .prepare("UPDATE jobs SET status = 'queued' WHERE id = ? AND status = 'payment_pending'")
+      .run(id)
+    return Number(result.changes) === 1
+  }
+
+  failPaymentPendingJob(id: string, error: string): boolean {
+    const result = this.conn
+      .prepare(
+        "UPDATE jobs SET status = 'failed', completed_at = ?, error = ? WHERE id = ? AND status = 'payment_pending'",
+      )
+      .run(Date.now(), error.slice(0, 1000), id)
+    return Number(result.changes) === 1
+  }
+
   listExpiredJobs(beforeMs: number): JobRecord[] {
     const rows = this.conn
       .prepare('SELECT * FROM jobs WHERE expires_at < ?')
@@ -262,9 +295,18 @@ interface RawJobRow {
   report_path: string | null
   error: string | null
   retry_count: number
+  kind: string
+  request_json: string
+  baseline_job_id: string | null
 }
 
 function rowToRecord(row: RawJobRow): JobRecord {
+  let request: JobRecord['request'] = {}
+  try {
+    request = JSON.parse(row.request_json ?? '{}') as JobRecord['request']
+  } catch {
+    request = {}
+  }
   return {
     id: row.id,
     url: row.url,
@@ -279,5 +321,8 @@ function rowToRecord(row: RawJobRow): JobRecord {
     reportPath: row.report_path,
     error: row.error,
     retryCount: row.retry_count,
+    kind: (row.kind ?? 'check') as JobKind,
+    request,
+    baselineJobId: row.baseline_job_id ?? null,
   }
 }

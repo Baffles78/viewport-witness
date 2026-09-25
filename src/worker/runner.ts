@@ -2,15 +2,22 @@ import crypto from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { chromium, type Browser } from 'playwright'
+import { PNG } from 'pngjs'
+import pixelmatch from 'pixelmatch'
 import type { JobStore } from '../db.js'
-import type { QAReport, Viewport, ViewportResult } from '../types.js'
+import type {
+  MachineVerdict,
+  QAReport,
+  Viewport,
+  ViewportResult,
+  VisualComparisonResult,
+} from '../types.js'
 import { runViewportCheck } from './browser.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
 interface QueueItem {
   jobId: string
-  url: string
   paymentMode: string
 }
 
@@ -46,7 +53,7 @@ export class WorkerRunner {
     const recoverable = this.store.listJobsByStatuses(['queued', 'running', 'retryable'])
     for (const job of recoverable) {
       if (job.status === 'running') this.store.markJobRetryable(job.id)
-      this.queue.push({ jobId: job.id, url: job.url, paymentMode: this.paymentMode })
+      this.queue.push({ jobId: job.id, paymentMode: this.paymentMode })
     }
     if (this.queue.length > 0) void this.processNext()
   }
@@ -87,11 +94,11 @@ export class WorkerRunner {
     return !this.shuttingDown && this.browser !== null
   }
 
-  async enqueue(jobId: string, url: string): Promise<void> {
+  async enqueue(jobId: string): Promise<void> {
     if (this.shuttingDown) {
       throw new Error('Worker is shutting down')
     }
-    this.queue.push({ jobId, url, paymentMode: this.paymentMode })
+    this.queue.push({ jobId, paymentMode: this.paymentMode })
     if (!this.processing) {
       void this.processNext()
     }
@@ -203,10 +210,11 @@ export class WorkerRunner {
         const result = await runViewportCheck(
           this.browser,
           viewport,
-          item.url,
+          job.url,
           this.screenshotsDir,
           item.jobId,
           signal,
+          job.request.assertions ?? [],
         )
         viewportResults[viewport] = result
         if (result.screenshotBytes > 0) {
@@ -269,6 +277,7 @@ export class WorkerRunner {
     const reportObj: Omit<QAReport, 'contentHash'> = {
       id: job.id,
       url: job.url,
+      kind: job.kind,
       status,
       paymentMode: item.paymentMode as QAReport['paymentMode'],
       createdAt: new Date(job.createdAt).toISOString(),
@@ -290,6 +299,64 @@ export class WorkerRunner {
         totalErrors,
         overallLoadStatus,
       },
+      verdict: this.buildVerdict(status, publicViewportResults),
+    }
+
+    if (job.kind === 'verify') {
+      const results: NonNullable<QAReport['assertions']>['results'] = {}
+      let passed = 0
+      let failed = 0
+      for (const [viewport, result] of Object.entries(publicViewportResults) as Array<
+        [Viewport, ViewportResult]
+      >) {
+        const viewportAssertions = result.assertions ?? []
+        results[viewport] = viewportAssertions
+        passed += viewportAssertions.filter((assertion) => assertion.passed).length
+        failed += viewportAssertions.filter((assertion) => !assertion.passed).length
+      }
+      reportObj.assertions = { passed, failed, results }
+      if (failed > 0) {
+        reportObj.status = 'FAIL'
+        reportObj.verdict = this.buildVerdict('FAIL', publicViewportResults)
+        reportObj.verdict.blockingIssues += failed
+        reportObj.verdict.reasons.push(`${failed} explicit assertion(s) failed.`)
+        reportObj.verdict.recommendedActions.unshift({
+          code: 'assertions_failed',
+          priority: 'high',
+          detail: 'Review the failed assertions before shipping.',
+        })
+      }
+    }
+
+    if (job.kind === 'compare' && job.baselineJobId) {
+      reportObj.comparison = await this.buildComparison(
+        job.id,
+        job.baselineJobId,
+        publicViewportResults,
+      )
+      if (!reportObj.comparison.evidenceComplete) {
+        reportObj.status = 'INCONCLUSIVE'
+        reportObj.verdict = this.buildVerdict('INCONCLUSIVE', publicViewportResults)
+        reportObj.verdict.reasons.unshift('The baseline comparison evidence is incomplete.')
+        reportObj.verdict.recommendedActions.unshift({
+          code: 'incomplete_comparison',
+          priority: 'high',
+          detail: 'Create a new complete baseline and run the comparison again.',
+        })
+      }
+      const changed = Object.values(reportObj.comparison.visual).some(
+        (entry) => entry && entry.changedPixels > 0,
+      )
+      if (changed) {
+        reportObj.verdict.warnings += 1
+        reportObj.verdict.reasons.push('Visual changes were detected against the baseline.')
+        reportObj.verdict.recommendedActions.push({
+          code: 'visual_change',
+          priority: 'medium',
+          detail: 'Inspect the three visual diff images before shipping.',
+        })
+        if (reportObj.verdict.decision === 'safe_to_ship') reportObj.verdict.decision = 'review'
+      }
     }
 
     // Compute content hash (evidence of integrity, not a cryptographic signature)
@@ -297,6 +364,172 @@ export class WorkerRunner {
     const contentHash = crypto.createHash('sha256').update(reportJson).digest('hex')
 
     return { ...reportObj, contentHash }
+  }
+
+  private buildVerdict(
+    status: QAReport['status'],
+    viewports: Partial<Record<Viewport, ViewportResult>>,
+  ): MachineVerdict {
+    const actions: MachineVerdict['recommendedActions'] = []
+    const reasons: string[] = []
+    let blockingIssues = 0
+    let warnings = 0
+    for (const [viewport, result] of Object.entries(viewports) as Array<
+      [Viewport, ViewportResult]
+    >) {
+      if (result.loadStatus !== 'success' || result.pageCrash) {
+        blockingIssues++
+        reasons.push(`${viewport}: page did not load cleanly.`)
+        actions.push({
+          code: 'load_failure',
+          priority: 'high',
+          viewport,
+          detail: 'Fix the page load or crash.',
+        })
+      }
+      const severe = result.accessibility.violations.filter(
+        (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+      ).length
+      if (severe > 0) {
+        blockingIssues += severe
+        reasons.push(`${viewport}: ${severe} serious accessibility issue(s).`)
+        actions.push({
+          code: 'accessibility',
+          priority: 'high',
+          viewport,
+          detail: 'Fix serious accessibility violations.',
+        })
+      }
+      if (result.consoleErrors.length + result.failedRequests.length > 0) {
+        blockingIssues++
+        reasons.push(`${viewport}: browser or network errors were observed.`)
+        actions.push({
+          code: 'browser_errors',
+          priority: 'high',
+          viewport,
+          detail: 'Review console errors and failed requests.',
+        })
+      }
+      if (result.overflowDetected || result.offscreenElements > 0) {
+        blockingIssues++
+        reasons.push(`${viewport}: content overflow or off-screen elements detected.`)
+        actions.push({
+          code: 'layout',
+          priority: 'high',
+          viewport,
+          detail: 'Correct the responsive layout.',
+        })
+      }
+      const moderate = result.accessibility.violations.filter(
+        (violation) => violation.impact === 'moderate' || violation.impact === 'minor',
+      ).length
+      warnings += moderate
+    }
+    if (status === 'INCONCLUSIVE') {
+      warnings++
+      reasons.push('The evidence set is incomplete.')
+      actions.push({
+        code: 'incomplete_evidence',
+        priority: 'medium',
+        detail: 'Retry the check before shipping.',
+      })
+    }
+    if (reasons.length === 0) reasons.push('All required checks passed across all three viewports.')
+    return {
+      decision: status === 'PASS' ? 'safe_to_ship' : status === 'FAIL' ? 'failed' : 'review',
+      blockingIssues,
+      warnings,
+      reasons: reasons.slice(0, 12),
+      recommendedActions: actions.slice(0, 12),
+    }
+  }
+
+  private async buildComparison(
+    jobId: string,
+    baselineJobId: string,
+    currentViewports: Partial<Record<Viewport, ViewportResult>>,
+  ): Promise<NonNullable<QAReport['comparison']>> {
+    const baselineJob = this.store.getJob(baselineJobId)
+    if (!baselineJob?.reportPath || baselineJob.status !== 'complete') {
+      throw new Error('baseline_unavailable')
+    }
+    const baseline = JSON.parse(await fs.readFile(baselineJob.reportPath, 'utf8')) as QAReport
+    const visual: Partial<Record<Viewport, VisualComparisonResult>> = {}
+    const evidenceLimitations: string[] = []
+    for (const viewport of VIEWPORTS_ORDER) {
+      const baselineShot = this.store.getScreenshot(baselineJobId, viewport)
+      const currentShot = this.store.getScreenshot(jobId, viewport)
+      const current = currentViewports[viewport]
+      if (!baselineShot || !currentShot || !current) {
+        evidenceLimitations.push(`${viewport}: screenshot evidence is missing.`)
+        continue
+      }
+      let baselinePng: PNG
+      let currentPng: PNG
+      try {
+        baselinePng = PNG.sync.read(await fs.readFile(baselineShot.path))
+        currentPng = PNG.sync.read(await fs.readFile(currentShot.path))
+      } catch {
+        evidenceLimitations.push(`${viewport}: screenshot evidence could not be decoded.`)
+        continue
+      }
+      if (baselinePng.width !== currentPng.width || baselinePng.height !== currentPng.height) {
+        evidenceLimitations.push(`${viewport}: screenshot dimensions are incompatible.`)
+        continue
+      }
+      const diff = new PNG({ width: currentPng.width, height: currentPng.height })
+      const changedPixels = pixelmatch(
+        baselinePng.data,
+        currentPng.data,
+        diff.data,
+        currentPng.width,
+        currentPng.height,
+        { threshold: 0.1 },
+      )
+      const diffPath = path.join(this.screenshotsDir, jobId, `diff-${viewport}.png`)
+      await fs.writeFile(diffPath, PNG.sync.write(diff))
+      visual[viewport] = {
+        viewport,
+        changedPixels,
+        changedPercent: Number(
+          ((changedPixels / (currentPng.width * currentPng.height)) * 100).toFixed(4),
+        ),
+        diffImageUrl: `/v1/checks/${jobId}/diffs/${viewport}`,
+        baselineScreenshotSha256: baselineShot.sha256,
+        currentScreenshotSha256: currentShot.sha256,
+      }
+    }
+    const baselineIds = new Set(
+      Object.values(baseline.viewports).flatMap(
+        (result) => result?.accessibility.violations.map((v) => v.id) ?? [],
+      ),
+    )
+    const currentIds = new Set(
+      Object.values(currentViewports).flatMap(
+        (result) => result?.accessibility.violations.map((v) => v.id) ?? [],
+      ),
+    )
+    const currentErrors = Object.values(currentViewports).reduce(
+      (sum, result) =>
+        sum + (result?.consoleErrors.length ?? 0) + (result?.failedRequests.length ?? 0),
+      0,
+    )
+    return {
+      baselineJobId,
+      evidenceComplete:
+        evidenceLimitations.length === 0 && Object.keys(visual).length === VIEWPORTS_ORDER.length,
+      evidenceLimitations,
+      visual,
+      accessibility: {
+        newViolationIds: [...currentIds].filter((id) => !baselineIds.has(id)).sort(),
+        resolvedViolationIds: [...baselineIds].filter((id) => !currentIds.has(id)).sort(),
+      },
+      errors: {
+        baseline: baseline.summary.totalErrors,
+        current: currentErrors,
+        delta: currentErrors - baseline.summary.totalErrors,
+      },
+    }
   }
 
   private computeReportStatus(
