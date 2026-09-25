@@ -204,6 +204,30 @@ describe('MCP tools/list — tool descriptions', () => {
     expect(tool?.description).toContain('noHorizontalOverflow')
     expect(tool?.description).toContain('noConsoleErrors')
   })
+
+  it('disambiguates broad QA from assertion-based verification', async () => {
+    const { port } = await startMcpServer(makeConfig())
+    const response = await callToolsList(port)
+    const check = response.result?.tools?.find((t) => t.name === 'check_page')
+    const verify = response.result?.tools?.find((t) => t.name === 'verify_page')
+    expect(check?.description).toContain('For explicit pass/fail assertions use verify_page')
+    expect(verify?.description).toContain('For broad exploratory browser QA use check_page')
+  })
+
+  it('provides descriptions for every top-level input parameter', async () => {
+    const { port } = await startMcpServer(makeConfig())
+    const response = await callToolsList(port)
+    for (const tool of response.result?.tools ?? []) {
+      const properties = (tool.inputSchema?.properties ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >
+      for (const schema of Object.values(properties)) {
+        expect(typeof schema.description).toBe('string')
+        expect((schema.description as string).length).toBeGreaterThan(0)
+      }
+    }
+  })
 })
 
 describe('MCP tools/list — verify_page assertions schema', () => {

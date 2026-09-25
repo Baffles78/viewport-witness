@@ -7,7 +7,7 @@
 1. **Discovery via tools/list**
    - Connect MCP client to `https://qa.honeygate.app/mcp` using streamable-http transport
    - Call `tools/list`
-   - Expected: four tools returned (`check_page`, `verify_page`, `compare_page`, `get_report`) with correct annotations
+   - Expected: six tools returned (`check_page`, `verify_page`, `compare_page`, `extract_page`, `web_release_gate`, `get_report`) with correct annotations
 
 2. **Free get_report on unknown job**
    - Call `get_report` with `{ "jobId": "00000000-0000-0000-0000-000000000001" }`
@@ -56,6 +56,12 @@
 - [x] Tool annotations verified: paid tools `readOnlyHint=false`, `get_report` `readOnlyHint=true`
 
 ## Release notes
+
+### v0.2.1
+- Expanded discovery language around website testing, screenshots, accessibility, visual comparison, Markdown extraction, and release security
+- Added the production `extract_page` and `web_release_gate` tools to the listing and reviewer inventory
+- Added a read-only discovery audit that checks the live MCP Registry, x402 challenge metadata, and Coinbase Bazaar search without making a payment
+- No price, payment rail, target-access, retention, or tool behavior changed
 
 ### v0.2.0
 - Added `verify_page` tool: 1–20 declarative assertions across all three viewports

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Website Testing MCP for AI Agents | ViewportWitness</title>
+    <meta
+      name="description"
+      content="Agent-native website testing through MCP and x402: browser QA, screenshots, accessibility, visual regression, HTML-to-Markdown extraction, assertions, and passive release security."
+    />
+    <link rel="canonical" href="https://qa.honeygate.app/agents" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ViewportWitness",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "url": "https://qa.honeygate.app/agents",
+        "description": "Agent-native website testing with browser QA, screenshots, accessibility findings, visual regression, Markdown extraction, assertions, and passive release security.",
+        "featureList": [
+          "Three-viewport browser QA",
+          "Website assertion testing",
+          "Visual regression comparison",
+          "HTML-to-Markdown extraction",
+          "Passive website release-security review"
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>ViewportWitness: website testing tools for AI agents</h1>
+      <p>
+        Connect an MCP client to <code>https://qa.honeygate.app/mcp</code>, or use the x402 HTTP
+        endpoints directly. Paid calls settle in USDC. Report retrieval is free.
+      </p>
+
+      <h2>Choose a tool by intent</h2>
+      <dl>
+        <dt><code>check_page</code> — browser QA and screenshots</dt>
+        <dd>
+          Use for broad responsive-layout, accessibility, console, network, and performance evidence
+          across phone portrait, phone landscape, and desktop.
+        </dd>
+
+        <dt><code>verify_page</code> — website assertions</dt>
+        <dd>
+          Use when an agent has explicit pass/fail assertions such as visible text, a title, a
+          selector, horizontal overflow, or console errors.
+        </dd>
+
+        <dt><code>compare_page</code> — visual regression testing</dt>
+        <dd>
+          Use after a baseline check to compare screenshots, accessibility issues, errors, and
+          performance evidence.
+        </dd>
+
+        <dt><code>extract_page</code> — webpage to Markdown</dt>
+        <dd>
+          Use to turn one public HTML page into deterministic clean Markdown without browser
+          execution.
+        </dd>
+
+        <dt><code>web_release_gate</code> — passive website security review</dt>
+        <dd>
+          Use to review security headers, cookie flags, mixed content, cross-origin script
+          integrity, and server disclosure without probing.
+        </dd>
+
+        <dt><code>get_report</code> — free report retrieval</dt>
+        <dd>Use to poll a submitted job and retrieve its completed structured evidence.</dd>
+      </dl>
+
+      <h2>Machine-readable discovery</h2>
+      <ul>
+        <li><a href="/.well-known/mcp.json">MCP server manifest</a></li>
+        <li><a href="/.well-known/x402">x402 products and payment rails</a></li>
+        <li><a href="/openapi.json">OpenAPI 3.1 contract</a></li>
+        <li><a href="/llms.txt">Agent usage guide</a></li>
+        <li><a href="/skill.md">Agent skill instructions</a></li>
+      </ul>
+    </main>
+  </body>
+</html>

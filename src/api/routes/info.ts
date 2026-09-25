@@ -18,6 +18,7 @@ const skillPath = join(__dirname, '../../../skill.md')
 const privacyPath = join(__dirname, '../../../docs/PRIVACY.md')
 const termsPath = join(__dirname, '../../../docs/TERMS.md')
 const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
+const agentsPath = join(__dirname, '../../../agents.html')
 
 // mcpub.dev probes this location before accepting a remote MCP listing.
 // Keep this payload aligned with the validated official MCP Registry manifest in server.json.
@@ -26,8 +27,8 @@ const mcpRegistryManifest = {
   name: 'io.github.Baffles78/viewport-witness',
   title: 'ViewportWitness by Apex Labs',
   description:
-    'Paid browser QA, DOM-to-Markdown, and passive web release security tools for AI agents using x402.',
-  version: '0.2.0',
+    'Agent-native website testing: browser QA, screenshots, accessibility, visual comparison, DOM-to-Markdown, and passive release security via MCP and x402.',
+  version: '0.2.1',
   repository: {
     url: 'https://github.com/Baffles78/viewport-witness',
     source: 'github',
@@ -83,12 +84,13 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
   router.get('/', (_req: Request, res: Response) => {
     res.json({
       service: 'ViewportWitness by Apex Labs',
-      version: '0.2.0',
+      version: '0.2.1',
       description:
-        'Browser QA API: screenshots, accessibility, and layout checks across three viewports',
+        'Agent-native website testing: browser QA, screenshots, accessibility, visual comparison, Markdown extraction, and passive release security',
       docs: '/openapi.json',
       agentDocs: '/llms.txt',
       skillDocs: '/skill.md',
+      agentLanding: '/agents',
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
@@ -148,6 +150,26 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
 
   router.get('/skill.md', (_req: Request, res: Response) => {
     res.type('text/markdown').send(skillContent)
+  })
+
+  router.get('/agents', (_req: Request, res: Response) => {
+    res.sendFile(agentsPath)
+  })
+
+  router.get('/robots.txt', (_req: Request, res: Response) => {
+    res
+      .type('text/plain')
+      .send(`User-agent: *\nAllow: /\nSitemap: ${PUBLIC_BASE_URL}/sitemap.xml\n`)
+  })
+
+  router.get('/sitemap.xml', (_req: Request, res: Response) => {
+    const paths = ['/agents', '/llms.txt', '/skill.md', '/openapi.json']
+    const urls = paths.map((path) => `  <url><loc>${PUBLIC_BASE_URL}${path}</loc></url>`).join('\n')
+    res
+      .type('application/xml')
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+      )
   })
 
   router.get('/privacy', (_req: Request, res: Response) => {

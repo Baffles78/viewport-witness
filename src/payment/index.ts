@@ -178,18 +178,36 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       type: 'array',
       minItems: 1,
       maxItems: 20,
-      items: { type: 'object' },
+      description: 'Explicit website assertions to evaluate across phone and desktop viewports.',
+      items: {
+        type: 'object',
+        description:
+          'One of noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, or selectorVisible.',
+      },
     }
     required.push('assertions')
   }
   if (route === 'POST /v1/compare') {
-    properties['baselineJobId'] = { type: 'string', format: 'uuid' }
+    properties['baselineJobId'] = {
+      type: 'string',
+      format: 'uuid',
+      description: 'Completed, unexpired ViewportWitness check job used as the visual baseline.',
+    }
     required.push('baselineJobId')
+  }
+  if (route === 'POST /v1/extract') {
+    properties['maxOutputTokens'] = {
+      type: 'integer',
+      minimum: 500,
+      maximum: 12000,
+      description: 'Optional approximate Markdown output budget.',
+    }
   }
   return declareDiscoveryExtension({
     bodyType: 'json',
     input,
     inputSchema: {
+      type: 'object',
       required,
       additionalProperties: false,
       properties,
@@ -218,6 +236,33 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       },
     },
   })
+}
+
+function bazaarTags(route: PaymentMiddlewareOptions['route']): string[] {
+  switch (route) {
+    case 'POST /v1/verify':
+      return ['website-assertions', 'browser-testing', 'regression-testing', 'accessibility', 'qa']
+    case 'POST /v1/compare':
+      return ['visual-regression', 'screenshot-diff', 'website-testing', 'browser-qa', 'qa']
+    case 'POST /v1/extract':
+      return [
+        'web-to-markdown',
+        'html-to-markdown',
+        'content-extraction',
+        'web-content',
+        'markdown',
+      ]
+    case 'POST /v1/security-gate':
+      return [
+        'website-security',
+        'security-headers',
+        'cookie-security',
+        'mixed-content',
+        'release-gate',
+      ]
+    default:
+      return ['browser-qa', 'website-testing', 'screenshots', 'accessibility', 'responsive-design']
+  }
 }
 
 export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): RequestHandler {
@@ -309,7 +354,7 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         description,
         mimeType: 'application/json',
         serviceName: 'ViewportWitness by Apex Labs',
-        tags: ['browser-qa', 'accessibility', 'screenshots', 'qa', 'layout'],
+        tags: bazaarTags(route),
         extensions: bazaarDiscovery,
       },
     },

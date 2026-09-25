@@ -116,12 +116,44 @@ function paymentIdFromContext(context: MCPToolContext): string | undefined {
 const assertionItemSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('noHorizontalOverflow') }).strict(),
   z.object({ type: z.literal('noConsoleErrors') }).strict(),
-  z.object({ type: z.literal('textVisible'), value: z.string().min(1).max(200) }).strict(),
-  z.object({ type: z.literal('titleIncludes'), value: z.string().min(1).max(200) }).strict(),
-  z.object({ type: z.literal('selectorExists'), selector: z.string().min(1).max(300) }).strict(),
-  z.object({ type: z.literal('selectorVisible'), selector: z.string().min(1).max(300) }).strict(),
+  z
+    .object({
+      type: z.literal('textVisible'),
+      value: z.string().min(1).max(200).describe('Visible text to find on the rendered page.'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('titleIncludes'),
+      value: z.string().min(1).max(200).describe('Text that the document title must include.'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('selectorExists'),
+      selector: z.string().min(1).max(300).describe('CSS selector that must exist in the DOM.'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('selectorVisible'),
+      selector: z.string().min(1).max(300).describe('CSS selector that must be visibly rendered.'),
+    })
+    .strict(),
 ])
-const assertionsSchema = z.array(assertionItemSchema).min(1).max(20)
+const assertionsSchema = z
+  .array(assertionItemSchema)
+  .min(1)
+  .max(20)
+  .describe('One to twenty explicit pass/fail assertions to evaluate across all three viewports.')
+
+const publicPageUrlSchema = z
+  .string()
+  .url()
+  .max(2048)
+  .describe(
+    'Public HTTPS page URL. Private, loopback, credentialed, and non-HTTPS URLs are rejected.',
+  )
 
 async function createMcpPaymentContext(cfg: Config): Promise<{
   server: x402ResourceServer
@@ -186,7 +218,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   }
 
   async function buildServer(): Promise<McpServer> {
-    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.0' })
+    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' })
     const context = await getPaymentContext()
     const wrap = <T extends Record<string, unknown>>(
       tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
@@ -285,8 +317,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'check_page',
-      `Run browser QA across three viewports (phone portrait, phone landscape, desktop), including bounded performance evidence and plain-English diagnosis with safe structural locator hints. Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
-      { url: z.string().url().max(2048) },
+      `Choose this for broad website testing when the caller wants screenshots, responsive layout checks, accessibility findings, console/network errors, performance evidence, and a release diagnosis across phone portrait, phone landscape, and desktop. For explicit pass/fail assertions use verify_page instead. Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
+      { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
         const valid = await validatePublicHttpsUrl(url)
@@ -308,9 +340,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'verify_page',
-      `Check up to 20 declarative assertions across three viewports and return bounded performance evidence plus plain-English diagnosis. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      `Choose this only when the caller supplies explicit website assertions that need pass/fail results across three viewports. For broad exploratory browser QA use check_page instead. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       {
-        url: z.string().url().max(2048),
+        url: publicPageUrlSchema,
         assertions: assertionsSchema,
       },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
@@ -341,8 +373,16 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'compare_page',
-      `Compare a page against a completed ViewportWitness baseline job. Returns pixel-diff percentages, new/resolved accessibility issue IDs, error deltas, bounded performance evidence, and plain-English diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
-      { url: z.string().url().max(2048), baselineJobId: z.string().uuid() },
+      `Choose this for visual regression testing after check_page has produced a completed, unexpired baseline. Compares screenshots and QA evidence, returning pixel-diff percentages, new or resolved accessibility issues, error deltas, performance evidence, and diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      {
+        url: publicPageUrlSchema,
+        baselineJobId: z
+          .string()
+          .uuid()
+          .describe(
+            'Completed, unexpired ViewportWitness check job to use as the visual baseline.',
+          ),
+      },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'compare',
@@ -383,10 +423,16 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'extract_page',
-      `Fetch one public HTML page without a browser and return deterministic clean Markdown. Costs $${cfg.EXTRACT_PRICE_USDC} USDC via x402.`,
+      `Choose this when an agent needs the readable content of a public webpage as deterministic clean Markdown, without screenshots or browser execution. Costs $${cfg.EXTRACT_PRICE_USDC} USDC via x402.`,
       {
-        url: z.string().url().max(2048),
-        maxOutputTokens: z.number().int().min(500).max(12_000).optional(),
+        url: publicPageUrlSchema,
+        maxOutputTokens: z
+          .number()
+          .int()
+          .min(500)
+          .max(12_000)
+          .optional()
+          .describe('Optional approximate output budget from 500 to 12000 tokens.'),
       },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
@@ -416,8 +462,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'web_release_gate',
-      `Passively inspect one public HTML response for release security controls. No probing or code execution. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402.`,
-      { url: z.string().url().max(2048) },
+      `Choose this for a passive website release-security review of headers, cookie flags, mixed content, cross-origin script integrity, and server disclosure. It does not run browser QA, probe the site, execute code, or replace a security audit. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402.`,
+      { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('security', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
         const valid = await validatePublicHttpsUrl(url)
@@ -440,7 +486,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
     mcp.tool(
       'get_report',
       'Retrieve the status or completed QA report for a previously submitted job. Free and read-only. Poll until status is "complete", "failed", or "retryable". No payment required.',
-      { jobId: z.string().uuid() },
+      { jobId: z.string().uuid().describe('ViewportWitness job UUID returned by a paid tool.') },
       { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       async ({ jobId }) => {
         const job = store.getJob(jobId)
