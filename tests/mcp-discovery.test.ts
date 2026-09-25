@@ -136,33 +136,33 @@ afterEach(async () => {
 })
 
 describe('MCP tools/list — tool annotations', () => {
-  it('check_page has readOnlyHint=false, destructiveHint=false, openWorldHint=true', async () => {
+  it('check_page marks its on-chain payment as destructive', async () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'check_page')
     expect(tool).toBeDefined()
     expect(tool?.annotations?.readOnlyHint).toBe(false)
-    expect(tool?.annotations?.destructiveHint).toBe(false)
+    expect(tool?.annotations?.destructiveHint).toBe(true)
     expect(tool?.annotations?.openWorldHint).toBe(true)
   })
 
-  it('verify_page has readOnlyHint=false, destructiveHint=false, openWorldHint=true', async () => {
+  it('verify_page marks its on-chain payment as destructive', async () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'verify_page')
     expect(tool).toBeDefined()
     expect(tool?.annotations?.readOnlyHint).toBe(false)
-    expect(tool?.annotations?.destructiveHint).toBe(false)
+    expect(tool?.annotations?.destructiveHint).toBe(true)
     expect(tool?.annotations?.openWorldHint).toBe(true)
   })
 
-  it('compare_page has readOnlyHint=false, destructiveHint=false, openWorldHint=true', async () => {
+  it('compare_page marks its on-chain payment as destructive', async () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'compare_page')
     expect(tool).toBeDefined()
     expect(tool?.annotations?.readOnlyHint).toBe(false)
-    expect(tool?.annotations?.destructiveHint).toBe(false)
+    expect(tool?.annotations?.destructiveHint).toBe(true)
     expect(tool?.annotations?.openWorldHint).toBe(true)
   })
 

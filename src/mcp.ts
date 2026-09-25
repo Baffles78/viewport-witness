@@ -275,7 +275,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       'check_page',
       `Run browser QA across three viewports (phone portrait, phone landscape, desktop). Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048) },
-      { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
         const valid = await validatePublicHttpsUrl(url)
         if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
@@ -301,7 +301,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         url: z.string().url().max(2048),
         assertions: assertionsSchema,
       },
-      { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'verify',
         async (
@@ -331,7 +331,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       'compare_page',
       `Compare a page against a completed ViewportWitness baseline job. Returns pixel-diff percentages, new/resolved accessibility issue IDs, and error deltas. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048), baselineJobId: z.string().uuid() },
-      { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'compare',
         async (
