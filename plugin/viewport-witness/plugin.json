@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "viewport-witness",
-  "version": "0.2.0",
-  "description": "Browser QA for AI agents across phone and desktop viewports, with screenshots, accessibility findings, assertions, and visual comparisons.",
+  "version": "0.2.1",
+  "description": "Agent-native website testing with browser QA, screenshots, accessibility findings, visual comparisons, Markdown extraction, and passive release security.",
   "author": {
     "name": "Apex Labs",
     "url": "https://qa.honeygate.app"
@@ -15,8 +15,8 @@
     "com.openai": {
       "interface": {
         "displayName": "ViewportWitness",
-        "shortDescription": "Paid browser QA across phone and desktop viewports.",
-        "longDescription": "Run browser QA, accessibility checks, declarative assertions, and visual comparisons for public HTTPS pages. Paid tools use x402; report retrieval is free.",
+        "shortDescription": "Agent-native website testing and release evidence.",
+        "longDescription": "Run browser QA, accessibility checks, declarative assertions, visual comparisons, DOM-to-Markdown extraction, and passive release security checks for public HTTPS pages. Paid tools use x402; report retrieval is free.",
         "developerName": "Apex Labs",
         "category": "Developer Tools",
         "capabilities": ["Read"],

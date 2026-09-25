@@ -3,6 +3,10 @@
 This file keeps the public listing copy and reviewer cases consistent. It is preparation, not
 evidence that a platform has approved or published ViewportWitness.
 
+Status: deferred by product decision on 2026-09-25. Preserve the private draft, but do not spend
+engineering time on an OpenAI-specific free access path or submit the paid x402 service under the
+current plugin commerce rules.
+
 ## Listing
 
 - **Name:** ViewportWitness
@@ -80,11 +84,13 @@ structured payment challenge before settlement and a job/result after settlement
 
 ## OpenAI submission prerequisites still requiring platform access
 
-- Sign in to the OpenAI Platform organization that will publish the plugin.
-- Confirm Apps Management write access and a verified individual or business identity.
-- Create a **With MCP** draft using the universal MCP URL above.
+- The publishing organization is verified and a private **With MCP** draft now exists in the OpenAI Platform.
+- Select the verified publisher identity and keep the public author name identical to that identity.
 - Add the portal-generated domain token at `/.well-known/openai-apps-challenge`.
 - Scan the live tools and resolve every portal finding.
-- Provide a reviewer-ready way to exercise paid tools. OpenAI does not send custom API keys or x402 wallet signatures, so this requires a separately reviewed OAuth/prepaid-credit flow or another truthful bounded-access design.
+- Replace the OpenAI-facing x402 purchase path with a compliant access model before scanning or submitting. OpenAI's current plugin guidelines prohibit selling digital products or services through a plugin. They do allow users to sign in to an existing paid account and use features already included in that account.
+- Provide a reviewer-ready way to exercise every tool. OpenAI reviewers need access without MFA, SMS, email confirmation, a private network, or an x402 wallet signature.
 - Record and host the required demo video after that access path works.
 - Submit only after the listing, tests, regions, attestations, and release notes are accurate.
+
+Do not check the commerce attestation or submit the current paid MCP unchanged. Two truthful paths remain: a durable free OpenAI access path, or OAuth sign-in to an existing ViewportWitness account whose included access was purchased outside the plugin without checkout or upgrade promotion inside ChatGPT or Codex.

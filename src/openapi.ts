@@ -21,7 +21,7 @@ export const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'ViewportWitness by Apex Labs',
-    version: '0.2.0',
+    version: '0.2.1',
     'x-guidance':
       'Use POST /v1/checks for general browser QA, POST /v1/verify for explicit assertions, and POST /v1/compare when you already have a completed baseline job. Each paid operation returns an x402 challenge before work begins.',
     description:
@@ -136,6 +136,45 @@ export const openApiSpec = {
           '200': {
             description: 'Concise agent-facing instructions for this service',
             content: { 'text/markdown': {} },
+          },
+        },
+      },
+    },
+    '/agents': {
+      get: {
+        summary: 'Agent discovery and tool-selection guide',
+        operationId: 'getAgentLanding',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Indexable guide mapping common website-testing intents to MCP tools',
+            content: { 'text/html': {} },
+          },
+        },
+      },
+    },
+    '/robots.txt': {
+      get: {
+        summary: 'Crawler policy',
+        operationId: 'getRobotsTxt',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Crawler access policy with sitemap location',
+            content: { 'text/plain': {} },
+          },
+        },
+      },
+    },
+    '/sitemap.xml': {
+      get: {
+        summary: 'Public discovery sitemap',
+        operationId: 'getSitemap',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Sitemap for agent-facing public documentation',
+            content: { 'application/xml': {} },
           },
         },
       },

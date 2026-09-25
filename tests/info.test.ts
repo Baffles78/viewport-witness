@@ -183,6 +183,46 @@ describe('GET /skill.md', () => {
   })
 })
 
+describe('agent discovery pages', () => {
+  it('serves an indexable agent landing page with every tool intent', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/agents`)
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/text\/html/)
+    for (const tool of [
+      'check_page',
+      'verify_page',
+      'compare_page',
+      'extract_page',
+      'web_release_gate',
+      'get_report',
+    ]) {
+      expect(text).toContain(tool)
+    }
+    expect(text).toContain('https://qa.honeygate.app/mcp')
+  })
+
+  it('serves robots.txt with the public sitemap URL', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/robots.txt`)
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(text).toContain('Allow: /')
+    expect(text).toContain('https://qa.honeygate.app/sitemap.xml')
+  })
+
+  it('serves a sitemap containing the agent landing page and machine-readable docs', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/sitemap.xml`)
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/xml/)
+    expect(text).toContain('https://qa.honeygate.app/agents')
+    expect(text).toContain('https://qa.honeygate.app/openapi.json')
+  })
+})
+
 describe('GET /.well-known/x402', () => {
   it('includes price $0.08 USDC', async () => {
     const { port } = await startServer(makeConfig({ PAYMENT_MODE: 'testnet' }))

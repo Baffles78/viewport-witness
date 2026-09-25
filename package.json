@@ -1,7 +1,7 @@
 {
   "name": "viewport-witness",
-  "version": "0.2.0",
-  "description": "Machine-facing browser QA API: screenshots, accessibility, and layout checks across three viewports",
+  "version": "0.2.1",
+  "description": "Agent-native website testing: browser QA, screenshots, accessibility, visual comparison, Markdown extraction, and passive release security",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -21,7 +21,8 @@
     "test": "vitest run --exclude tests/e2e.test.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:all": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:discovery": "node scripts/check-agent-discovery.mjs"
   },
   "dependencies": {
     "@axe-core/playwright": "^4.10.1",
