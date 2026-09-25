@@ -100,6 +100,7 @@ export async function createProductJob(params: {
       kind: params.kind,
       request: params.assertions ? { assertions: params.assertions } : {},
       ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
+      initialStatus: params.deferEnqueue ? 'payment_pending' : 'queued',
     })
   } catch (error) {
     const raced =
@@ -114,7 +115,8 @@ export async function createProductJob(params: {
     }
   }
   if (params.deferEnqueue) {
-    params.store.updateJobStatus(id, 'payment_pending')
+    // The pending state was written atomically with the row above. A restart
+    // cannot recover this job until successful settlement claims it.
   } else {
     try {
       await params.runner.enqueue(id)

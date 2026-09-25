@@ -87,16 +87,18 @@ export class JobStore {
     kind?: JobKind
     request?: { assertions?: PageAssertion[] }
     baselineJobId?: string
+    initialStatus?: 'queued' | 'payment_pending'
   }): JobRecord {
     const now = Date.now()
     this.conn
       .prepare(
         `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at, expires_at, kind, request_json, baseline_job_id)
-         VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         params.id,
         params.url,
+        params.initialStatus ?? 'queued',
         params.idempotencyKey,
         params.paymentId ?? null,
         params.customerId ?? null,

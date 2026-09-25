@@ -8,6 +8,7 @@ import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from 
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
+import { PaymentPayloadSchema } from '@x402/core/schemas'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { ExactSvmScheme } from '@x402/svm/exact/server'
 import { z } from 'zod'
@@ -39,8 +40,60 @@ function canonicalJson(value: unknown): string {
 }
 
 export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefined {
-  if (!paymentPayload || typeof paymentPayload !== 'object') return undefined
-  const canonical = canonicalJson(paymentPayload)
+  const parsed = PaymentPayloadSchema.safeParse(paymentPayload)
+  if (!parsed.success) return undefined
+  const envelope = parsed.data
+  const network = envelope.x402Version === 1 ? envelope.network : envelope.accepted.network
+  const scheme = envelope.x402Version === 1 ? envelope.scheme : envelope.accepted.scheme
+  const payload = envelope.payload
+  let signedIdentity: Record<string, unknown>
+  if (typeof payload['transaction'] === 'string') {
+    signedIdentity = { transaction: payload['transaction'] }
+  } else if (
+    payload['authorization'] &&
+    typeof payload['authorization'] === 'object' &&
+    typeof payload['signature'] === 'string'
+  ) {
+    const authorization = payload['authorization'] as Record<string, unknown>
+    const fields = ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce'] as const
+    if (!fields.every((field) => typeof authorization[field] === 'string')) return undefined
+    signedIdentity = {
+      authorization: Object.fromEntries(fields.map((field) => [field, authorization[field]])),
+      signature: payload['signature'],
+    }
+  } else if (
+    payload['permit2Authorization'] &&
+    typeof payload['permit2Authorization'] === 'object' &&
+    typeof payload['signature'] === 'string'
+  ) {
+    const authorization = payload['permit2Authorization'] as Record<string, unknown>
+    const permitted = authorization['permitted']
+    if (
+      typeof authorization['from'] !== 'string' ||
+      !permitted ||
+      typeof permitted !== 'object' ||
+      typeof (permitted as Record<string, unknown>)['token'] !== 'string' ||
+      typeof (permitted as Record<string, unknown>)['amount'] !== 'string' ||
+      typeof authorization['spender'] !== 'string' ||
+      typeof authorization['nonce'] !== 'string' ||
+      typeof authorization['deadline'] !== 'string'
+    )
+      return undefined
+    signedIdentity = {
+      permit2Authorization: {
+        from: authorization['from'],
+        permitted: {
+          token: (permitted as Record<string, unknown>)['token'],
+          amount: (permitted as Record<string, unknown>)['amount'],
+        },
+        spender: authorization['spender'],
+        nonce: authorization['nonce'],
+        deadline: authorization['deadline'],
+      },
+      signature: payload['signature'],
+    }
+  } else return undefined
+  const canonical = canonicalJson({ network, scheme, signedIdentity })
   if (canonical.length > 64 * 1024) return undefined
   return `mcp_${createHash('sha256').update(canonical).digest('hex')}`
 }

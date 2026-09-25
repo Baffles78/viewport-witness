@@ -66,6 +66,7 @@ describe('agent QA products', () => {
   })
 
   it('keeps MCP work inactive until settlement activates it', async () => {
+    const updateSpy = vi.spyOn(store, 'updateJobStatus')
     const created = await createProductJob({
       store,
       runner: { enqueue },
@@ -76,6 +77,7 @@ describe('agent QA products', () => {
     })
 
     expect(store.getJob(created.id)?.status).toBe('payment_pending')
+    expect(updateSpy).not.toHaveBeenCalled()
     expect(enqueue).not.toHaveBeenCalled()
     expect(store.activatePaymentPendingJob(created.id)).toBe(true)
     expect(store.activatePaymentPendingJob(created.id)).toBe(false)
@@ -183,16 +185,39 @@ describe('agent QA products', () => {
   })
 
   it('canonicalizes MCP payment payloads before fingerprinting', () => {
+    const authorization = {
+      from: '0x1111111111111111111111111111111111111111',
+      to: '0x2222222222222222222222222222222222222222',
+      value: '100000',
+      validAfter: '0',
+      validBefore: '9999999999',
+      nonce: `0x${'1'.repeat(64)}`,
+    }
+    const accepted = {
+      scheme: 'exact',
+      network: 'eip155:8453',
+      amount: '100000',
+      asset: '0x3333333333333333333333333333333333333333',
+      payTo: '0x4444444444444444444444444444444444444444',
+      maxTimeoutSeconds: 60,
+    }
     const first = mcpPaymentFingerprint({
-      accepted: { network: 'eip155:8453', amount: '100' },
-      payload: { b: 2, a: 1 },
+      x402Version: 2,
+      accepted,
+      payload: { authorization, signature: `0x${'a'.repeat(130)}` },
     })
-    const reordered = mcpPaymentFingerprint({
-      payload: { a: 1, b: 2 },
-      accepted: { amount: '100', network: 'eip155:8453' },
+    const semanticVariant = mcpPaymentFingerprint({
+      x402Version: 2,
+      ignoredTopLevel: 'does-not-change-payment',
+      accepted: { ...accepted, ignoredAcceptedField: true },
+      payload: {
+        ignoredPayloadField: 'not-signed',
+        signature: `0x${'a'.repeat(130)}`,
+        authorization: { ignoredAuthorizationField: 123, ...authorization },
+      },
     })
     expect(first).toMatch(/^mcp_[a-f0-9]{64}$/)
-    expect(reordered).toBe(first)
+    expect(semanticVariant).toBe(first)
     expect(mcpPaymentFingerprint(undefined)).toBeUndefined()
   })
 })
