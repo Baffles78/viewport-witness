@@ -40,8 +40,33 @@ export interface AccessibilityViolation {
   nodes: Array<{
     html: string
     failureSummary: string
+    locator?: string
   }>
   count: number
+}
+
+export interface PerformanceEvidence {
+  navigation: {
+    dnsMs?: number
+    connectMs?: number
+    tlsMs?: number
+    requestMs?: number
+    responseMs?: number
+    timeToFirstByteMs?: number
+    domInteractiveMs?: number
+    domContentLoadedMs?: number
+    loadEventMs?: number
+  }
+  paint: {
+    firstPaintMs?: number
+    firstContentfulPaintMs?: number
+    largestContentfulPaintMs?: number
+    cumulativeLayoutShift?: number
+  }
+  resources: {
+    requestCount: number
+    transferredBytes: number
+  }
 }
 
 export interface ViewportResult {
@@ -60,6 +85,8 @@ export interface ViewportResult {
   failedRequests: Array<{ url: string; status: number | null; reason: string }>
   overflowDetected: boolean
   offscreenElements: number
+  layoutLocatorHints: string[]
+  performance: PerformanceEvidence
   accessibility: {
     completed: boolean
     violations: AccessibilityViolation[]
@@ -116,6 +143,17 @@ export interface QAReport {
     overallLoadStatus: string
   }
   verdict: MachineVerdict
+  diagnosis: {
+    overview: string
+    findings: Array<{
+      code: string
+      severity: 'high' | 'medium' | 'low'
+      viewports: Viewport[]
+      diagnosis: string
+      fix: string
+      locatorHints: string[]
+    }>
+  }
   assertions?: {
     passed: number
     failed: number

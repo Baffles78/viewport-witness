@@ -118,6 +118,17 @@ When complete, the full QAReport is returned:
     "reasons": [],
     "recommendedActions": []
   },
+  "diagnosis": {
+    "overview": "Plain-English summary derived from the collected evidence.",
+    "findings": [{
+      "code": "responsive-layout",
+      "severity": "high",
+      "viewports": ["phonePortrait"],
+      "diagnosis": "...",
+      "fix": "...",
+      "locatorHints": ["body:nth-of-type(1) > main:nth-of-type(1)"]
+    }]
+  },
   "viewports": {
     "phonePortrait":  { ... ViewportResult ... },
     "phoneLandscape": { ... ViewportResult ... },
@@ -142,6 +153,10 @@ When complete, the full QAReport is returned:
 - failedRequests: [{ url, status, reason }]  (max 50, paths redacted)
 - overflowDetected: boolean
 - offscreenElements: number
+- layoutLocatorHints: string[] (max 5; structural tags and nth-of-type only)
+- performance.navigation: bounded DNS, connection, request, response, DOM, and load timings when available
+- performance.paint: first paint, first contentful paint, largest contentful paint, and cumulative layout shift when available
+- performance.resources: { requestCount, transferredBytes } observed during the existing page load
 - accessibility.violations: [{ id, impact, description, helpUrl, nodes, count }]
 - accessibility.completed: boolean
 - accessibility.passes: number

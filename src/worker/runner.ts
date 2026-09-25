@@ -13,6 +13,7 @@ import type {
   VisualComparisonResult,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
+import { buildDiagnosis } from '../report-guidance.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
@@ -274,7 +275,7 @@ export class WorkerRunner {
       publicViewportResults[viewport] = publicResult as ViewportResult
     }
 
-    const reportObj: Omit<QAReport, 'contentHash'> = {
+    const reportObj: Omit<QAReport, 'contentHash' | 'diagnosis'> = {
       id: job.id,
       url: job.url,
       kind: job.kind,
@@ -288,6 +289,7 @@ export class WorkerRunner {
         'layout:overflow',
         'layout:offscreen',
         'network:failed-requests',
+        'performance:navigation-and-paint',
         'interaction:visibility',
         'interaction:focusability',
       ],
@@ -359,11 +361,19 @@ export class WorkerRunner {
       }
     }
 
+    const reportWithDiagnosis: Omit<QAReport, 'contentHash'> = {
+      ...reportObj,
+      diagnosis: buildDiagnosis(reportObj.status, publicViewportResults, {
+        ...(reportObj.assertions ? { assertions: reportObj.assertions } : {}),
+        ...(reportObj.comparison ? { comparison: reportObj.comparison } : {}),
+      }),
+    }
+
     // Compute content hash (evidence of integrity, not a cryptographic signature)
-    const reportJson = JSON.stringify(reportObj)
+    const reportJson = JSON.stringify(reportWithDiagnosis)
     const contentHash = crypto.createHash('sha256').update(reportJson).digest('hex')
 
-    return { ...reportObj, contentHash }
+    return { ...reportWithDiagnosis, contentHash }
   }
 
   private buildVerdict(

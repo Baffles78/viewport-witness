@@ -290,6 +290,7 @@ export function createChecksRouter(
             viewports: report.viewports,
             summary: report.summary,
             verdict: report.verdict,
+            diagnosis: report.diagnosis,
             ...(report.assertions ? { assertions: report.assertions } : {}),
             ...(report.comparison ? { comparison: report.comparison } : {}),
             feedbackUrl: FEEDBACK_URL,

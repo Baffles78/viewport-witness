@@ -5,7 +5,7 @@ MCP endpoint: https://qa.honeygate.app/mcp (streamable-http)
 
 ## What it does
 
-Submit a public HTTPS URL. Receive a structured browser QA report and PNG screenshots across three viewports:
+Submit a public HTTPS URL. Receive a structured browser QA report and PNG screenshots across three viewports. Reports include bounded performance evidence and deterministic plain-English diagnosis with specific fixes and privacy-safe structural locator hints:
 - Phone portrait: 375×812
 - Phone landscape: 812×375
 - Desktop: 1440×900
