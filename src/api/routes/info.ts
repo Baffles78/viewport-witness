@@ -27,7 +27,7 @@ const mcpRegistryManifest = {
   name: 'io.github.Baffles78/viewport-witness',
   title: 'ViewportWitness by Apex Labs',
   description:
-    'Agent-native website testing: browser QA, screenshots, accessibility, visual comparison, DOM-to-Markdown, and passive release security via MCP and x402.',
+    'Agent website testing: browser QA, visual regression, Markdown extraction, and security checks.',
   version: '0.2.1',
   repository: {
     url: 'https://github.com/Baffles78/viewport-witness',

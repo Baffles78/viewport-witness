@@ -282,6 +282,7 @@ describe('GET /.well-known/mcp.json', () => {
     const body = (await res.json()) as {
       $schema: string
       name: string
+      description: string
       remotes: Array<{ type: string; url: string }>
       repository: { source: string; url: string; id: string }
     }
@@ -289,6 +290,7 @@ describe('GET /.well-known/mcp.json', () => {
       'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
     )
     expect(body.name).toBe('io.github.Baffles78/viewport-witness')
+    expect(body.description.length).toBeLessThanOrEqual(100)
     expect(body.remotes).toEqual([
       {
         type: 'streamable-http',
