@@ -11,9 +11,11 @@ import type {
   Viewport,
   ViewportResult,
   VisualComparisonResult,
+  StoredReport,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
 import { buildDiagnosis } from '../report-guidance.js'
+import { buildExtractReport, buildSecurityReport, fetchBoundedHtml } from '../web-products.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
@@ -196,11 +198,26 @@ export class WorkerRunner {
     }
   }
 
-  private async runJob(item: QueueItem, signal: AbortSignal): Promise<QAReport> {
-    if (!this.browser) throw new Error('Browser not initialized')
-
+  private async runJob(item: QueueItem, signal: AbortSignal): Promise<StoredReport> {
     const job = this.store.getJob(item.jobId)
     if (!job) throw new Error(`Job ${item.jobId} not found`)
+
+    if (job.kind === 'extract' || job.kind === 'security') {
+      const fetched = await fetchBoundedHtml(job.url, signal)
+      const paymentMode = item.paymentMode as QAReport['paymentMode']
+      return job.kind === 'extract'
+        ? buildExtractReport(
+            job.id,
+            job.createdAt,
+            job.expiresAt,
+            paymentMode,
+            fetched,
+            job.request.maxOutputTokens ?? 4000,
+          )
+        : buildSecurityReport(job.id, job.createdAt, job.expiresAt, paymentMode, fetched)
+    }
+
+    if (!this.browser) throw new Error('Browser not initialized')
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
     const limitations: string[] = []

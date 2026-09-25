@@ -5,7 +5,49 @@ export type JobStatus =
 
 export type Viewport = 'phonePortrait' | 'phoneLandscape' | 'desktop'
 
-export type JobKind = 'check' | 'verify' | 'compare'
+export type JobKind = 'check' | 'verify' | 'compare' | 'extract' | 'security'
+
+export interface ExtractReport {
+  id: string
+  kind: 'extract'
+  status: 'PASS'
+  paymentMode: PaymentMode
+  createdAt: string
+  expiresAt: string
+  sourceUrl: string
+  markdown: string
+  contentHash: string
+  inputBytes: number
+  outputBytes: number
+  estimatedInputTokens: number
+  estimatedOutputTokens: number
+  warnings: string[]
+  provenance: { fetchedAt: string; redirects: number; contentType: string; parser: string }
+}
+
+export interface SecurityFinding {
+  code: string
+  severity: 'high' | 'medium' | 'low'
+  evidence: string
+  remediation: string
+}
+
+export interface SecurityReport {
+  id: string
+  kind: 'security'
+  status: 'PASS' | 'FAIL' | 'INCONCLUSIVE'
+  paymentMode: PaymentMode
+  createdAt: string
+  expiresAt: string
+  sourceUrl: string
+  contentHash: string
+  findings: SecurityFinding[]
+  checksPerformed: string[]
+  limitations: string[]
+  provenance: { fetchedAt: string; redirects: number; contentType: string }
+}
+
+export type StoredReport = QAReport | ExtractReport | SecurityReport
 
 export type PageAssertion =
   | { type: 'textVisible'; value: string }
@@ -187,6 +229,6 @@ export interface JobRecord {
   error: string | null
   retryCount: number
   kind: JobKind
-  request: { assertions?: PageAssertion[] }
+  request: { assertions?: PageAssertion[]; maxOutputTokens?: number }
   baselineJobId: string | null
 }

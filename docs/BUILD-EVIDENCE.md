@@ -137,3 +137,12 @@ npm audit --omit=dev
 docker compose config --quiet
 docker build -t viewport-witness:local .
 ```
+
+## Parser and passive security gate candidate (prepared, not deployed)
+
+- Added queued `extract` and `security` job kinds without increasing worker concurrency.
+- Added HTTP and MCP surfaces at fixed reviewed prices of 0.005 and 0.05 USDC.
+- The fetch path accepts one public HTTPS URL, validates every redirect, sends no caller headers or credentials, and enforces HTML-only, five-redirect, 1 MiB, and eight-second bounds.
+- Cheerio 1.1.2 and Turndown 7.2.1 are exact-pinned; all Coinbase and x402 package pins remain exact. `npm audit` reported zero vulnerabilities.
+- Typecheck, lint, build, and 262 unit/integration tests passed. Local end-to-end tests passed 10 with 2 intentionally skipped. A separate live read-only exercise processed both new HTTP routes against `https://example.com`; extraction returned PASS and the security gate returned its expected evidence-based FAIL.
+- No deployment, public configuration change, chain request, or paid transaction was performed for this candidate.

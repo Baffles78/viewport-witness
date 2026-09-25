@@ -91,6 +91,14 @@ describe('JobStore - createJob and getJob', () => {
     store.updateJobStatus(failed.id, 'failed')
     expect(store.listJobsByStatuses(['queued']).map((job) => job.id)).toEqual([queued.id])
   })
+
+  it('stores new queued product kinds and bounded extraction options', () => {
+    const params = makeJob({ kind: 'extract', request: { maxOutputTokens: 1200 } })
+    store.createJob(params)
+    const job = store.getJob(params.id)
+    expect(job?.kind).toBe('extract')
+    expect(job?.request.maxOutputTokens).toBe(1200)
+  })
 })
 
 describe('JobStore - customer identity migration', () => {

@@ -1,5 +1,7 @@
 # ViewportWitness Runbook
 
+The `extract` and `security` jobs share the existing single-worker queue and seven-day cleanup. Keep `EXTRACT_PRICE_USDC=0.005` and `SECURITY_PRICE_USDC=0.05` in paid modes. Each uses an eight-second fetch/parser deadline, at most five redirects, HTML-only responses, and a 1 MiB response ceiling. Do not increase worker concurrency on the shared VPS.
+
 This runbook covers day-to-day operations. For technical internals see [BUILD-SPEC.md](BUILD-SPEC.md).
 
 ---

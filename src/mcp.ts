@@ -16,7 +16,7 @@ import type { Config } from './config.js'
 import type { JobStore } from './db.js'
 import { PUBLIC_BASE_URL } from './public.js'
 import { validatePublicHttpsUrl } from './ssrf.js'
-import type { PageAssertion, QAReport } from './types.js'
+import type { PageAssertion, StoredReport } from './types.js'
 import type { WorkerRunner } from './worker/runner.js'
 import { createProductJob } from './api/routes/products.js'
 
@@ -125,7 +125,10 @@ const assertionsSchema = z.array(assertionItemSchema).min(1).max(20)
 
 async function createMcpPaymentContext(cfg: Config): Promise<{
   server: x402ResourceServer
-  requirements: Record<'check' | 'verify' | 'compare', PaymentRequirements[]>
+  requirements: Record<
+    'check' | 'verify' | 'compare' | 'extract' | 'security',
+    PaymentRequirements[]
+  >
 } | null> {
   if (cfg.PAYMENT_MODE === 'test') return null
   if (!cfg.CDP_API_KEY_ID || !cfg.CDP_API_KEY_SECRET) throw new Error('mcp_payment_not_configured')
@@ -167,6 +170,8 @@ async function createMcpPaymentContext(cfg: Config): Promise<{
       check: await build(cfg.PRICE_USDC),
       verify: await build(cfg.VERIFY_PRICE_USDC),
       compare: await build(cfg.COMPARE_PRICE_USDC),
+      extract: await build(cfg.EXTRACT_PRICE_USDC),
+      security: await build(cfg.SECURITY_PRICE_USDC),
     },
   }
 }
@@ -184,14 +189,19 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
     const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.0' })
     const context = await getPaymentContext()
     const wrap = <T extends Record<string, unknown>>(
-      tier: 'check' | 'verify' | 'compare',
+      tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
       handler: (args: T, context: MCPToolContext) => Promise<ToolResult>,
     ) => {
       if (!context) {
         return (args: T, extra: unknown): Promise<ToolResult> => {
           const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
           return handler(args, {
-            toolName: tier === 'check' ? 'check_page' : `${tier}_page`,
+            toolName:
+              tier === 'check'
+                ? 'check_page'
+                : tier === 'security'
+                  ? 'web_release_gate'
+                  : `${tier}_page`,
             arguments: args,
             ...(meta ? { meta } : {}),
           })
@@ -199,7 +209,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       }
       const paidHandler = createPaymentWrapper(context.server, {
         accepts: context.requirements[tier],
-        resource: { url: `mcp://tool/${tier === 'check' ? 'check_page' : `${tier}_page`}` },
+        resource: {
+          url: `mcp://tool/${tier === 'check' ? 'check_page' : tier === 'security' ? 'web_release_gate' : `${tier}_page`}`,
+        },
         hooks: {
           onAfterSettlement: async ({ paymentPayload }) => {
             const paymentId = mcpPaymentFingerprint(paymentPayload)
@@ -370,6 +382,62 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
     )
 
     mcp.tool(
+      'extract_page',
+      `Fetch one public HTML page without a browser and return deterministic clean Markdown. Costs $${cfg.EXTRACT_PRICE_USDC} USDC via x402.`,
+      {
+        url: z.string().url().max(2048),
+        maxOutputTokens: z.number().int().min(500).max(12_000).optional(),
+      },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      wrap(
+        'extract',
+        async (
+          { url, maxOutputTokens }: { url: string; maxOutputTokens: number | undefined },
+          toolContext: MCPToolContext,
+        ) => {
+          const valid = await validatePublicHttpsUrl(url)
+          if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
+          const paymentId = paymentIdFromContext(toolContext)
+          return jsonResult(
+            await createProductJob({
+              store,
+              runner,
+              cfg,
+              kind: 'extract',
+              url,
+              ...(maxOutputTokens ? { maxOutputTokens } : {}),
+              ...(paymentId ? { paymentId } : {}),
+              deferEnqueue: Boolean(context),
+            }),
+          )
+        },
+      ),
+    )
+
+    mcp.tool(
+      'web_release_gate',
+      `Passively inspect one public HTML response for release security controls. No probing or code execution. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402.`,
+      { url: z.string().url().max(2048) },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      wrap('security', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
+        const valid = await validatePublicHttpsUrl(url)
+        if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
+        const paymentId = paymentIdFromContext(toolContext)
+        return jsonResult(
+          await createProductJob({
+            store,
+            runner,
+            cfg,
+            kind: 'security',
+            url,
+            ...(paymentId ? { paymentId } : {}),
+            deferEnqueue: Boolean(context),
+          }),
+        )
+      }),
+    )
+
+    mcp.tool(
       'get_report',
       'Retrieve the status or completed QA report for a previously submitted job. Free and read-only. Poll until status is "complete", "failed", or "retryable". No payment required.',
       { jobId: z.string().uuid() },
@@ -381,7 +449,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           return jsonResult({ id: job.id, status: job.status, pollUrl: `/v1/checks/${job.id}` })
         }
         try {
-          return jsonResult(JSON.parse(await fs.readFile(job.reportPath, 'utf8')) as QAReport)
+          return jsonResult(JSON.parse(await fs.readFile(job.reportPath, 'utf8')) as StoredReport)
         } catch {
           return jsonResult({ error: 'report_unavailable' }, true)
         }

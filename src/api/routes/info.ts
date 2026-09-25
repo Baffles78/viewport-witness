@@ -25,7 +25,8 @@ const mcpRegistryManifest = {
   $schema: 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
   name: 'io.github.Baffles78/viewport-witness',
   title: 'ViewportWitness by Apex Labs',
-  description: 'Paid browser QA for AI agents across phone and desktop viewports, using x402.',
+  description:
+    'Paid browser QA, DOM-to-Markdown, and passive web release security tools for AI agents using x402.',
   version: '0.2.0',
   repository: {
     url: 'https://github.com/Baffles78/viewport-witness',
@@ -100,6 +101,8 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
         check: { endpoint: 'POST /v1/checks', price: '$0.08 USDC' },
         verify: { endpoint: 'POST /v1/verify', price: '$0.10 USDC' },
         compare: { endpoint: 'POST /v1/compare', price: '$0.12 USDC' },
+        extract: { endpoint: 'POST /v1/extract', price: '$0.005 USDC' },
+        security: { endpoint: 'POST /v1/security-gate', price: '$0.05 USDC' },
       },
       feedback: FEEDBACK_URL,
     })

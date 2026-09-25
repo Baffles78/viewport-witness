@@ -191,6 +191,88 @@ export const openApiSpec = {
         responses: { '200': { description: 'MCP JSON-RPC response' } },
       },
     },
+    '/v1/extract': {
+      post: {
+        summary: 'Extract clean Markdown from one public HTML page',
+        operationId: 'extractPage',
+        description:
+          'Non-browser, deterministic extraction. Costs $0.005 USDC live. The response is queued and retained for seven days.',
+        security: x402Security,
+        'x-payment-info': {
+          protocols: [{ x402: {} }],
+          price: { mode: 'fixed', currency: 'USD', amount: '0.005' },
+        },
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['url'],
+                additionalProperties: false,
+                properties: {
+                  url: { type: 'string', format: 'uri' },
+                  maxOutputTokens: { type: 'integer', minimum: 500, maximum: 12000 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '202': {
+            description: 'Job accepted',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateCheckResponse' } },
+            },
+          },
+          '402': {
+            description: 'Payment required',
+            headers: {
+              'PAYMENT-REQUIRED': {
+                schema: { type: 'string' },
+                description: 'x402 payment requirements',
+              },
+            },
+          },
+          '422': { description: 'Invalid input' },
+        },
+      },
+    },
+    '/v1/security-gate': {
+      post: {
+        summary: 'Run a passive web release security gate',
+        operationId: 'webReleaseGate',
+        description:
+          'Checks only the target HTML response and validated redirects. No probing or code execution. Costs $0.05 USDC live.',
+        security: x402Security,
+        'x-payment-info': {
+          protocols: [{ x402: {} }],
+          price: { mode: 'fixed', currency: 'USD', amount: '0.05' },
+        },
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: createCheckRequestSchema } },
+        },
+        responses: {
+          '202': {
+            description: 'Job accepted',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CreateCheckResponse' } },
+            },
+          },
+          '402': {
+            description: 'Payment required',
+            headers: {
+              'PAYMENT-REQUIRED': {
+                schema: { type: 'string' },
+                description: 'x402 payment requirements',
+              },
+            },
+          },
+          '422': { description: 'Invalid input' },
+        },
+      },
+    },
     '/v1/verify': {
       post: {
         summary: 'Create a read-only assertion job',

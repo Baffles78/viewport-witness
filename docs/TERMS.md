@@ -1,5 +1,7 @@
 # Terms of Service
 
+The extraction result is a deterministic convenience transformation, not a guarantee of completeness. The web release gate is a passive, single-response review and is not a penetration test, repository audit, or assurance that a site is secure. Customers remain responsible for release decisions.
+
 By using this service you agree to the following terms.
 
 ## What this service does

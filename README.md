@@ -1,5 +1,7 @@
 # ViewportWitness by Apex Labs
 
+Two low-resource paid agent tools complement browser QA: `extract_page` converts one public HTML page to deterministic Markdown for $0.005 USDC, and `web_release_gate` passively checks one public page's release security controls for $0.05 USDC. Both share the Base/Solana x402 rails, idempotency protection, single-worker queue, and seven-day report lifecycle. They do not accept caller-supplied HTML, credentials, cookies, custom headers, uploads, or private-network targets.
+
 Remote MCP server and x402 API for AI-agent browser QA. Submit a public HTTPS URL and receive
 screenshots, accessibility findings, layout analysis, and structured JSON across phone and
 desktop viewports.

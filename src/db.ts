@@ -85,7 +85,7 @@ export class JobStore {
     customerId?: string
     expiresAt: number
     kind?: JobKind
-    request?: { assertions?: PageAssertion[] }
+    request?: { assertions?: PageAssertion[]; maxOutputTokens?: number }
     baselineJobId?: string
     initialStatus?: 'queued' | 'payment_pending'
   }): JobRecord {

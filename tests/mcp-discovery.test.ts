@@ -241,16 +241,18 @@ describe('MCP tools/list — verify_page assertions schema', () => {
   })
 })
 
-describe('MCP tools/list — all four tools present', () => {
-  it('returns exactly four tools', async () => {
+describe('MCP tools/list — all six tools present', () => {
+  it('returns exactly six tools', async () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const names = response.result?.tools?.map((t) => t.name) ?? []
     expect(names).toContain('check_page')
     expect(names).toContain('verify_page')
     expect(names).toContain('compare_page')
+    expect(names).toContain('extract_page')
+    expect(names).toContain('web_release_gate')
     expect(names).toContain('get_report')
-    expect(names.length).toBe(4)
+    expect(names.length).toBe(6)
   })
 })
 

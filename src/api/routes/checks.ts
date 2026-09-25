@@ -8,7 +8,7 @@ import { validatePublicHttpsUrl } from '../../ssrf.js'
 import type { JobStore } from '../../db.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
-import type { QAReport, Viewport } from '../../types.js'
+import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { challengeIfUnsigned } from './products.js'
 
@@ -275,7 +275,11 @@ export function createChecksRouter(
           const jobRoot = path.join(cfg.SCREENSHOTS_DIR, job.id)
           if (!isPathInside(jobRoot, job.reportPath)) throw new Error('unsafe_report_path')
           const reportJson = await fs.readFile(job.reportPath, 'utf8')
-          const report = JSON.parse(reportJson) as QAReport
+          const report = JSON.parse(reportJson) as StoredReport
+          if (report.kind === 'extract' || report.kind === 'security') {
+            res.json({ ...report, feedbackUrl: FEEDBACK_URL, jobStatus: 'complete' })
+            return
+          }
           res.json({
             id: report.id,
             url: report.url,
@@ -347,6 +351,10 @@ export function createChecksRouter(
       const job = store.getJob(id)
       if (!job) {
         res.status(404).json({ error: 'not_found', code: 'not_found' })
+        return
+      }
+      if (job.kind === 'extract' || job.kind === 'security') {
+        res.status(400).json({ error: 'artifact_not_available', code: 'non_browser_job' })
         return
       }
 

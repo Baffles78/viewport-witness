@@ -46,6 +46,8 @@ const PAID_OPERATIONS: Array<[string, string, string]> = [
   ['/v1/checks', 'post', '0.08'],
   ['/v1/verify', 'post', '0.10'],
   ['/v1/compare', 'post', '0.12'],
+  ['/v1/extract', 'post', '0.005'],
+  ['/v1/security-gate', 'post', '0.05'],
 ]
 
 describe('openapi spec — free route security', () => {
