@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "app.honeygate/viewport-witness",
+  "name": "io.github.baffles78/viewport-witness",
   "title": "ViewportWitness by Apex Labs",
   "description": "Paid browser QA for AI agents across phone and desktop viewports, using x402.",
   "version": "0.2.0",

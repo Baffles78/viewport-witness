@@ -124,7 +124,7 @@ Configure your MCP client to use `http://localhost:3000/mcp` instead. In test mo
 
 ## Registry entry
 
-The official MCP Registry manifest is `server.json` at the repository root and uses the namespace `app.honeygate/viewport-witness`. Check the registry itself for current publication status; a prepared manifest is not evidence that publication has completed.
+The official MCP Registry manifest is `server.json` at the repository root and uses the verified GitHub namespace `io.github.baffles78/viewport-witness`. Check the registry itself for current publication status; a prepared manifest or workflow run is not evidence that publication has completed.
 
 ---
 
