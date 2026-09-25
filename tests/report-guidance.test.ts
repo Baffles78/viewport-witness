@@ -153,6 +153,79 @@ describe('buildDiagnosis', () => {
     )
   })
 
+  it('ranks product evidence ahead of 12 or more earlier low-priority findings', () => {
+    const lowPriorityViolations: ViewportResult['accessibility']['violations'] = Array.from(
+      { length: 15 },
+      (_, index) => ({
+        id: `minor-rule-${index}`,
+        impact: 'minor' as const,
+        description: `Minor rule ${index}`,
+        helpUrl: 'https://example.com/help',
+        nodes: [],
+        count: 1,
+      }),
+    )
+    const comparison: NonNullable<QAReport['comparison']> = {
+      baselineJobId: 'baseline-id',
+      evidenceComplete: false,
+      evidenceLimitations: ['desktop: screenshot evidence is missing.'],
+      visual: {
+        phonePortrait: {
+          viewport: 'phonePortrait',
+          changedPixels: 10,
+          changedPercent: 0.1,
+          diffImageUrl: '/diff/phone',
+          baselineScreenshotSha256: 'a'.repeat(64),
+          currentScreenshotSha256: 'b'.repeat(64),
+        },
+      },
+      accessibility: { newViolationIds: [], resolvedViolationIds: [] },
+      errors: { baseline: 0, current: 0, delta: 0 },
+    }
+
+    const diagnosis = buildDiagnosis(
+      'INCONCLUSIVE',
+      {
+        phonePortrait: result({
+          accessibility: {
+            completed: true,
+            violations: lowPriorityViolations,
+            passes: 0,
+            incomplete: 0,
+            impact: { minor: lowPriorityViolations.length },
+          },
+        }),
+      },
+      {
+        assertions: {
+          passed: 0,
+          failed: 1,
+          results: {
+            phonePortrait: [
+              {
+                assertion: { type: 'noHorizontalOverflow' },
+                passed: false,
+                detail: 'Horizontal overflow detected.',
+              },
+            ],
+          },
+        },
+        comparison,
+      },
+    )
+
+    const codes = diagnosis.findings.map((finding) => finding.code)
+    expect(diagnosis.findings).toHaveLength(12)
+    expect(codes).toContain('failed-assertions')
+    expect(codes).toContain('incomplete-comparison-evidence')
+    expect(codes).toContain('visual-changes')
+    expect(diagnosis.findings.slice(0, 2).every((finding) => finding.severity === 'high')).toBe(
+      true,
+    )
+    expect(diagnosis.findings[2]?.severity).toBe('medium')
+    expect(diagnosis.findings.slice(3).every((finding) => finding.severity === 'low')).toBe(true)
+  })
+
   it('combines matching problems across viewports and preserves bounded structural hints', () => {
     const viewports: Partial<Record<Viewport, ViewportResult>> = {
       phonePortrait: result({

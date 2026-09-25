@@ -27,7 +27,7 @@ const ACCESSIBILITY_FIXES: Record<string, string> = {
 function addFinding(findings: Finding[], next: Finding): void {
   const existing = findings.find((finding) => finding.code === next.code)
   if (!existing) {
-    if (findings.length < MAX_FINDINGS) findings.push(next)
+    findings.push(next)
     return
   }
   existing.viewports = VIEWPORTS.filter(
@@ -98,7 +98,7 @@ export function buildDiagnosis(
       })
     }
 
-    for (const violation of result.accessibility.violations) {
+    for (const violation of result.accessibility.violations.slice(0, 50)) {
       addFinding(findings, {
         code: `accessibility:${violation.id}`,
         severity: severityForImpact(violation.impact),
