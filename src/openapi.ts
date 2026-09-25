@@ -1,5 +1,8 @@
 import { FEEDBACK_URL } from './public.js'
 
+/** Security requirement array for paid x402 operations */
+const x402Security = [{ x402Payment: [] }]
+
 const createCheckRequestSchema = {
   type: 'object',
   required: ['url'],
@@ -37,6 +40,7 @@ export const openApiSpec = {
       get: {
         summary: 'Service info card',
         operationId: 'getRoot',
+        security: [],
         responses: {
           '200': {
             description: 'Service links and version',
@@ -53,6 +57,7 @@ export const openApiSpec = {
       get: {
         summary: 'Process liveness',
         operationId: 'getHealth',
+        security: [],
         responses: {
           '200': {
             description: 'Process is alive',
@@ -69,6 +74,7 @@ export const openApiSpec = {
       get: {
         summary: 'Readiness probe',
         operationId: 'getReady',
+        security: [],
         responses: {
           '200': {
             description: 'Service is ready',
@@ -93,6 +99,7 @@ export const openApiSpec = {
       get: {
         summary: 'x402 payment discovery',
         operationId: 'getPaymentDiscovery',
+        security: [],
         responses: {
           '200': {
             description: 'Payment configuration for x402 clients',
@@ -109,6 +116,7 @@ export const openApiSpec = {
       get: {
         summary: 'Agent skill manifest',
         operationId: 'getSkillMd',
+        security: [],
         responses: {
           '200': {
             description: 'Concise agent-facing instructions for this service',
@@ -121,9 +129,11 @@ export const openApiSpec = {
       get: {
         summary: 'Privacy policy',
         operationId: 'getPrivacy',
+        security: [],
         responses: {
           '200': {
-            description: 'Privacy policy covering submitted URLs, screenshots, payment identifiers, and data retention',
+            description:
+              'Privacy policy covering submitted URLs, screenshots, payment identifiers, and data retention',
             content: { 'text/markdown': {} },
           },
         },
@@ -133,9 +143,11 @@ export const openApiSpec = {
       get: {
         summary: 'Terms of service',
         operationId: 'getTerms',
+        security: [],
         responses: {
           '200': {
-            description: 'Terms of service covering paid automated QA, non-mutating behavior, report expiry, and crypto payment finality',
+            description:
+              'Terms of service covering paid automated QA, non-mutating behavior, report expiry, and crypto payment finality',
             content: { 'text/markdown': {} },
           },
         },
@@ -145,6 +157,7 @@ export const openApiSpec = {
       get: {
         summary: 'ViewportWitness logo',
         operationId: 'getLogo',
+        security: [],
         responses: {
           '200': {
             description: 'Square PNG logo for directories and integrations',
@@ -167,11 +180,22 @@ export const openApiSpec = {
         summary: 'Create a read-only assertion job',
         operationId: 'verifyPage',
         description:
-          'Checks up to 20 declarative assertions across all three viewports. Costs $0.10 USDC live.',
+          'Checks up to 20 declarative assertions across all three viewports. Costs $0.10 USDC live on the production service; no payment required in test mode.',
+        security: x402Security,
+        'x-payment-info': {
+          protocols: ['x402'],
+          price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
+        },
         requestBody: {
           required: true,
           content: {
-            'application/json': { schema: { $ref: '#/components/schemas/VerifyRequest' } },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/VerifyRequest' },
+              example: {
+                url: 'https://example.com',
+                assertions: [{ type: 'titleIncludes', value: 'Example Domain' }],
+              },
+            },
           },
         },
         responses: {
@@ -181,7 +205,15 @@ export const openApiSpec = {
               'application/json': { schema: { $ref: '#/components/schemas/CreateCheckResponse' } },
             },
           },
-          '402': { description: 'Payment required' },
+          '402': {
+            description: 'Payment required (production mode only)',
+            headers: {
+              'PAYMENT-RESPONSE': {
+                schema: { type: 'string' },
+                description: 'x402 payment requirements',
+              },
+            },
+          },
           '422': { description: 'Invalid assertions' },
         },
       },
@@ -191,11 +223,22 @@ export const openApiSpec = {
         summary: 'Compare a page with a baseline job',
         operationId: 'comparePage',
         description:
-          'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Costs $0.12 USDC live.',
+          'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Costs $0.12 USDC live on the production service; no payment required in test mode.',
+        security: x402Security,
+        'x-payment-info': {
+          protocols: ['x402'],
+          price: { mode: 'fixed', currency: 'USD', amount: '0.12' },
+        },
         requestBody: {
           required: true,
           content: {
-            'application/json': { schema: { $ref: '#/components/schemas/CompareRequest' } },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CompareRequest' },
+              example: {
+                url: 'https://example.com',
+                baselineJobId: '00000000-0000-0000-0000-000000000000',
+              },
+            },
           },
         },
         responses: {
@@ -206,7 +249,15 @@ export const openApiSpec = {
             },
           },
           '400': { description: 'Baseline or URL unavailable' },
-          '402': { description: 'Payment required' },
+          '402': {
+            description: 'Payment required (production mode only)',
+            headers: {
+              'PAYMENT-RESPONSE': {
+                schema: { type: 'string' },
+                description: 'x402 payment requirements',
+              },
+            },
+          },
         },
       },
     },
@@ -219,6 +270,11 @@ export const openApiSpec = {
           'In test mode, no payment is required. In production mode, include a PAYMENT-SIGNATURE header ' +
           'with a valid $0.08 USDC payment using one of the networks in the live 402 challenge and ' +
           '/.well-known/x402 discovery response.',
+        security: x402Security,
+        'x-payment-info': {
+          protocols: ['x402'],
+          price: { mode: 'fixed', currency: 'USD', amount: '0.08' },
+        },
         parameters: [
           {
             name: 'Idempotency-Key',
@@ -301,6 +357,7 @@ export const openApiSpec = {
       get: {
         summary: 'Get check job status and result',
         operationId: 'getCheck',
+        security: [],
         parameters: [
           {
             name: 'id',
@@ -334,6 +391,7 @@ export const openApiSpec = {
       get: {
         summary: 'Get a screenshot for a specific viewport',
         operationId: 'getScreenshot',
+        security: [],
         parameters: [
           {
             name: 'id',
@@ -377,6 +435,16 @@ export const openApiSpec = {
     },
   },
   components: {
+    securitySchemes: {
+      x402Payment: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'PAYMENT-SIGNATURE',
+        description:
+          'x402 payment header. Include a signed payment payload for the required amount. ' +
+          'See /.well-known/x402 for accepted networks and amounts.',
+      },
+    },
     schemas: {
       VerifyRequest: {
         type: 'object',
