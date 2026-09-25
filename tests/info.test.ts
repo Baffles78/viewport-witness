@@ -233,6 +233,26 @@ describe('GET /.well-known/x402', () => {
   })
 })
 
+describe('GET /.well-known/mcp.json', () => {
+  it('advertises the canonical remote MCP endpoint', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/.well-known/mcp.json`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    const body = (await res.json()) as {
+      name: string
+      transport: { type: string; url: string }
+      repository: string
+    }
+    expect(body.name).toBe('io.github.Baffles78/viewport-witness')
+    expect(body.transport).toEqual({
+      type: 'streamable-http',
+      url: 'https://qa.honeygate.app/mcp',
+    })
+    expect(body.repository).toBe('https://github.com/Baffles78/viewport-witness')
+  })
+})
+
 describe('GET /openapi.json', () => {
   it('returns 200 with valid JSON', async () => {
     const { port } = await startServer(makeConfig())
@@ -247,6 +267,13 @@ describe('GET /openapi.json', () => {
     const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
     const body = (await res.json()) as { paths: Record<string, unknown> }
     expect(body.paths['/skill.md']).toBeDefined()
+  })
+
+  it('has /.well-known/mcp.json path defined', async () => {
+    const { port } = await startServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/openapi.json`)
+    const body = (await res.json()) as { paths: Record<string, unknown> }
+    expect(body.paths['/.well-known/mcp.json']).toBeDefined()
   })
 
   it('has live service server listed', async () => {

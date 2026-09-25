@@ -114,6 +114,19 @@ export const openApiSpec = {
         },
       },
     },
+    '/.well-known/mcp.json': {
+      get: {
+        summary: 'MCP server discovery',
+        operationId: 'getMcpDiscovery',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Connection metadata for the public remote MCP server',
+            content: { 'application/json': {} },
+          },
+        },
+      },
+    },
     '/skill.md': {
       get: {
         summary: 'Agent skill manifest',

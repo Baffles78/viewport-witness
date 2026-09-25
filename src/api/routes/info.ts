@@ -19,6 +19,18 @@ const privacyPath = join(__dirname, '../../../docs/PRIVACY.md')
 const termsPath = join(__dirname, '../../../docs/TERMS.md')
 const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
 
+const mcpDiscovery = {
+  name: 'io.github.Baffles78/viewport-witness',
+  title: 'ViewportWitness by Apex Labs',
+  description: 'Paid browser QA for AI agents across phone and desktop viewports, using x402.',
+  version: '0.2.0',
+  transport: {
+    type: 'streamable-http',
+    url: `${PUBLIC_BASE_URL}/mcp`,
+  },
+  repository: 'https://github.com/Baffles78/viewport-witness',
+}
+
 let llmsContent: string
 try {
   llmsContent = readFileSync(llmsPath, 'utf8')
@@ -62,6 +74,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
+      mcpDiscovery: '/.well-known/mcp.json',
       mcp: '/mcp',
       privacy: '/privacy',
       terms: '/terms',
@@ -144,6 +157,10 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       PUBLIC_BASE_URL,
     )
     res.json(discovery)
+  })
+
+  router.get('/.well-known/mcp.json', (_req: Request, res: Response) => {
+    res.json(mcpDiscovery)
   })
 
   return router
