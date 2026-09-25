@@ -15,6 +15,9 @@ const startTime = Date.now()
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const llmsPath = join(__dirname, '../../../llms.txt')
 const skillPath = join(__dirname, '../../../skill.md')
+const privacyPath = join(__dirname, '../../../docs/PRIVACY.md')
+const termsPath = join(__dirname, '../../../docs/TERMS.md')
+const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
 
 let llmsContent: string
 try {
@@ -28,6 +31,20 @@ try {
   skillContent = readFileSync(skillPath, 'utf8')
 } catch {
   skillContent = 'ViewportWitness by Apex Labs: see /openapi.json and /llms.txt for documentation.'
+}
+
+let privacyContent: string
+try {
+  privacyContent = readFileSync(privacyPath, 'utf8')
+} catch {
+  privacyContent = '# Privacy Policy\n\nSee /openapi.json for service documentation.'
+}
+
+let termsContent: string
+try {
+  termsContent = readFileSync(termsPath, 'utf8')
+} catch {
+  termsContent = '# Terms of Service\n\nSee /openapi.json for service documentation.'
 }
 
 export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Config): Router {
@@ -46,6 +63,9 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
       mcp: '/mcp',
+      privacy: '/privacy',
+      terms: '/terms',
+      logo: '/logo.png',
       products: {
         check: { endpoint: 'POST /v1/checks', price: '$0.08 USDC' },
         verify: { endpoint: 'POST /v1/verify', price: '$0.10 USDC' },
@@ -95,6 +115,18 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
 
   router.get('/skill.md', (_req: Request, res: Response) => {
     res.type('text/markdown').send(skillContent)
+  })
+
+  router.get('/privacy', (_req: Request, res: Response) => {
+    res.type('text/markdown').send(privacyContent)
+  })
+
+  router.get('/terms', (_req: Request, res: Response) => {
+    res.type('text/markdown').send(termsContent)
+  })
+
+  router.get('/logo.png', (_req: Request, res: Response) => {
+    res.sendFile(logoPath)
   })
 
   router.get('/.well-known/x402', (_req: Request, res: Response) => {
