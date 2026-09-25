@@ -183,7 +183,7 @@ export const openApiSpec = {
           'Checks up to 20 declarative assertions across all three viewports. Costs $0.10 USDC live on the production service; no payment required in test mode.',
         security: x402Security,
         'x-payment-info': {
-          protocols: ['x402'],
+          protocols: [{ x402: {} }],
           price: { mode: 'fixed', currency: 'USD', amount: '0.10' },
         },
         requestBody: {
@@ -208,7 +208,7 @@ export const openApiSpec = {
           '402': {
             description: 'Payment required (production mode only)',
             headers: {
-              'PAYMENT-RESPONSE': {
+              'PAYMENT-REQUIRED': {
                 schema: { type: 'string' },
                 description: 'x402 payment requirements',
               },
@@ -226,7 +226,7 @@ export const openApiSpec = {
           'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Costs $0.12 USDC live on the production service; no payment required in test mode.',
         security: x402Security,
         'x-payment-info': {
-          protocols: ['x402'],
+          protocols: [{ x402: {} }],
           price: { mode: 'fixed', currency: 'USD', amount: '0.12' },
         },
         requestBody: {
@@ -252,7 +252,7 @@ export const openApiSpec = {
           '402': {
             description: 'Payment required (production mode only)',
             headers: {
-              'PAYMENT-RESPONSE': {
+              'PAYMENT-REQUIRED': {
                 schema: { type: 'string' },
                 description: 'x402 payment requirements',
               },
@@ -272,7 +272,7 @@ export const openApiSpec = {
           '/.well-known/x402 discovery response.',
         security: x402Security,
         'x-payment-info': {
-          protocols: ['x402'],
+          protocols: [{ x402: {} }],
           price: { mode: 'fixed', currency: 'USD', amount: '0.08' },
         },
         parameters: [
@@ -323,7 +323,7 @@ export const openApiSpec = {
           '402': {
             description: 'Payment required (production mode only)',
             headers: {
-              'PAYMENT-RESPONSE': {
+              'PAYMENT-REQUIRED': {
                 schema: { type: 'string' },
                 description: 'x402 payment requirements',
               },

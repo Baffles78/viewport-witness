@@ -5,7 +5,7 @@ type PathItem = Record<string, unknown>
 type Operation = {
   security?: Array<Record<string, unknown>>
   'x-payment-info'?: {
-    protocols: string[]
+    protocols: Array<{ x402: Record<string, never> }>
     price: { mode: string; amount: string; currency: string }
   }
   responses?: Record<string, unknown>
@@ -84,17 +84,27 @@ describe('openapi spec — paid route security', () => {
       expect((op.responses as Record<string, unknown>)['402']).toBeDefined()
     })
 
-    it(`${method.toUpperCase()} ${path} has x-payment-info with protocols [x402]`, () => {
+    it(`${method.toUpperCase()} ${path} has canonical x402 protocol metadata`, () => {
       const op = getOp(path, method)
       const info = op['x-payment-info']
       expect(info).toBeDefined()
-      expect(info!.protocols).toEqual(['x402'])
+      expect(info!.protocols).toEqual([{ x402: {} }])
     })
 
     it(`${method.toUpperCase()} ${path} has fixed USD pricing`, () => {
       const op = getOp(path, method)
       expect(op['x-payment-info']!.price.mode).toBe('fixed')
       expect(op['x-payment-info']!.price.currency).toBe('USD')
+    })
+  }
+
+  for (const [path, method] of PAID_OPERATIONS) {
+    it(`${method.toUpperCase()} ${path} documents PAYMENT-REQUIRED challenge header`, () => {
+      const response = getOp(path, method).responses?.['402'] as {
+        headers?: Record<string, unknown>
+      }
+      expect(response.headers?.['PAYMENT-REQUIRED']).toBeDefined()
+      expect(response.headers?.['PAYMENT-RESPONSE']).toBeUndefined()
     })
   }
 
