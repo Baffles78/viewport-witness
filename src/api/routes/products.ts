@@ -8,6 +8,19 @@ import { validatePublicHttpsUrl } from '../../ssrf.js'
 import type { JobKind, PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 
+// In paid modes, send the x402 challenge to unsigned requests before running any
+// body, URL, or baseline validation. Signed requests skip this and proceed to
+// validation as normal; the payment middleware runs later for settlement only.
+export function challengeIfUnsigned(pm: RequestHandler, cfg: Config): RequestHandler {
+  return (req, res, next) => {
+    if (cfg.PAYMENT_MODE !== 'test' && !req.header('payment-signature') && !req.header('x-payment')) {
+      pm(req, res, next)
+    } else {
+      next()
+    }
+  }
+}
+
 interface ProductRunner {
   enqueue(jobId: string): Promise<void>
 }
@@ -139,14 +152,6 @@ export function createProductsRouter(
   comparePayment: RequestHandler,
 ): Router {
   const router = createRouter()
-  const challengeUnpaidCompare: RequestHandler = (req, res, next) => {
-    const hasPayment = Boolean(req.header('payment-signature') ?? req.header('x-payment'))
-    if (cfg.PAYMENT_MODE !== 'test' && !hasPayment) {
-      comparePayment(req, res, next)
-      return
-    }
-    next()
-  }
   const inFlightIdempotencyKeys = new Set<string>()
   const idempotencyPreflight = (req: Request, res: Response, next: NextFunction): void => {
     const key = readIdempotencyKey(req)
@@ -185,6 +190,7 @@ export function createProductsRouter(
 
   router.post(
     '/v1/verify',
+    challengeIfUnsigned(verifyPayment, cfg),
     asyncHandler(async (req, res, next) => {
       const parsed = verifySchema.safeParse(req.body)
       if (!parsed.success) {
@@ -231,10 +237,7 @@ export function createProductsRouter(
 
   router.post(
     '/v1/compare',
-    // Let discovery clients receive the unsigned 402 challenge before baseline
-    // validation. Signed requests still validate first, so an invalid baseline
-    // cannot be settled and charged.
-    challengeUnpaidCompare,
+    challengeIfUnsigned(comparePayment, cfg),
     asyncHandler(async (req, res, next) => {
       const parsed = compareSchema.safeParse(req.body)
       if (!parsed.success) {
