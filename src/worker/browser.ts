@@ -10,6 +10,7 @@ import type {
   AccessibilityViolation,
   PageAssertion,
   AssertionResult,
+  PerformanceEvidence,
 } from '../types.js'
 import { VIEWPORTS as VP } from '../types.js'
 
@@ -68,6 +69,38 @@ export async function runViewportCheck(
 
   try {
     const page: Page = await context.newPage()
+    await page.addInitScript(() => {
+      const metrics = { largestContentfulPaintMs: 0, cumulativeLayoutShift: 0 }
+      ;(
+        window as Window & {
+          __viewportWitnessMetrics?: {
+            largestContentfulPaintMs: number
+            cumulativeLayoutShift: number
+          }
+        }
+      ).__viewportWitnessMetrics = metrics
+      try {
+        new PerformanceObserver((list) => {
+          const entries = list.getEntries()
+          const last = entries[entries.length - 1]
+          if (last) metrics.largestContentfulPaintMs = last.startTime
+        }).observe({ type: 'largest-contentful-paint', buffered: true })
+      } catch {
+        // Metric is not available in every browser/page.
+      }
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number }
+            if (!shift.hadRecentInput && typeof shift.value === 'number') {
+              metrics.cumulativeLayoutShift += shift.value
+            }
+          }
+        }).observe({ type: 'layout-shift', buffered: true })
+      } catch {
+        // Metric is not available in every browser/page.
+      }
+    })
     const consoleErrors: string[] = []
     let pageCrash = false
     const failedRequests: Array<{ url: string; status: number | null; reason: string }> = []
@@ -228,17 +261,53 @@ export async function runViewportCheck(
         'accessibility_timeout',
       )
 
-      const violations: AccessibilityViolation[] = axeResults.violations.slice(0, 50).map((v) => ({
-        id: v.id,
-        impact: (v.impact as AccessibilityViolation['impact']) ?? null,
-        description: v.description,
-        helpUrl: v.helpUrl,
-        nodes: v.nodes.slice(0, 5).map((n) => ({
-          html: '[redacted]',
-          failureSummary: n.failureSummary?.slice(0, 500) ?? '',
+      let remainingLocatorHints = 20
+      const violations: AccessibilityViolation[] = await Promise.all(
+        axeResults.violations.slice(0, 50).map(async (v) => ({
+          id: v.id,
+          impact: (v.impact as AccessibilityViolation['impact']) ?? null,
+          description: v.description,
+          helpUrl: v.helpUrl,
+          nodes: await Promise.all(
+            v.nodes.slice(0, 5).map(async (n) => {
+              let locator: string | undefined
+              const target = n.target[0]
+              if (typeof target === 'string' && remainingLocatorHints > 0) {
+                remainingLocatorHints--
+                try {
+                  locator = await page
+                    .locator(target)
+                    .first()
+                    .evaluate((element) => {
+                      const parts: string[] = []
+                      let current: Element | null = element
+                      while (current && parts.length < 5 && current !== document.documentElement) {
+                        const tag = current.tagName.toLowerCase()
+                        const siblings = current.parentElement
+                          ? Array.from(current.parentElement.children).filter(
+                              (sibling) => sibling.tagName === current?.tagName,
+                            )
+                          : []
+                        const position = Math.max(1, siblings.indexOf(current) + 1)
+                        parts.unshift(`${tag}:nth-of-type(${position})`)
+                        current = current.parentElement
+                      }
+                      return parts.join(' > ').slice(0, 200)
+                    })
+                } catch {
+                  // Keep the finding without a locator if the node cannot be resolved.
+                }
+              }
+              return {
+                html: '[redacted]',
+                failureSummary: n.failureSummary?.slice(0, 500) ?? '',
+                ...(locator ? { locator } : {}),
+              }
+            }),
+          ),
+          count: v.nodes.length,
         })),
-        count: v.nodes.length,
-      }))
+      )
 
       const impactCounts: Record<string, number> = {}
       for (const v of violations) {
@@ -261,6 +330,7 @@ export async function runViewportCheck(
     // Layout checks
     let overflowDetected = false
     let offscreenElements = 0
+    let layoutLocatorHints: string[] = []
 
     try {
       const layoutData = await withTimeout(
@@ -270,16 +340,120 @@ export async function runViewportCheck(
           const offscreen = allElements.filter((el) => {
             const rect = el.getBoundingClientRect()
             return rect.right > window.innerWidth * 1.2 && rect.width > 10
-          }).length
-          return { overflow, offscreen }
+          })
+          const locatorFor = (element: Element): string => {
+            const parts: string[] = []
+            let current: Element | null = element
+            while (current && parts.length < 5 && current !== document.documentElement) {
+              const tag = current.tagName.toLowerCase()
+              const siblings = current.parentElement
+                ? Array.from(current.parentElement.children).filter(
+                    (sibling) => sibling.tagName === current?.tagName,
+                  )
+                : []
+              const position = Math.max(1, siblings.indexOf(current) + 1)
+              parts.unshift(`${tag}:nth-of-type(${position})`)
+              current = current.parentElement
+            }
+            return parts.join(' > ').slice(0, 200)
+          }
+          return {
+            overflow,
+            offscreen: offscreen.length,
+            locators: offscreen.slice(0, 5).map(locatorFor),
+          }
         }),
         5_000,
         'layout_timeout',
       )
       overflowDetected = layoutData.overflow
       offscreenElements = layoutData.offscreen
+      layoutLocatorHints = layoutData.locators
     } catch {
       // ignore
+    }
+
+    let performanceEvidence: PerformanceEvidence = {
+      navigation: {},
+      paint: {},
+      resources: {
+        requestCount: Math.min(requestCount, MAX_REQUESTS + 1),
+        transferredBytes: Math.min(MAX_RESPONSE_BYTES, Math.max(0, Math.round(responseBytes))),
+      },
+    }
+
+    try {
+      const measured = await withTimeout(
+        page.evaluate(() => {
+          const navigation = performance.getEntriesByType('navigation')[0] as
+            PerformanceNavigationTiming | undefined
+          const paints = performance.getEntriesByType('paint')
+          const paintValue = (name: string): number | undefined =>
+            paints.find((entry) => entry.name === name)?.startTime
+          const observed = (
+            window as Window & {
+              __viewportWitnessMetrics?: {
+                largestContentfulPaintMs: number
+                cumulativeLayoutShift: number
+              }
+            }
+          ).__viewportWitnessMetrics
+          return {
+            navigation: navigation
+              ? {
+                  dnsMs: navigation.domainLookupEnd - navigation.domainLookupStart,
+                  connectMs: navigation.connectEnd - navigation.connectStart,
+                  tlsMs:
+                    navigation.secureConnectionStart > 0
+                      ? navigation.connectEnd - navigation.secureConnectionStart
+                      : undefined,
+                  requestMs: navigation.responseStart - navigation.requestStart,
+                  responseMs: navigation.responseEnd - navigation.responseStart,
+                  timeToFirstByteMs: navigation.responseStart - navigation.requestStart,
+                  domInteractiveMs: navigation.domInteractive,
+                  domContentLoadedMs: navigation.domContentLoadedEventEnd,
+                  loadEventMs: navigation.loadEventEnd,
+                }
+              : {},
+            paint: {
+              firstPaintMs: paintValue('first-paint'),
+              firstContentfulPaintMs: paintValue('first-contentful-paint'),
+              largestContentfulPaintMs: observed?.largestContentfulPaintMs,
+              cumulativeLayoutShift: observed?.cumulativeLayoutShift,
+            },
+          }
+        }),
+        2_000,
+        'performance_timeout',
+      )
+      const boundedMs = (value: number | undefined): number | undefined =>
+        typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 300_000
+          ? Math.round(value)
+          : undefined
+      const boundedCls = (value: number | undefined): number | undefined =>
+        typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
+          ? Number(value.toFixed(4))
+          : undefined
+      const firstPaintMs = boundedMs(measured.paint.firstPaintMs)
+      const firstContentfulPaintMs = boundedMs(measured.paint.firstContentfulPaintMs)
+      const largestContentfulPaintMs = boundedMs(measured.paint.largestContentfulPaintMs)
+      const cumulativeLayoutShift = boundedCls(measured.paint.cumulativeLayoutShift)
+      performanceEvidence = {
+        navigation: Object.fromEntries(
+          Object.entries(measured.navigation)
+            .map(([key, value]) => [key, boundedMs(value)])
+            .filter((entry): entry is [string, number] => entry[1] !== undefined),
+        ),
+        paint: {
+          ...(firstPaintMs !== undefined ? { firstPaintMs } : {}),
+          ...(firstContentfulPaintMs !== undefined ? { firstContentfulPaintMs } : {}),
+          ...(largestContentfulPaintMs !== undefined ? { largestContentfulPaintMs } : {}),
+          ...(cumulativeLayoutShift !== undefined ? { cumulativeLayoutShift } : {}),
+        },
+        resources: performanceEvidence.resources,
+      }
+    } catch {
+      // Request and transfer totals remain available when page timing APIs are unavailable.
     }
 
     // Declarative, read-only assertions. These only inspect the loaded DOM and
@@ -452,6 +626,8 @@ export async function runViewportCheck(
       failedRequests,
       overflowDetected,
       offscreenElements,
+      layoutLocatorHints,
+      performance: performanceEvidence,
       accessibility: accessibilityResult,
       interactionObservations,
       ...(assertionResults ? { assertions: assertionResults } : {}),

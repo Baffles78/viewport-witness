@@ -93,6 +93,10 @@ When complete, the full QAReport is returned. The top-level `status` field becom
 `"PASS"` | `"FAIL"` | `"INCONCLUSIVE"`.
 Every report also includes a compact `verdict` with `decision`, issue counts, short reasons, and
 recommended actions.
+Reports also include `diagnosis`, with deterministic plain-English findings, specific fixes, and
+bounded structural locator hints. Each viewport includes `performance` navigation/paint metrics
+when the browser exposes them, plus observed request count and transferred bytes. These are
+collected during the existing page load; ViewportWitness does not make an extra visit.
 
 ## Screenshots
 

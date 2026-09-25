@@ -70,6 +70,18 @@ describe('openapi spec — /mcp excluded from HTTP x402 payment probing', () => 
   })
 })
 
+describe('openapi spec — report value fields', () => {
+  it('documents deterministic diagnosis and bounded performance evidence', () => {
+    const schemas = openApiSpec.components.schemas as Record<
+      string,
+      { properties?: Record<string, unknown> }
+    >
+    expect(schemas['QAReport']?.properties).toHaveProperty('diagnosis')
+    expect(schemas['ViewportResult']?.properties).toHaveProperty('performance')
+    expect(schemas['ViewportResult']?.properties).toHaveProperty('layoutLocatorHints')
+  })
+})
+
 describe('openapi spec — paid route security', () => {
   for (const [path, method] of PAID_OPERATIONS) {
     it(`${method.toUpperCase()} ${path} uses x402Payment security scheme`, () => {

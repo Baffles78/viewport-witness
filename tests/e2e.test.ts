@@ -243,7 +243,16 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       expect(report).not.toHaveProperty('paymentId')
       const viewports = report?.['viewports'] as Record<
         string,
-        { screenshotBytes: number; screenshotPath?: string }
+        {
+          screenshotBytes: number
+          screenshotPath?: string
+          performance: {
+            navigation: Record<string, number>
+            paint: Record<string, number>
+            resources: { requestCount: number; transferredBytes: number }
+          }
+          layoutLocatorHints: string[]
+        }
       >
       expect(Object.keys(viewports).sort(), JSON.stringify(report?.['limitations'])).toEqual(
         ['desktop', 'phoneLandscape', 'phonePortrait'].sort(),
@@ -251,7 +260,13 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       for (const result of Object.values(viewports)) {
         expect(result.screenshotBytes).toBeGreaterThan(0)
         expect(result.screenshotPath).toBeUndefined()
+        expect(result.performance.resources.requestCount).toBeGreaterThan(0)
+        expect(result.performance.resources.transferredBytes).toBeGreaterThanOrEqual(0)
+        expect(result.performance.navigation).toBeTypeOf('object')
+        expect(result.performance.paint).toBeTypeOf('object')
+        expect(result.layoutLocatorHints).toBeInstanceOf(Array)
       }
+      expect(report?.['diagnosis']).toMatchObject({ overview: expect.any(String) })
     },
     180000,
   )

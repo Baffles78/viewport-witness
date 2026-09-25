@@ -273,7 +273,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'check_page',
-      `Run browser QA across three viewports (phone portrait, phone landscape, desktop). Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
+      `Run browser QA across three viewports (phone portrait, phone landscape, desktop), including bounded performance evidence and plain-English diagnosis with safe structural locator hints. Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048) },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
@@ -296,7 +296,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'verify_page',
-      `Check up to 20 declarative assertions across three viewports. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      `Check up to 20 declarative assertions across three viewports and return bounded performance evidence plus plain-English diagnosis. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       {
         url: z.string().url().max(2048),
         assertions: assertionsSchema,
@@ -329,7 +329,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'compare_page',
-      `Compare a page against a completed ViewportWitness baseline job. Returns pixel-diff percentages, new/resolved accessibility issue IDs, and error deltas. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      `Compare a page against a completed ViewportWitness baseline job. Returns pixel-diff percentages, new/resolved accessibility issue IDs, error deltas, bounded performance evidence, and plain-English diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048), baselineJobId: z.string().uuid() },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(

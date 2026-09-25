@@ -669,6 +669,43 @@ export const openApiSpec = {
               recommendedActions: { type: 'array', items: { type: 'object' } },
             },
           },
+          diagnosis: {
+            type: 'object',
+            required: ['overview', 'findings'],
+            description:
+              'Bounded, deterministic plain-English diagnosis and repair guidance derived from collected evidence.',
+            properties: {
+              overview: { type: 'string' },
+              findings: {
+                type: 'array',
+                maxItems: 12,
+                items: {
+                  type: 'object',
+                  required: ['code', 'severity', 'viewports', 'diagnosis', 'fix', 'locatorHints'],
+                  properties: {
+                    code: { type: 'string' },
+                    severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+                    viewports: {
+                      type: 'array',
+                      items: {
+                        type: 'string',
+                        enum: ['phonePortrait', 'phoneLandscape', 'desktop'],
+                      },
+                    },
+                    diagnosis: { type: 'string' },
+                    fix: { type: 'string' },
+                    locatorHints: {
+                      type: 'array',
+                      maxItems: 5,
+                      description:
+                        'Structural tag and nth-of-type hints only; page text and element attributes are excluded.',
+                      items: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
           viewports: {
             type: 'object',
             properties: {
@@ -720,6 +757,49 @@ export const openApiSpec = {
           },
           overflowDetected: { type: 'boolean' },
           offscreenElements: { type: 'integer' },
+          layoutLocatorHints: {
+            type: 'array',
+            maxItems: 5,
+            items: { type: 'string' },
+          },
+          performance: {
+            type: 'object',
+            description:
+              'Bounded timing and transfer evidence collected during the existing page load; no extra browsing is performed.',
+            properties: {
+              navigation: {
+                type: 'object',
+                properties: {
+                  dnsMs: { type: 'number' },
+                  connectMs: { type: 'number' },
+                  tlsMs: { type: 'number' },
+                  requestMs: { type: 'number' },
+                  responseMs: { type: 'number' },
+                  timeToFirstByteMs: { type: 'number' },
+                  domInteractiveMs: { type: 'number' },
+                  domContentLoadedMs: { type: 'number' },
+                  loadEventMs: { type: 'number' },
+                },
+              },
+              paint: {
+                type: 'object',
+                properties: {
+                  firstPaintMs: { type: 'number' },
+                  firstContentfulPaintMs: { type: 'number' },
+                  largestContentfulPaintMs: { type: 'number' },
+                  cumulativeLayoutShift: { type: 'number' },
+                },
+              },
+              resources: {
+                type: 'object',
+                required: ['requestCount', 'transferredBytes'],
+                properties: {
+                  requestCount: { type: 'integer', maximum: 101 },
+                  transferredBytes: { type: 'integer', maximum: 15728640 },
+                },
+              },
+            },
+          },
           accessibility: {
             type: 'object',
             properties: {
@@ -762,6 +842,11 @@ export const openApiSpec = {
               properties: {
                 html: { type: 'string' },
                 failureSummary: { type: 'string' },
+                locator: {
+                  type: 'string',
+                  description:
+                    'Bounded structural locator made only from tag names and nth-of-type positions.',
+                },
               },
             },
           },

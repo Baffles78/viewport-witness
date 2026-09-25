@@ -13,6 +13,7 @@ import type {
   VisualComparisonResult,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
+import { buildDiagnosis } from '../report-guidance.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
@@ -288,6 +289,7 @@ export class WorkerRunner {
         'layout:overflow',
         'layout:offscreen',
         'network:failed-requests',
+        'performance:navigation-and-paint',
         'interaction:visibility',
         'interaction:focusability',
       ],
@@ -300,6 +302,7 @@ export class WorkerRunner {
         overallLoadStatus,
       },
       verdict: this.buildVerdict(status, publicViewportResults),
+      diagnosis: buildDiagnosis(status, publicViewportResults),
     }
 
     if (job.kind === 'verify') {
@@ -358,6 +361,8 @@ export class WorkerRunner {
         if (reportObj.verdict.decision === 'safe_to_ship') reportObj.verdict.decision = 'review'
       }
     }
+
+    reportObj.diagnosis = buildDiagnosis(reportObj.status, publicViewportResults)
 
     // Compute content hash (evidence of integrity, not a cryptographic signature)
     const reportJson = JSON.stringify(reportObj)
