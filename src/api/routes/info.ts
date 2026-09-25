@@ -76,7 +76,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
   })
 
   router.get('/favicon.ico', (_req: Request, res: Response) => {
-    res.status(204).end()
+    res.sendFile(logoPath)
   })
 
   router.get('/health', (_req: Request, res: Response) => {

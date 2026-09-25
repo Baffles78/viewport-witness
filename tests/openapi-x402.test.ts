@@ -37,6 +37,7 @@ const FREE_OPERATIONS: Array<[string, string]> = [
   ['/privacy', 'get'],
   ['/terms', 'get'],
   ['/logo.png', 'get'],
+  ['/mcp', 'post'],
   ['/v1/checks/{id}', 'get'],
   ['/v1/checks/{id}/screenshots/{viewport}', 'get'],
 ]
@@ -57,10 +58,10 @@ describe('openapi spec — free route security', () => {
   }
 })
 
-describe('openapi spec — /mcp excluded from HTTP x402 probing', () => {
-  it('POST /mcp has no security entry (transport endpoint, not HTTP x402 probed)', () => {
+describe('openapi spec — /mcp excluded from HTTP x402 payment probing', () => {
+  it('POST /mcp is explicitly public at the HTTP transport layer', () => {
     const op = getOp('/mcp', 'post')
-    expect(op.security).toBeUndefined()
+    expect(op.security).toEqual([])
   })
 
   it('POST /mcp has no x-payment-info', () => {

@@ -22,6 +22,8 @@ export const openApiSpec = {
   info: {
     title: 'ViewportWitness by Apex Labs',
     version: '0.2.0',
+    'x-guidance':
+      'Use POST /v1/checks for general browser QA, POST /v1/verify for explicit assertions, and POST /v1/compare when you already have a completed baseline job. Each paid operation returns an x402 challenge before work begins.',
     description:
       'Machine-facing browser QA API. Submit a public HTTPS URL and receive screenshots, ' +
       'accessibility findings, layout analysis, and a structured report across three browser viewports. ' +
@@ -170,6 +172,7 @@ export const openApiSpec = {
       post: {
         summary: 'Remote MCP interface for AI agents',
         operationId: 'mcp',
+        security: [],
         description:
           'Stateless Streamable HTTP MCP endpoint. Paid tools use the x402 MCP payment transport.',
         responses: { '200': { description: 'MCP JSON-RPC response' } },
