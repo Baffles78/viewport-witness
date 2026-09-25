@@ -13,4 +13,7 @@ tests
 eslint.config.*
 *.md
 !skill.md
+!docs/
+!docs/PRIVACY.md
+!docs/TERMS.md
 vitest.config.ts

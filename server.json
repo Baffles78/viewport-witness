@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.baffles78/viewport-witness",
+  "title": "ViewportWitness by Apex Labs",
+  "description": "Paid browser QA for AI agents across phone and desktop viewports, using x402.",
+  "version": "0.2.0",
+  "repository": {
+    "url": "https://github.com/Baffles78/viewport-witness",
+    "source": "github",
+    "id": "1386004607"
+  },
+  "websiteUrl": "https://qa.honeygate.app",
+  "icons": [
+    {
+      "src": "https://qa.honeygate.app/logo.png",
+      "mimeType": "image/png",
+      "sizes": ["1254x1254"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://qa.honeygate.app/mcp"
+    }
+  ]
+}

@@ -113,32 +113,15 @@ function paymentIdFromContext(context: MCPToolContext): string | undefined {
   return mcpPaymentFingerprint(context.meta?.[MCP_PAYMENT_META_KEY])
 }
 
-function parseAssertions(value: unknown[]): PageAssertion[] | null {
-  if (value.length < 1 || value.length > 20) return null
-  const parsed: PageAssertion[] = []
-  for (const raw of value) {
-    if (!raw || typeof raw !== 'object') return null
-    const item = raw as Record<string, unknown>
-    if (item['type'] === 'noHorizontalOverflow' || item['type'] === 'noConsoleErrors') {
-      parsed.push({ type: item['type'] })
-    } else if (
-      (item['type'] === 'textVisible' || item['type'] === 'titleIncludes') &&
-      typeof item['value'] === 'string' &&
-      item['value'].length > 0 &&
-      item['value'].length <= 200
-    ) {
-      parsed.push({ type: item['type'], value: item['value'] })
-    } else if (
-      (item['type'] === 'selectorExists' || item['type'] === 'selectorVisible') &&
-      typeof item['selector'] === 'string' &&
-      item['selector'].length > 0 &&
-      item['selector'].length <= 300
-    ) {
-      parsed.push({ type: item['type'], selector: item['selector'] })
-    } else return null
-  }
-  return parsed
-}
+const assertionItemSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('noHorizontalOverflow') }).strict(),
+  z.object({ type: z.literal('noConsoleErrors') }).strict(),
+  z.object({ type: z.literal('textVisible'), value: z.string().min(1).max(200) }).strict(),
+  z.object({ type: z.literal('titleIncludes'), value: z.string().min(1).max(200) }).strict(),
+  z.object({ type: z.literal('selectorExists'), selector: z.string().min(1).max(300) }).strict(),
+  z.object({ type: z.literal('selectorVisible'), selector: z.string().min(1).max(300) }).strict(),
+])
+const assertionsSchema = z.array(assertionItemSchema).min(1).max(20)
 
 async function createMcpPaymentContext(cfg: Config): Promise<{
   server: x402ResourceServer
@@ -290,8 +273,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'check_page',
-      `Run browser QA across three viewports. Costs $${cfg.PRICE_USDC} USDC.`,
+      `Run browser QA across three viewports (phone portrait, phone landscape, desktop). Costs $${cfg.PRICE_USDC} USDC via x402. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048) },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
         const valid = await validatePublicHttpsUrl(url)
         if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
@@ -312,20 +296,20 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'verify_page',
-      `Run read-only assertions across three viewports. Costs $${cfg.VERIFY_PRICE_USDC} USDC.`,
+      `Check up to 20 declarative assertions across three viewports. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       {
         url: z.string().url().max(2048),
-        assertions: z.array(z.record(z.unknown())).min(1).max(20),
+        assertions: assertionsSchema,
       },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'verify',
         async (
-          { url, assertions }: { url: string; assertions: unknown[] },
+          { url, assertions }: { url: string; assertions: PageAssertion[] },
           toolContext: MCPToolContext,
         ) => {
           const valid = await validatePublicHttpsUrl(url)
-          const parsed = parseAssertions(assertions)
-          if (!valid.valid || !parsed) return jsonResult({ error: 'invalid_input' }, true)
+          if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
           const paymentId = paymentIdFromContext(toolContext)
           return jsonResult(
             await createProductJob({
@@ -334,7 +318,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
               cfg,
               kind: 'verify',
               url,
-              assertions: parsed,
+              assertions,
               ...(paymentId ? { paymentId } : {}),
               deferEnqueue: Boolean(context),
             }),
@@ -345,8 +329,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'compare_page',
-      `Compare a page to a completed baseline. Costs $${cfg.COMPARE_PRICE_USDC} USDC.`,
+      `Compare a page against a completed ViewportWitness baseline job. Returns pixel-diff percentages, new/resolved accessibility issue IDs, and error deltas. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
       { url: z.string().url().max(2048), baselineJobId: z.string().uuid() },
+      { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'compare',
         async (
@@ -386,8 +371,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'get_report',
-      'Get a queued job status or completed report. Free.',
+      'Retrieve the status or completed QA report for a previously submitted job. Free and read-only. Poll until status is "complete", "failed", or "retryable". No payment required.',
       { jobId: z.string().uuid() },
+      { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       async ({ jobId }) => {
         const job = store.getJob(jobId)
         if (!job) return jsonResult({ error: 'not_found' }, true)

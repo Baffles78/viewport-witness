@@ -1,0 +1,37 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "viewport-witness",
+  "version": "0.2.0",
+  "description": "Browser QA for AI agents across phone and desktop viewports, with screenshots, accessibility findings, assertions, and visual comparisons.",
+  "author": {
+    "name": "Apex Labs",
+    "url": "https://qa.honeygate.app"
+  },
+  "homepage": "https://qa.honeygate.app",
+  "repository": "https://github.com/Baffles78/viewport-witness",
+  "license": "MIT",
+  "keywords": ["browser-qa", "accessibility", "visual-regression", "mcp", "x402"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "ViewportWitness",
+        "shortDescription": "Paid browser QA across phone and desktop viewports.",
+        "longDescription": "Run browser QA, accessibility checks, declarative assertions, and visual comparisons for public HTTPS pages. Paid tools use x402; report retrieval is free.",
+        "developerName": "Apex Labs",
+        "category": "Developer Tools",
+        "capabilities": ["Read"],
+        "websiteURL": "https://qa.honeygate.app",
+        "privacyPolicyURL": "https://qa.honeygate.app/privacy",
+        "termsOfServiceURL": "https://qa.honeygate.app/terms",
+        "defaultPrompt": [
+          "Check https://example.com for accessibility and layout issues.",
+          "Verify that https://example.com has no horizontal overflow.",
+          "Retrieve the report for this ViewportWitness job ID."
+        ],
+        "brandColor": "#082B5C",
+        "composerIcon": "./assets/viewport-witness.png",
+        "logo": "./assets/viewport-witness.png"
+      }
+    }
+  }
+}

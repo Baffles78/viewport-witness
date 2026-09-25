@@ -66,6 +66,9 @@ Local defaults to `PAYMENT_MODE=test`. No CDP keys needed for test mode. Results
 | GET | `/openapi.json` | OpenAPI 3.1 spec |
 | GET | `/llms.txt` | Agent usage guide |
 | GET | `/skill.md` | Concise agent skill manifest |
+| GET | `/privacy` | Privacy policy |
+| GET | `/terms` | Terms of service |
+| GET | `/logo.png` | Directory and integration logo |
 | GET | `/.well-known/x402` | Payment discovery |
 | POST | `/v1/checks` | Create a QA check job |
 | POST | `/v1/verify` | Check explicit read-only assertions |
@@ -125,6 +128,8 @@ curl http://localhost:3000/health
 - [Runbook](docs/RUNBOOK.md) — operations, backups, upgrades, mainnet activation
 - [Agent guide](llms.txt) — machine-readable usage instructions
 - [Skill manifest](skill.md) — concise agent skill guide
+- [MCP install guide](docs/MCP-INSTALL.md) — connect ChatGPT, Claude, Codex, Cursor, and VS Code
+- [Privacy policy](docs/PRIVACY.md) and [terms](docs/TERMS.md)
 - [Customer feedback](https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml) — request a capability or report a result without posting secrets
 - [Build evidence](docs/BUILD-EVIDENCE.md) — test results and known limits
 

@@ -22,7 +22,7 @@ export const openApiSpec = {
     description:
       'Machine-facing browser QA API. Submit a public HTTPS URL and receive screenshots, ' +
       'accessibility findings, layout analysis, and a structured report across three browser viewports. ' +
-      'A $0.08 USDC x402 payment on Base is required per report on the live service. ' +
+      'x402 payment is required per report on the live service; see /.well-known/x402 for current payment options. ' +
       'Self-hosted instances can run in test mode without payment.',
     contact: {
       url: FEEDBACK_URL,
@@ -113,6 +113,42 @@ export const openApiSpec = {
           '200': {
             description: 'Concise agent-facing instructions for this service',
             content: { 'text/markdown': {} },
+          },
+        },
+      },
+    },
+    '/privacy': {
+      get: {
+        summary: 'Privacy policy',
+        operationId: 'getPrivacy',
+        responses: {
+          '200': {
+            description: 'Privacy policy covering submitted URLs, screenshots, payment identifiers, and data retention',
+            content: { 'text/markdown': {} },
+          },
+        },
+      },
+    },
+    '/terms': {
+      get: {
+        summary: 'Terms of service',
+        operationId: 'getTerms',
+        responses: {
+          '200': {
+            description: 'Terms of service covering paid automated QA, non-mutating behavior, report expiry, and crypto payment finality',
+            content: { 'text/markdown': {} },
+          },
+        },
+      },
+    },
+    '/logo.png': {
+      get: {
+        summary: 'ViewportWitness logo',
+        operationId: 'getLogo',
+        responses: {
+          '200': {
+            description: 'Square PNG logo for directories and integrations',
+            content: { 'image/png': {} },
           },
         },
       },
@@ -353,9 +389,57 @@ export const openApiSpec = {
             minItems: 1,
             maxItems: 20,
             items: {
-              type: 'object',
-              description:
-                'One of textVisible, selectorExists, selectorVisible, titleIncludes, noHorizontalOverflow, or noConsoleErrors.',
+              oneOf: [
+                {
+                  type: 'object',
+                  required: ['type'],
+                  additionalProperties: false,
+                  properties: { type: { type: 'string', enum: ['noHorizontalOverflow'] } },
+                },
+                {
+                  type: 'object',
+                  required: ['type'],
+                  additionalProperties: false,
+                  properties: { type: { type: 'string', enum: ['noConsoleErrors'] } },
+                },
+                {
+                  type: 'object',
+                  required: ['type', 'value'],
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', enum: ['textVisible'] },
+                    value: { type: 'string', minLength: 1, maxLength: 200 },
+                  },
+                },
+                {
+                  type: 'object',
+                  required: ['type', 'value'],
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', enum: ['titleIncludes'] },
+                    value: { type: 'string', minLength: 1, maxLength: 200 },
+                  },
+                },
+                {
+                  type: 'object',
+                  required: ['type', 'selector'],
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', enum: ['selectorExists'] },
+                    selector: { type: 'string', minLength: 1, maxLength: 300 },
+                  },
+                },
+                {
+                  type: 'object',
+                  required: ['type', 'selector'],
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: 'string', enum: ['selectorVisible'] },
+                    selector: { type: 'string', minLength: 1, maxLength: 300 },
+                  },
+                },
+              ],
+              discriminator: { propertyName: 'type' },
             },
           },
         },
