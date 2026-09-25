@@ -63,5 +63,5 @@
 - Discriminated assertion schema: all six supported assertion types (`noHorizontalOverflow`, `noConsoleErrors`, `textVisible`, `titleIncludes`, `selectorExists`, `selectorVisible`) with precise per-type required fields
 - Tool annotations: `readOnlyHint`, `destructiveHint`, `openWorldHint` set correctly on all tools
 - Tool descriptions clarify x402-aware client is required; standard AI assistants cannot automatically pay
-- Prepared MCP Registry metadata under verified namespace `io.github.baffles78/viewport-witness` (publication is a separate release step)
+- Prepared MCP Registry metadata under verified namespace `io.github.Baffles78/viewport-witness` (publication is a separate release step)
 - Added `/privacy` and `/terms` public policy endpoints
