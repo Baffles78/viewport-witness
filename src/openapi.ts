@@ -116,12 +116,12 @@ export const openApiSpec = {
     },
     '/.well-known/mcp.json': {
       get: {
-        summary: 'MCP server discovery',
+        summary: 'MCP registry manifest for directory crawlers',
         operationId: 'getMcpDiscovery',
         security: [],
         responses: {
           '200': {
-            description: 'Connection metadata for the public remote MCP server',
+            description: 'Official-registry metadata exposed for compatible directory probes',
             content: { 'application/json': {} },
           },
         },

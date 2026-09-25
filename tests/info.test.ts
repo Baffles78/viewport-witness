@@ -234,22 +234,32 @@ describe('GET /.well-known/x402', () => {
 })
 
 describe('GET /.well-known/mcp.json', () => {
-  it('advertises the canonical remote MCP endpoint', async () => {
+  it('serves the official registry manifest shape for the mcpub directory probe', async () => {
     const { port } = await startServer(makeConfig())
     const res = await fetch(`http://127.0.0.1:${port}/.well-known/mcp.json`)
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('application/json')
     const body = (await res.json()) as {
+      $schema: string
       name: string
-      transport: { type: string; url: string }
-      repository: string
+      remotes: Array<{ type: string; url: string }>
+      repository: { source: string; url: string; id: string }
     }
+    expect(body.$schema).toBe(
+      'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
+    )
     expect(body.name).toBe('io.github.Baffles78/viewport-witness')
-    expect(body.transport).toEqual({
-      type: 'streamable-http',
-      url: 'https://qa.honeygate.app/mcp',
+    expect(body.remotes).toEqual([
+      {
+        type: 'streamable-http',
+        url: 'https://qa.honeygate.app/mcp',
+      },
+    ])
+    expect(body.repository).toEqual({
+      source: 'github',
+      url: 'https://github.com/Baffles78/viewport-witness',
+      id: '1386004607',
     })
-    expect(body.repository).toBe('https://github.com/Baffles78/viewport-witness')
   })
 })
 
