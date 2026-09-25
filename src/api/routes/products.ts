@@ -139,6 +139,14 @@ export function createProductsRouter(
   comparePayment: RequestHandler,
 ): Router {
   const router = createRouter()
+  const challengeUnpaidCompare: RequestHandler = (req, res, next) => {
+    const hasPayment = Boolean(req.header('payment-signature') ?? req.header('x-payment'))
+    if (cfg.PAYMENT_MODE !== 'test' && !hasPayment) {
+      comparePayment(req, res, next)
+      return
+    }
+    next()
+  }
   const inFlightIdempotencyKeys = new Set<string>()
   const idempotencyPreflight = (req: Request, res: Response, next: NextFunction): void => {
     const key = readIdempotencyKey(req)
@@ -223,6 +231,10 @@ export function createProductsRouter(
 
   router.post(
     '/v1/compare',
+    // Let discovery clients receive the unsigned 402 challenge before baseline
+    // validation. Signed requests still validate first, so an invalid baseline
+    // cannot be settled and charged.
+    challengeUnpaidCompare,
     asyncHandler(async (req, res, next) => {
       const parsed = compareSchema.safeParse(req.body)
       if (!parsed.success) {
