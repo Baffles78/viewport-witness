@@ -98,6 +98,10 @@ interface SafetyResult {
   reason?: string
 }
 
+export interface PublicAddressResult extends SafetyResult {
+  addresses: Array<{ address: string; family: 4 | 6 }>
+}
+
 function checkIp(host: string): SafetyResult {
   // IPv4 check
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
@@ -230,26 +234,33 @@ function checkIpv6(addr: string): SafetyResult {
   return { safe: true }
 }
 
-export async function resolveAndCheck(hostname: string): Promise<SafetyResult> {
+export async function resolvePublicAddresses(hostname: string): Promise<PublicAddressResult> {
   // If hostname is already an IP, check directly
   if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    return checkIpv4(hostname)
+    const result = checkIpv4(hostname)
+    return { ...result, addresses: result.safe ? [{ address: hostname, family: 4 }] : [] }
   }
   if (hostname.startsWith('[') && hostname.endsWith(']')) {
-    return checkIpv6(hostname.slice(1, -1))
+    const address = hostname.slice(1, -1)
+    const result = checkIpv6(address)
+    return { ...result, addresses: result.safe ? [{ address, family: 6 }] : [] }
   }
 
   const errors: string[] = []
-  let resolvedAddresses = 0
+  const addresses: Array<{ address: string; family: 4 | 6 }> = []
 
   try {
     const v4Addrs = await dns.resolve4(hostname)
-    resolvedAddresses += v4Addrs.length
     for (const addr of v4Addrs) {
       const result = checkIpv4(addr)
       if (!result.safe) {
-        return { safe: false, reason: result.reason ?? `blocked_resolved_ip:${addr}` }
+        return {
+          safe: false,
+          reason: result.reason ?? `blocked_resolved_ip:${addr}`,
+          addresses: [],
+        }
       }
+      addresses.push({ address: addr, family: 4 })
     }
   } catch (err: unknown) {
     // ENOTFOUND is expected for non-existent hostnames; collect for later
@@ -261,12 +272,16 @@ export async function resolveAndCheck(hostname: string): Promise<SafetyResult> {
 
   try {
     const v6Addrs = await dns.resolve6(hostname)
-    resolvedAddresses += v6Addrs.length
     for (const addr of v6Addrs) {
       const result = checkIpv6(addr)
       if (!result.safe) {
-        return { safe: false, reason: result.reason ?? `blocked_resolved_ipv6:${addr}` }
+        return {
+          safe: false,
+          reason: result.reason ?? `blocked_resolved_ipv6:${addr}`,
+          addresses: [],
+        }
       }
+      addresses.push({ address: addr, family: 6 })
     }
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
@@ -277,14 +292,21 @@ export async function resolveAndCheck(hostname: string): Promise<SafetyResult> {
 
   if (errors.length > 0) {
     // DNS errors (not NXDOMAIN) - fail safe
-    return { safe: false, reason: `dns_error:${errors.join(',')}` }
+    return { safe: false, reason: `dns_error:${errors.join(',')}`, addresses: [] }
   }
 
-  if (resolvedAddresses === 0) {
-    return { safe: false, reason: 'dns_no_records' }
+  if (addresses.length === 0) {
+    return { safe: false, reason: 'dns_no_records', addresses: [] }
   }
 
-  return { safe: true }
+  return { safe: true, addresses }
+}
+
+export async function resolveAndCheck(hostname: string): Promise<SafetyResult> {
+  const result = await resolvePublicAddresses(hostname)
+  return result.safe
+    ? { safe: true }
+    : { safe: false, ...(result.reason ? { reason: result.reason } : {}) }
 }
 
 /** Apply the complete public-target policy in one fail-closed operation. */

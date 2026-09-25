@@ -48,6 +48,8 @@ const configSchema = z.object({
   PRICE_USDC: usdcPriceSchema.default('0.08'),
   VERIFY_PRICE_USDC: usdcPriceSchema.default('0.10'),
   COMPARE_PRICE_USDC: usdcPriceSchema.default('0.12'),
+  EXTRACT_PRICE_USDC: usdcPriceSchema.default('0.005'),
+  SECURITY_PRICE_USDC: usdcPriceSchema.default('0.05'),
   RETENTION_DAYS: z
     .string()
     .optional()
@@ -85,6 +87,8 @@ export type Config = {
   PRICE_USDC: string
   VERIFY_PRICE_USDC: string
   COMPARE_PRICE_USDC: string
+  EXTRACT_PRICE_USDC: string
+  SECURITY_PRICE_USDC: string
   RETENTION_DAYS: number
   MAX_STORAGE_GB: number
   WORKER_TIMEOUT_MS: number
@@ -108,6 +112,13 @@ export function validateConfig(cfg: Config): void {
     (cfg.VERIFY_PRICE_USDC !== '0.10' || cfg.COMPARE_PRICE_USDC !== '0.12')
   ) {
     throw new Error('Paid modes require the reviewed prices: verify=0.10 and compare=0.12 USDC.')
+  }
+  if (
+    cfg.PAYMENT_MODE !== 'test' &&
+    ((cfg.EXTRACT_PRICE_USDC ?? '0.005') !== '0.005' ||
+      (cfg.SECURITY_PRICE_USDC ?? '0.05') !== '0.05')
+  ) {
+    throw new Error('Paid modes require the reviewed prices: extract=0.005 and security=0.05 USDC.')
   }
   if (cfg.PAYMENT_MODE === 'production') {
     if (!cfg.ENABLE_MAINNET_PAYMENTS) {

@@ -4,6 +4,7 @@ import http from 'http'
 import type { AddressInfo } from 'net'
 import { createChecksRouter } from '../src/api/routes/checks.js'
 import { createProductsRouter } from '../src/api/routes/products.js'
+import { createWebProductsRouter } from '../src/api/routes/web-products.js'
 import type { Config } from '../src/config.js'
 import type { JobStore } from '../src/db.js'
 import type { WorkerRunner } from '../src/worker/runner.js'
@@ -148,9 +149,7 @@ describe('POST /v1/verify middleware order', () => {
   })
 
   it('validates signed paid-mode requests before invoking payment middleware', async () => {
-    const verifyPayment = vi.fn((_req: Request, _res: Response, next: NextFunction): void =>
-      next(),
-    )
+    const verifyPayment = vi.fn((_req: Request, _res: Response, next: NextFunction): void => next())
     const { port } = await startServer(makeVerifyApp(PAID_CFG, verifyPayment))
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/verify`, {
@@ -210,5 +209,39 @@ describe('POST /v1/compare middleware order', () => {
 
     expect(response.status).toBe(422)
     expect(comparePayment).not.toHaveBeenCalled()
+  })
+})
+
+describe.each(['/v1/extract', '/v1/security-gate'])('%s middleware order', (route) => {
+  it('challenges unsigned paid-mode requests before body validation', async () => {
+    const payment = vi.fn((_req: Request, res: Response): void => {
+      res.status(402).json({ error: 'payment_required' })
+    })
+    const app = express()
+    app.use(express.json())
+    app.use(createWebProductsRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, payment, payment))
+    const { port } = await startServer(app)
+    const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+    expect(response.status).toBe(402)
+    expect(payment).toHaveBeenCalledOnce()
+  })
+
+  it('validates signed requests before attempting settlement', async () => {
+    const payment = vi.fn((_req: Request, _res: Response, next: NextFunction): void => next())
+    const app = express()
+    app.use(express.json())
+    app.use(createWebProductsRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, payment, payment))
+    const { port } = await startServer(app)
+    const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'payment-signature': 'fake' },
+      body: '{}',
+    })
+    expect(response.status).toBe(422)
+    expect(payment).not.toHaveBeenCalled()
   })
 })

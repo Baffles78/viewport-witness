@@ -1,5 +1,7 @@
 # ViewportWitness by Apex Labs — Agent Skill Guide
 
+Paid agent tools include `extract_page` ($0.005 USDC), which converts one public HTML page to clean Markdown, and `web_release_gate` ($0.05 USDC), which passively checks one public page's release security controls. Poll both through `get_report`; neither executes target code or probes extra paths.
+
 Base URL: https://qa.honeygate.app
 
 ## What this service does

@@ -21,6 +21,8 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     PRICE_USDC: '0.08',
     VERIFY_PRICE_USDC: '0.10',
     COMPARE_PRICE_USDC: '0.12',
+    EXTRACT_PRICE_USDC: '0.005',
+    SECURITY_PRICE_USDC: '0.05',
     RETENTION_DAYS: 7,
     MAX_STORAGE_GB: 10,
     WORKER_TIMEOUT_MS: 120_000,
@@ -68,6 +70,21 @@ describe('paid-mode configuration', () => {
         }),
       ),
     ).not.toThrow()
+  })
+
+  it('pins the reviewed extraction and security prices in paid modes', () => {
+    const paid = {
+      PAYMENT_MODE: 'testnet' as const,
+      CDP_API_KEY_ID: 'organizations/org/apiKeys/key',
+      CDP_API_KEY_SECRET: 'secret',
+      CUSTOMER_HASH_SECRET: '0123456789abcdef0123456789abcdef',
+    }
+    expect(() => validateConfig(makeConfig({ ...paid, EXTRACT_PRICE_USDC: '0.006' }))).toThrow(
+      'extract=0.005',
+    )
+    expect(() => validateConfig(makeConfig({ ...paid, SECURITY_PRICE_USDC: '0.06' }))).toThrow(
+      'security=0.05',
+    )
   })
 
   it('accepts separately configured Solana test and revenue destinations', () => {

@@ -13,7 +13,11 @@ import type { WorkerRunner } from '../../worker/runner.js'
 // validation as normal; the payment middleware runs later for settlement only.
 export function challengeIfUnsigned(pm: RequestHandler, cfg: Config): RequestHandler {
   return (req, res, next) => {
-    if (cfg.PAYMENT_MODE !== 'test' && !req.header('payment-signature') && !req.header('x-payment')) {
+    if (
+      cfg.PAYMENT_MODE !== 'test' &&
+      !req.header('payment-signature') &&
+      !req.header('x-payment')
+    ) {
       pm(req, res, next)
     } else {
       next()
@@ -84,6 +88,7 @@ export async function createProductJob(params: {
   kind: JobKind
   url: string
   assertions?: PageAssertion[]
+  maxOutputTokens?: number
   baselineJobId?: string
   idempotencyKey?: string
   paymentId?: string
@@ -111,7 +116,10 @@ export async function createProductJob(params: {
       ...(params.customerId ? { customerId: params.customerId } : {}),
       expiresAt: Date.now() + params.cfg.RETENTION_DAYS * 24 * 60 * 60 * 1000,
       kind: params.kind,
-      request: params.assertions ? { assertions: params.assertions } : {},
+      request: {
+        ...(params.assertions ? { assertions: params.assertions } : {}),
+        ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
+      },
       ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
       initialStatus: params.deferEnqueue ? 'payment_pending' : 'queued',
     })

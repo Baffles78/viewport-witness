@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { openApiSpec } from '../src/openapi.js'
+import { buildExtractReport, buildSecurityReport } from '../src/web-products.js'
 
 type PathItem = Record<string, unknown>
 type Operation = {
@@ -46,6 +47,8 @@ const PAID_OPERATIONS: Array<[string, string, string]> = [
   ['/v1/checks', 'post', '0.08'],
   ['/v1/verify', 'post', '0.10'],
   ['/v1/compare', 'post', '0.12'],
+  ['/v1/extract', 'post', '0.005'],
+  ['/v1/security-gate', 'post', '0.05'],
 ]
 
 describe('openapi spec — free route security', () => {
@@ -79,6 +82,42 @@ describe('openapi spec — report value fields', () => {
     expect(schemas['QAReport']?.properties).toHaveProperty('diagnosis')
     expect(schemas['ViewportResult']?.properties).toHaveProperty('performance')
     expect(schemas['ViewportResult']?.properties).toHaveProperty('layoutLocatorHints')
+  })
+
+  it('represents both new completed report variants without widening QAReport kind', () => {
+    const schemas = openApiSpec.components.schemas as Record<
+      string,
+      {
+        required?: readonly string[]
+        properties?: Record<string, { enum?: readonly string[] }>
+        oneOf?: ReadonlyArray<{ $ref: string }>
+      }
+    >
+    const refs = schemas['CheckStatusResponse']?.oneOf?.map((entry) => entry.$ref) ?? []
+    expect(refs).toContain('#/components/schemas/ExtractReport')
+    expect(refs).toContain('#/components/schemas/SecurityReport')
+    expect(schemas['QAReport']?.properties?.['kind']?.enum).toEqual(['check', 'verify', 'compare'])
+
+    const fetched = {
+      finalUrl: 'https://example.com/',
+      html: '<main>Hello</main>',
+      inputBytes: 18,
+      contentType: 'text/html',
+      redirects: 0,
+      headers: new Headers(),
+      fetchedAt: '2026-09-25T00:00:00.000Z',
+    }
+    const reports = [
+      ['ExtractReport', buildExtractReport('id', 0, 1000, 'test', fetched, 500)],
+      ['SecurityReport', buildSecurityReport('id', 0, 1000, 'test', fetched)],
+    ] as const
+    for (const [schemaName, report] of reports) {
+      const schema = schemas[schemaName]
+      expect(schema).toBeDefined()
+      for (const field of schema?.required ?? []) expect(report).toHaveProperty(field)
+      expect(schema?.properties?.['kind']?.enum).toContain(report.kind)
+      expect(schema?.properties?.['status']?.enum).toContain(report.status)
+    }
   })
 })
 

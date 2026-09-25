@@ -1,5 +1,7 @@
 # Privacy Policy
 
+Markdown extraction and web release gate jobs retain the submitted public URL and generated report for the same seven-day period as browser QA. The service does not accept caller-supplied HTML, cookies, credentials, or custom headers. Extracted public page text may appear in the Markdown report; security evidence is bounded and response bodies are not stored separately.
+
 This policy describes how the ViewportWitness service handles data submitted to it.
 
 ## Data we process

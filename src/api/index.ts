@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { createInfoRouter } from './routes/info.js'
 import { createChecksRouter } from './routes/checks.js'
 import { createProductsRouter } from './routes/products.js'
+import { createWebProductsRouter } from './routes/web-products.js'
 import { createMcpRouter } from '../mcp.js'
 import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
@@ -87,6 +88,36 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
   })
+  const extractPaymentMiddleware = createPaymentMiddleware({
+    payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
+    priceUsdc: cfg.EXTRACT_PRICE_USDC,
+    route: 'POST /v1/extract',
+    description: 'Deterministic public HTML to clean Markdown extraction',
+    mode: cfg.PAYMENT_MODE,
+    enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+    facilitatorUrl: cfg.FACILITATOR_URL,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+  })
+  const securityPaymentMiddleware = createPaymentMiddleware({
+    payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
+    priceUsdc: cfg.SECURITY_PRICE_USDC,
+    route: 'POST /v1/security-gate',
+    description: 'Passive public web release security gate',
+    mode: cfg.PAYMENT_MODE,
+    enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+    facilitatorUrl: cfg.FACILITATOR_URL,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+  })
 
   // Mount routers
   const infoRouter = createInfoRouter(store, runner, cfg)
@@ -96,6 +127,15 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
 
   app.use(
     createProductsRouter(store, runner, cfg, verifyPaymentMiddleware, comparePaymentMiddleware),
+  )
+  app.use(
+    createWebProductsRouter(
+      store,
+      runner,
+      cfg,
+      extractPaymentMiddleware,
+      securityPaymentMiddleware,
+    ),
   )
 
   const checksRouter = createChecksRouter(store, runner, cfg, paymentMiddleware)

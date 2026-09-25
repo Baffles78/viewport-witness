@@ -1,5 +1,7 @@
 # ViewportWitness Runbook
 
+The `extract` and `security` jobs share the existing single-worker queue and seven-day cleanup. Keep `EXTRACT_PRICE_USDC=0.005` and `SECURITY_PRICE_USDC=0.05` in paid modes. Each has one eight-second budget shared by fetching and parsing, at most five redirects, HTML-only responses, and separate 1 MiB compressed-wire and decoded-body ceilings. Every request connects to the exact public address that passed DNS validation while TLS still verifies the requested hostname. Parsing runs in a terminable worker thread with 96 MiB old-generation, 16 MiB young-generation, and 4 MiB stack limits. Do not increase worker concurrency on the shared VPS.
+
 This runbook covers day-to-day operations. For technical internals see [BUILD-SPEC.md](BUILD-SPEC.md).
 
 ---

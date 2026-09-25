@@ -11,9 +11,12 @@ import type {
   Viewport,
   ViewportResult,
   VisualComparisonResult,
+  StoredReport,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
 import { buildDiagnosis } from '../report-guidance.js'
+import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
+import { runBoundedWebAnalysis } from '../web-analysis-runner.js'
 
 const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
@@ -196,11 +199,30 @@ export class WorkerRunner {
     }
   }
 
-  private async runJob(item: QueueItem, signal: AbortSignal): Promise<QAReport> {
-    if (!this.browser) throw new Error('Browser not initialized')
-
+  private async runJob(item: QueueItem, signal: AbortSignal): Promise<StoredReport> {
     const job = this.store.getJob(item.jobId)
     if (!job) throw new Error(`Job ${item.jobId} not found`)
+
+    if (job.kind === 'extract' || job.kind === 'security') {
+      const startedAt = Date.now()
+      const fetched = await fetchBoundedHtml(job.url, signal)
+      const paymentMode = item.paymentMode as QAReport['paymentMode']
+      return await runBoundedWebAnalysis(
+        {
+          kind: job.kind,
+          id: job.id,
+          createdAt: job.createdAt,
+          expiresAt: job.expiresAt,
+          paymentMode,
+          fetched,
+          maxOutputTokens: job.request.maxOutputTokens ?? 4000,
+        },
+        WEB_JOB_BUDGET_MS - (Date.now() - startedAt),
+        signal,
+      )
+    }
+
+    if (!this.browser) throw new Error('Browser not initialized')
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
     const limitations: string[] = []

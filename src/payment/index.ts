@@ -54,7 +54,12 @@ export interface PaymentMiddlewareOptions {
   cdpApiKeyId?: string | undefined
   cdpApiKeySecret?: string | undefined
   customerHashSecret?: string | undefined
-  route?: 'POST /v1/checks' | 'POST /v1/verify' | 'POST /v1/compare'
+  route?:
+    | 'POST /v1/checks'
+    | 'POST /v1/verify'
+    | 'POST /v1/compare'
+    | 'POST /v1/extract'
+    | 'POST /v1/security-gate'
   description?: string
 }
 
@@ -399,6 +404,18 @@ export function getPaymentDiscovery(
               endpoint: `POST ${baseUrl}/v1/compare`,
               price: '$0.12 USDC',
               description: 'Visual and QA comparison to a baseline report',
+            },
+            {
+              name: 'extract_page',
+              endpoint: `POST ${baseUrl}/v1/extract`,
+              price: '$0.005 USDC',
+              description: 'Deterministic public HTML to clean Markdown',
+            },
+            {
+              name: 'web_release_gate',
+              endpoint: `POST ${baseUrl}/v1/security-gate`,
+              price: '$0.05 USDC',
+              description: 'Passive release security checks for one public page',
             },
             {
               name: 'mcp',
