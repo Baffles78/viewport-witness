@@ -1,11 +1,16 @@
 # ViewportWitness by Apex Labs
 
-Browser QA API for AI agents. Submit a public HTTPS URL and receive screenshots, accessibility
-findings, layout analysis, and a structured JSON report across three browser viewports.
+Remote MCP server and x402 API for AI-agent browser QA. Submit a public HTTPS URL and receive
+screenshots, accessibility findings, layout analysis, and structured JSON across phone and
+desktop viewports.
 
 The live service is at **https://qa.honeygate.app**. A standard report costs $0.08 USDC,
 read-only assertions cost $0.10, and a baseline comparison costs $0.12. Local instances can run
 in test mode without payment.
+
+- [Official MCP Registry listing](https://registry.modelcontextprotocol.io/v0.1/servers?search=viewport-witness)
+- [MCP setup for ChatGPT, Claude, Codex, Cursor, and VS Code](docs/MCP-INSTALL.md)
+- [Privacy policy](https://qa.honeygate.app/privacy) · [Terms](https://qa.honeygate.app/terms) · [Support](https://github.com/Baffles78/viewport-witness/issues)
 
 ---
 
