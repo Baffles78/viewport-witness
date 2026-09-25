@@ -57,9 +57,7 @@ function makeMockRunner(): WorkerRunner {
   } as unknown as WorkerRunner
 }
 
-async function startMcpServer(
-  cfg: Config,
-): Promise<{ port: number; close: () => Promise<void> }> {
+async function startMcpServer(cfg: Config): Promise<{ port: number; close: () => Promise<void> }> {
   const app = express()
   app.use(express.json())
   app.use(createMcpRouter(makeMockStore(), makeMockRunner(), cfg))
@@ -73,9 +71,7 @@ async function startMcpServer(
   }
 }
 
-async function startInfoServer(
-  cfg: Config,
-): Promise<{ port: number; close: () => Promise<void> }> {
+async function startInfoServer(cfg: Config): Promise<{ port: number; close: () => Promise<void> }> {
   const app = express()
   app.use(createInfoRouter(makeMockStore(), makeMockRunner(), cfg))
   const server = http.createServer(app)
@@ -215,7 +211,8 @@ describe('MCP tools/list — verify_page assertions schema', () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'verify_page')
-    const assertions = tool?.inputSchema?.properties?.['assertions'] as Record<string, unknown> | undefined
+    const assertions = tool?.inputSchema?.properties?.['assertions'] as
+      Record<string, unknown> | undefined
     expect(assertions).toBeDefined()
   })
 
@@ -223,7 +220,8 @@ describe('MCP tools/list — verify_page assertions schema', () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'verify_page')
-    const assertions = tool?.inputSchema?.properties?.['assertions'] as Record<string, unknown> | undefined
+    const assertions = tool?.inputSchema?.properties?.['assertions'] as
+      Record<string, unknown> | undefined
     // The array items should have anyOf or oneOf — not just { type: 'object' }
     const items = assertions?.['items'] as Record<string, unknown> | undefined
     expect(items).toBeDefined()
@@ -235,7 +233,8 @@ describe('MCP tools/list — verify_page assertions schema', () => {
     const { port } = await startMcpServer(makeConfig())
     const response = await callToolsList(port)
     const tool = response.result?.tools?.find((t) => t.name === 'verify_page')
-    const assertions = tool?.inputSchema?.properties?.['assertions'] as Record<string, unknown> | undefined
+    const assertions = tool?.inputSchema?.properties?.['assertions'] as
+      Record<string, unknown> | undefined
     const items = assertions?.['items'] as Record<string, unknown> | undefined
     const variants = ((items?.['anyOf'] ?? items?.['oneOf']) as unknown[]) ?? []
     expect(variants.length).toBe(6)
@@ -361,5 +360,15 @@ describe('GET /logo.png', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toMatch(/image\/png/)
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(1_000)
+  })
+})
+
+describe('GET /favicon.ico', () => {
+  it('serves the service icon for directory discovery', async () => {
+    const { port } = await startInfoServer(makeConfig())
+    const res = await fetch(`http://127.0.0.1:${port}/favicon.ico`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('image/png')
+    expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
   })
 })
