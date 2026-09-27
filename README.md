@@ -36,6 +36,73 @@ See [llms.txt](llms.txt) for the full agent usage guide.
 
 ---
 
+## Paid product examples
+
+An ordinary HTTP request to any paid endpoint returns **HTTP 402** — an x402 challenge
+containing the network, asset, amount, and destination address. An x402-aware client
+(such as `@x402/fetch` with a funded wallet) pays the challenge and retries automatically;
+your code receives the successful JSON result. The examples below show the request shape only
+— do not call the live service or send payment during development; use `PAYMENT_MODE=test`
+locally (see [Local development](#local-development)).
+
+### POST /v1/checks — 0.08 USDC
+
+Submit a public HTTPS URL and receive screenshots, accessibility findings, layout analysis,
+and browser errors across phone and desktop viewports.
+
+```ts
+// x402-aware client pays the 402 challenge and retries automatically
+const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/checks', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ url: 'https://example.com' }),
+}).then(r => r.json())
+// Poll GET pollUrl until { status: 'complete' }
+```
+
+### POST /v1/verify — 0.10 USDC
+
+Run explicit read-only assertions against a live public HTTPS URL. The worker performs only
+non-mutating checks — no forms are submitted, no purchase or delete controls are clicked.
+
+```ts
+const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/verify', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: 'https://example.com',
+    assertions: [
+      { type: 'selectorVisible', selector: 'h1' },
+      { type: 'titleIncludes', value: 'Example Domain' },
+    ],
+  }),
+}).then(r => r.json())
+```
+
+### POST /v1/compare — 0.12 USDC
+
+Diff the current render against a baseline job. `baselineJobId` must identify a completed,
+unexpired ViewportWitness check that has screenshots for all three viewports (phonePortrait,
+phoneLandscape, desktop). Baselines expire after seven days. The request is rejected if the
+baseline job is pending, failed, or missing any viewport screenshot.
+
+```ts
+const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/compare', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: 'https://example.com',
+    baselineJobId: 'JOB_ID_FROM_PREVIOUS_CHECKS',
+  }),
+}).then(r => r.json())
+```
+
+> **Safety**: Only public HTTPS URLs are accepted. Loopback, private, link-local, and metadata
+> addresses are blocked at every hop. The browser worker is non-mutating — no forms are submitted
+> and no state-changing interactions are performed.
+
+---
+
 ## Local development
 
 ```bash

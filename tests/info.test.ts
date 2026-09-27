@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import fs from 'fs'
+import { fileURLToPath } from 'url'
 import express from 'express'
 import http from 'http'
 import { createInfoRouter } from '../src/api/routes/info.js'
@@ -403,5 +405,54 @@ describe('GET /openapi.json', () => {
       components: { schemas: { QAReport: { properties: Record<string, unknown> } } }
     }
     expect(body.components.schemas.QAReport.properties.feedbackUrl).toBeDefined()
+  })
+})
+
+describe('README.md — paid product documentation', () => {
+  let readme: string
+
+  beforeAll(() => {
+    readme = fs.readFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), 'utf-8')
+  })
+
+  it('documents POST /v1/checks at 0.08 USDC', () => {
+    expect(readme).toContain('POST /v1/checks')
+    expect(readme).toContain('0.08 USDC')
+  })
+
+  it('documents POST /v1/verify at 0.10 USDC', () => {
+    expect(readme).toContain('POST /v1/verify')
+    expect(readme).toContain('0.10 USDC')
+  })
+
+  it('documents POST /v1/compare at 0.12 USDC', () => {
+    expect(readme).toContain('POST /v1/compare')
+    expect(readme).toContain('0.12 USDC')
+  })
+
+  it('explains the HTTP 402 x402 challenge', () => {
+    expect(readme).toContain('HTTP 402')
+    expect(readme).toContain('x402')
+  })
+
+  it('explains that an x402-aware client pays and retries', () => {
+    expect(readme).toContain('x402-aware client')
+    expect(readme).toContain('retries automatically')
+  })
+
+  it('documents the public-HTTPS-only safety boundary', () => {
+    expect(readme).toContain('public HTTPS')
+  })
+
+  it('documents the non-mutating safety boundary', () => {
+    expect(readme).toContain('non-mutating')
+  })
+
+  it('/v1/compare: documents that baselineJobId must identify a completed job', () => {
+    expect(readme).toMatch(/baselineJobId.{0,40}must identify a completed/is)
+  })
+
+  it('/v1/compare: documents that the baseline must have screenshots for all three viewports', () => {
+    expect(readme).toContain('screenshots for all three viewports')
   })
 })
