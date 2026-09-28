@@ -84,6 +84,25 @@ describe('RetentionManager - path containment', () => {
     expect(deletedIds).toContain(outsideDir)
   })
 
+  it('symlinked job directory does not remove or inspect its outside target', async () => {
+    await fs.mkdir(outsideDir, { recursive: true })
+    await fs.writeFile(path.join(outsideDir, 'sentinel.txt'), 'do not delete')
+
+    const jobId = 'job-linked'
+    const linkPath = path.join(screenshotsDir, jobId)
+    await fs.symlink(outsideDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const { store, deletedIds } = makeStore([makeJobRecord({ id: jobId })])
+    const manager = new RetentionManager(store, screenshotsDir, 100 * 1024 * 1024)
+
+    const result = await manager.runCleanup()
+
+    expect(await fs.readFile(path.join(outsideDir, 'sentinel.txt'), 'utf8')).toBe('do not delete')
+    expect(await fs.lstat(linkPath).then((stat) => stat.isSymbolicLink())).toBe(true)
+    expect(result.freedBytes).toBe(0)
+    expect(deletedIds).toContain(jobId)
+  })
+
   it('empty job ID is skipped safely and DB record is purged', async () => {
     const { store, deletedIds } = makeStore([makeJobRecord({ id: '' })])
     const manager = new RetentionManager(store, screenshotsDir, 100 * 1024 * 1024)

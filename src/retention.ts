@@ -37,8 +37,8 @@ export class RetentionManager {
         continue
       }
       try {
-        const stat = await fs.stat(jobDir)
-        if (stat.isDirectory()) {
+        const stat = await fs.lstat(jobDir)
+        if (stat.isDirectory() && !stat.isSymbolicLink()) {
           const size = await getDirSize(jobDir)
           await fs.rm(jobDir, { recursive: true, force: true })
           freedBytes += size
@@ -64,8 +64,10 @@ export class RetentionManager {
             const entryPath = this.resolveJobDir(entry.name)
             if (entryPath === null) continue
             try {
-              const stat = await fs.stat(entryPath)
-              dirs.push({ name: entry.name, mtime: stat.mtimeMs })
+              const stat = await fs.lstat(entryPath)
+              if (!stat.isSymbolicLink()) {
+                dirs.push({ name: entry.name, mtime: stat.mtimeMs })
+              }
             } catch {
               // skip
             }
