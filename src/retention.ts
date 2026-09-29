@@ -11,6 +11,17 @@ export class RetentionManager {
     private readonly maxStorageBytes: number,
   ) {}
 
+  // Returns the resolved absolute path only when it is a strict child of screenshotsDir.
+  // Returns null for traversal sequences, absolute paths, empty strings, or the root itself.
+  private resolveJobDir(jobId: string): string | null {
+    const root = path.resolve(this.screenshotsDir)
+    const candidate = path.resolve(root, jobId)
+    if (!candidate.startsWith(root + path.sep)) {
+      return null
+    }
+    return candidate
+  }
+
   async runCleanup(): Promise<{ deletedJobs: number; freedBytes: number }> {
     let deletedJobs = 0
     let freedBytes = 0
@@ -18,10 +29,16 @@ export class RetentionManager {
     // Delete expired jobs
     const expired = this.store.listExpiredJobs(Date.now())
     for (const job of expired) {
-      const jobDir = path.join(this.screenshotsDir, job.id)
+      const jobDir = this.resolveJobDir(job.id)
+      if (jobDir === null) {
+        // Malformed or traversal ID: purge the DB record but touch no filesystem path
+        this.store.deleteJob(job.id)
+        deletedJobs++
+        continue
+      }
       try {
-        const stat = await fs.stat(jobDir)
-        if (stat.isDirectory()) {
+        const stat = await fs.lstat(jobDir)
+        if (stat.isDirectory() && !stat.isSymbolicLink()) {
           const size = await getDirSize(jobDir)
           await fs.rm(jobDir, { recursive: true, force: true })
           freedBytes += size
@@ -44,9 +61,13 @@ export class RetentionManager {
         const dirs: Array<{ name: string; mtime: number }> = []
         for (const entry of entries) {
           if (entry.isDirectory()) {
+            const entryPath = this.resolveJobDir(entry.name)
+            if (entryPath === null) continue
             try {
-              const stat = await fs.stat(path.join(this.screenshotsDir, entry.name))
-              dirs.push({ name: entry.name, mtime: stat.mtimeMs })
+              const stat = await fs.lstat(entryPath)
+              if (!stat.isSymbolicLink()) {
+                dirs.push({ name: entry.name, mtime: stat.mtimeMs })
+              }
             } catch {
               // skip
             }
@@ -56,7 +77,8 @@ export class RetentionManager {
 
         for (const dir of dirs) {
           if (cleared >= excess) break
-          const dirPath = path.join(this.screenshotsDir, dir.name)
+          const dirPath = this.resolveJobDir(dir.name)
+          if (dirPath === null) continue
           const size = await getDirSize(dirPath)
           await fs.rm(dirPath, { recursive: true, force: true })
           this.store.deleteJob(dir.name)
