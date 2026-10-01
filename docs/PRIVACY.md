@@ -18,6 +18,8 @@ This policy describes how the ViewportWitness service handles data submitted to 
 
 **Network and operational data.** Cloudflare, the hosting provider, and the service process may temporarily process ordinary request metadata such as IP address, user agent, route, response status, and timing for delivery, abuse prevention, and troubleshooting. The application log does not intentionally record payment headers, wallet addresses, submitted page contents, or screenshots.
 
+**Anonymous usage counts.** The application records bounded daily counts of successful documentation requests and unpaid payment challenges, using only predefined product, mode and caller-declared source labels. These counters contain no IP addresses, referrers, target URLs, arbitrary headers or payment credentials. Retained jobs carry a predefined source/mode label for offline product and repeat-use summaries. Source labels do not prove acquisition origin, and request counts do not identify unique visitors. There is no public analytics endpoint.
+
 ## What we do not collect
 
 - Private keys or seed phrases
@@ -28,6 +30,8 @@ This policy describes how the ViewportWitness service handles data submitted to 
 ## Retention
 
 Job records, screenshots, and reports are retained on the active service volume for seven days by default, then deleted. A configurable storage ceiling triggers oldest-first cleanup before the seven-day period if disk space is exhausted. Infrastructure backups or provider snapshots may retain encrypted or access-controlled copies for their own backup lifecycle; they are not available through the service API.
+
+Anonymous daily counters retain up to 30 UTC day buckets including today. Older counters are pruned on tracked requests and by the existing hourly cleanup while the service runs. Job source/mode labels expire with their job records.
 
 ## Service providers and data chains
 

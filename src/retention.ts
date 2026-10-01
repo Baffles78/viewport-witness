@@ -91,6 +91,11 @@ export class RetentionManager {
       }
     }
 
+    try {
+      this.store.pruneGrowthDaily()
+    } catch {
+      /* Observer cleanup cannot block job cleanup. */
+    }
     return { deletedJobs, freedBytes }
   }
 

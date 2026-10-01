@@ -9,6 +9,7 @@ import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
 import type { Config } from '../config.js'
 import { createPaymentMiddleware } from '../payment/index.js'
+import { growthMiddleware } from '../growth.js'
 
 export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): Express {
   const app = express()
@@ -24,6 +25,7 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
 
   // Disable x-powered-by header
   app.disable('x-powered-by')
+  app.use(growthMiddleware(store, cfg.PAYMENT_MODE))
 
   // Request ID injection
   app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -51,6 +53,8 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
       cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.PRICE_USDC,
+    description:
+      'Check a public website before deploy: test mobile website layout, accessibility, browser errors and screenshots across three viewports',
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
@@ -65,7 +69,8 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.VERIFY_PRICE_USDC,
     route: 'POST /v1/verify',
-    description: 'Read-only browser assertions across three viewports',
+    description:
+      'Verify visible text, elements and layout on a public website before deploy, across phone and desktop sizes',
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
@@ -95,7 +100,7 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.EXTRACT_PRICE_USDC,
     route: 'POST /v1/extract',
-    description: 'Deterministic public HTML to clean Markdown extraction',
+    description: 'DOM to Markdown: extract readable content from a public HTML webpage',
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
