@@ -35,7 +35,7 @@ function parseArgs(argv) {
     const key = eqIdx >= 0 ? arg.slice(2, eqIdx) : arg.slice(2)
     if (
       !arg.startsWith('--') ||
-      !['manifest', 'state', 'output', 'adapter', 'service-url'].includes(key) ||
+      !['manifest', 'state', 'output', 'adapter', 'wallet-module', 'service-url'].includes(key) ||
       Object.hasOwn(args, key)
     )
       throw new Error('Unknown or repeated argument')
@@ -54,8 +54,9 @@ function usage(msg) {
       '  --manifest <path>      Required. Path to release manifest JSON.',
       '  --state <path>         Checkpoint file. Required for --execute.',
       '  --output <dir>         Output directory for report.md and summary.json.',
-      '  --execute              Enable paid execution (requires --state and --adapter).',
+      '  --execute              Enable paid execution (requires --state and --wallet-module or --adapter).',
       '  --adapter <path>       Customer-owned JS module exporting a default payment adapter.',
+      '  --wallet-module <path> Existing customer wallet connector exporting signer; uses the built-in x402 adapter.',
       '  --service-url <url>    Service base URL (local test only).',
       '  --test-mode            Allow unsigned 202 responses (local test only).',
     ].join('\n'),
@@ -140,7 +141,10 @@ async function main() {
   const testMode = args.testMode === true
 
   if (execute && !args.state) usage('--state is required for --execute')
-  if (execute && !testMode && !args.adapter) usage('--adapter is required for paid --execute')
+  if (args.adapter && args['wallet-module']) usage('Choose adapter or wallet-module, not both')
+  if (execute && !testMode && !args.adapter && !args['wallet-module'])
+    usage('--wallet-module or --adapter is required for paid --execute')
+  if (testMode && args['wallet-module']) usage('Wallet signing is never used in test mode')
   let ownedLock
   if (execute) {
     const statePath = resolve(args.state)
@@ -208,6 +212,35 @@ async function main() {
 
   // Import adapter only when explicitly executing.
   let adapter = undefined
+  if (execute && args['wallet-module']) {
+    if (
+      !manifest.allowedNetwork ||
+      !manifest.allowedPayTo ||
+      (manifest.allowedNetwork.startsWith('solana:') && !manifest.allowedFeePayer)
+    )
+      usage(
+        'Built-in adapter requires approved network, recipient, and Solana fee payer in manifest',
+      )
+    const walletPath = resolve(args['wallet-module'])
+    const walletStat = await fs.lstat(walletPath).catch(() => null)
+    if (!walletStat?.isFile() || walletStat.isSymbolicLink())
+      usage('Expected a regular customer wallet module')
+    const { createX402PaymentAdapter } = await import('../dist/x402-adapter.js')
+    let wallet
+    try {
+      wallet = await import(pathToFileURL(walletPath).href)
+    } catch {
+      throw new Error('Customer wallet module could not be loaded; no payment attempted')
+    }
+    adapter = createX402PaymentAdapter({
+      network: manifest.allowedNetwork,
+      payTo: manifest.allowedPayTo,
+      maxTotalUsdc: manifest.maxBudgetUsdc,
+      signer: wallet.signer,
+      ...(manifest.allowedFeePayer ? { feePayer: manifest.allowedFeePayer } : {}),
+      ...(wallet.rpcUrl ? { rpcUrl: wallet.rpcUrl } : {}),
+    })
+  }
   if (execute && args.adapter) {
     const adapterPath = resolve(args.adapter)
     const adapterStat = await fs.lstat(adapterPath).catch(() => null)
@@ -251,7 +284,7 @@ async function main() {
 
   if (result.dryRun) {
     console.log(
-      '\nNo verdict: unpaid preview. Re-run with --execute --state --adapter for a live release check.',
+      '\nNo verdict: unpaid preview. Re-run with --execute --state and --wallet-module or --adapter for a live release check.',
     )
     return 0
   }

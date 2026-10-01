@@ -107,6 +107,36 @@ describe('recordGrowth — bounded daily retention', () => {
 })
 
 describe('growthSummary — mode/job settlement classification', () => {
+  it('reports protocol use and repeat paid identities without claiming AI buyer verification', () => {
+    for (const id of ['agent-1', 'agent-2'])
+      growthContext.run({ source: 'agent-client', mode: 'production' }, () => {
+        store.createJob({
+          id,
+          url: 'https://example.com',
+          idempotencyKey: null,
+          expiresAt: Date.now() + 86400000,
+          paymentId: `payment-${id}`,
+          customerId: 'private-customer',
+        })
+        store.updateJobStatus(id, 'complete', {
+          startedAt: Date.now() - 1000,
+          completedAt: Date.now(),
+        })
+      })
+    const summary = store.growthSummary()
+    const agents = summary.protocolUsage.sources.find((source) => source.source === 'agent-client')!
+    expect(summary.protocolUsage.buyerTypeVerification).toBe('not_available')
+    expect(agents.paidJobs).toBe(2)
+    expect(agents.repeatTrackedIdentities).toBe(1)
+    expect(agents.estimatedWorkerCostUsdc).toBeNull()
+    expect(JSON.stringify(summary)).not.toContain('private-customer')
+    expect(
+      store
+        .growthSummary({ excludedJobIds: ['agent-1'] })
+        .protocolUsage.sources.find((source) => source.source === 'agent-client')!
+        .repeatTrackedIdentities,
+    ).toBe(0)
+  })
   it('only counts jobs with payment_id, non-payment-pending, non-payment_not_settled, production mode', () => {
     growthContext.run({ source: 'agent-client', mode: 'production' }, () => {
       store.createJob({
