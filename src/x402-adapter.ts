@@ -117,7 +117,7 @@ export function createX402PaymentAdapter(options: X402AdapterOptions): PaymentAd
       throw new Error('Quote violates the customer-approved payment policy')
     if (
       network === BASE_NETWORK &&
-      (approved.extra?.name !== 'USDC' ||
+      (approved.extra?.name !== 'USD Coin' ||
         approved.extra?.version !== '2' ||
         (approved.extra?.assetTransferMethod && approved.extra.assetTransferMethod !== 'eip3009'))
     )

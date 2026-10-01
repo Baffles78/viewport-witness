@@ -12,7 +12,7 @@ const requirement = (): Requirement => ({
   payTo: PAYEE,
   amount: '80000',
   maxTimeoutSeconds: 60,
-  extra: { name: 'USDC', version: '2' },
+  extra: { name: 'USD Coin', version: '2' },
 })
 function input(
   approved = requirement(),
@@ -50,6 +50,10 @@ afterEach(() => vi.unstubAllGlobals())
 describe('customer x402 adapter', () => {
   it('uses the official Base SDK, binds the recipient and sends one signed request', async () => {
     const { adapter, sign, send } = base()
+    sign.mockImplementation(async (...args: unknown[]) => {
+      expect(args[0]).toMatchObject({ domain: { name: 'USD Coin', version: '2', chainId: 8453 } })
+      return `0x${'11'.repeat(65)}` as `0x${string}`
+    })
     expect((await adapter(input())).status).toBe(202)
     expect(sign).toHaveBeenCalledOnce()
     expect(send).toHaveBeenCalledOnce()
@@ -83,11 +87,19 @@ describe('customer x402 adapter', () => {
       adapter(
         input({
           ...requirement(),
-          extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2' },
+          extra: { name: 'USD Coin', version: '2', assetTransferMethod: 'permit2' },
         }),
       ),
     ).rejects.toThrow()
     expect(sign).not.toHaveBeenCalled()
+  })
+  it('rejects a wrong Base token domain before wallet authorization', async () => {
+    const { adapter, sign, send } = base()
+    await expect(
+      adapter(input({ ...requirement(), extra: { name: 'USDC', version: '2' } })),
+    ).rejects.toThrow('EIP-3009')
+    expect(sign).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
   })
   it('reserves budget before concurrent signing and forbids repeated attempts', async () => {
     const { adapter, sign } = base('0.08')
