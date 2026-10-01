@@ -1,0 +1,5 @@
+{
+  "runId": "my-v1-release-20261001",
+  "pages": ["https://example.com", "https://example.com/docs", "https://example.com/pricing"],
+  "maxBudgetUsdc": "0.40"
+}

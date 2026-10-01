@@ -1,0 +1,82 @@
+name: Release check (ViewportWitness)
+
+# Manual trigger only. No automatic spending on forks or pull requests.
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: 'Path to release manifest JSON (relative to repo root)'
+        required: false
+        default: 'examples/release-check.json'
+      execute:
+        description: 'Run paid check (requires adapter secret). Default: preview only.'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viewport-witness-release-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Preview run (default, no payment). Shows quoted cost before any adapter is loaded.
+      - name: Preview release check
+        if: inputs.execute != 'true'
+        run: |
+          node scripts/release-check.mjs \
+            --manifest "$MANIFEST_PATH" \
+            --output release-check-output/
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest }}
+        # Exit 0 for a valid unpaid preview; invalid manifests fail closed.
+
+      # Paid execution.
+      # Requires:
+      #   1. A customer-owned payment adapter module available in the repo or
+      #      mounted via an Actions secret.
+      #   2. Explicit opt-in via workflow_dispatch input execute=true.
+      #
+      # IMPORTANT: The adapter is customer-owned code that holds your wallet
+      # signing logic. Never commit private keys or seed phrases to the repo.
+      # Provide the adapter path via a secret and write it to a temp file, or
+      # use an adapter that reads credentials from the environment.
+      #
+      # No payment attempt is made unless --execute is passed.
+      - name: Paid release check
+        if: inputs.execute == 'true'
+        run: |
+          node scripts/release-check.mjs \
+            --manifest "$MANIFEST_PATH" \
+            --state release-check-output/checkpoint.json \
+            --output release-check-output/ \
+            --execute \
+            --adapter "$ADAPTER_PATH"
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest }}
+          ADAPTER_PATH: ${{ secrets.RELEASE_CHECK_ADAPTER_PATH }}
+        # Exit 0 = PASS, 1 = FAIL, 2 = INCONCLUSIVE or validation error.
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-check-report
+          path: release-check-output/
+          retention-days: 14

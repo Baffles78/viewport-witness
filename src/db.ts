@@ -1,17 +1,38 @@
 import { DatabaseSync } from 'node:sqlite'
 import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
+import {
+  growthContext,
+  GROWTH_SOURCES,
+  GROWTH_PRODUCTS,
+  GROWTH_EVENTS,
+  type GrowthSource,
+  type GrowthProduct,
+  type GrowthEvent,
+} from './growth.js'
+import type { PaymentMode } from './types.js'
 
 export class JobStore {
   private db: DatabaseSync | null = null
 
   constructor(private readonly dbPath: string) {}
 
-  init(): void {
-    this.db = new DatabaseSync(this.dbPath)
+  init({ readOnly = false }: { readOnly?: boolean } = {}): void {
+    this.db = new DatabaseSync(this.dbPath, { readOnly })
+    if (readOnly) return
     this.db.exec('PRAGMA journal_mode = WAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec('PRAGMA synchronous = NORMAL')
     this.createSchema()
+    try {
+      this.db.exec(`CREATE TABLE IF NOT EXISTS growth_daily (
+        day TEXT NOT NULL, product TEXT NOT NULL, source TEXT NOT NULL, event TEXT NOT NULL,
+        mode TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(day,product,source,event,mode));
+        CREATE TABLE IF NOT EXISTS growth_jobs (
+        job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+        source TEXT NOT NULL, mode TEXT NOT NULL);`)
+    } catch {
+      console.warn('Growth measurement unavailable; job service remains authoritative.')
+    }
   }
 
   private get conn(): DatabaseSync {
@@ -117,7 +138,186 @@ export class JobStore {
         .run(params.idempotencyKey, params.id, now)
     }
 
+    try {
+      const context = growthContext.getStore()
+      this.conn
+        .prepare('INSERT OR IGNORE INTO growth_jobs(job_id,source,mode) VALUES(?,?,?)')
+        .run(params.id, context?.source ?? 'unknown', context?.mode ?? 'unknown')
+    } catch {
+      /* Measurement cannot block an accepted job. */
+    }
     return this.getJob(params.id) as JobRecord
+  }
+
+  recordGrowth(
+    product: GrowthProduct,
+    source: GrowthSource,
+    event: GrowthEvent,
+    mode: PaymentMode,
+    now = Date.now(),
+  ): void {
+    if (
+      !GROWTH_PRODUCTS.includes(product) ||
+      !GROWTH_SOURCES.includes(source) ||
+      !GROWTH_EVENTS.includes(event) ||
+      !['test', 'testnet', 'production'].includes(mode) ||
+      !Number.isFinite(now)
+    )
+      return
+    try {
+      const day = new Date(now).toISOString().slice(0, 10)
+      this.pruneGrowthDaily(now)
+      this.conn
+        .prepare(
+          `INSERT INTO growth_daily(day,product,source,event,mode,count) VALUES(?,?,?,?,?,1)
+        ON CONFLICT(day,product,source,event,mode) DO UPDATE SET count=MIN(count+1,2147483647)`,
+        )
+        .run(day, product, source, event, mode)
+    } catch {
+      /* Measurement must never affect request delivery. */
+    }
+  }
+
+  pruneGrowthDaily(now = Date.now()): void {
+    try {
+      this.conn
+        .prepare('DELETE FROM growth_daily WHERE day < ? OR day > ?')
+        .run(
+          new Date(now - 29 * 86400000).toISOString().slice(0, 10),
+          new Date(now).toISOString().slice(0, 10),
+        )
+    } catch {
+      /* Optional anonymous counters never block governed job cleanup. */
+    }
+  }
+
+  growthSummary({
+    now = Date.now(),
+    excludedJobIds = [],
+    costPerWorkerSecondUsdc,
+  }: { now?: number; excludedJobIds?: string[]; costPerWorkerSecondUsdc?: number } = {}) {
+    if (
+      !Number.isFinite(now) ||
+      excludedJobIds.length > 100 ||
+      excludedJobIds.some((id) => !/^[a-zA-Z0-9-]{1,80}$/.test(id)) ||
+      (costPerWorkerSecondUsdc !== undefined &&
+        (!Number.isFinite(costPerWorkerSecondUsdc) || costPerWorkerSecondUsdc < 0))
+    )
+      throw new Error('Invalid summary options')
+    const cutoff = now - 30 * 86400000
+    const excluded = new Set(excludedJobIds)
+    const jobs = (
+      this.conn
+        .prepare(
+          `SELECT j.id,j.kind,j.status,j.error,j.payment_id,j.customer_id,j.started_at,j.completed_at,
+      COALESCE(g.source,'unknown') AS source,COALESCE(g.mode,'unknown') AS mode FROM jobs j
+      LEFT JOIN growth_jobs g ON g.job_id=j.id WHERE j.created_at>=? AND j.created_at<=?`,
+        )
+        .all(cutoff, now) as unknown as Array<{
+        id: string
+        kind: string
+        status: string
+        error: string | null
+        payment_id: string | null
+        customer_id: string | null
+        started_at: number | null
+        completed_at: number | null
+        source: string
+        mode: string
+      }>
+    ).filter((job) => !excluded.has(job.id))
+    const paid = jobs.filter(
+      (job) =>
+        job.payment_id !== null &&
+        job.status !== 'payment_pending' &&
+        job.error !== 'payment_not_settled' &&
+        job.mode === 'production',
+    )
+    const customers = new Map<string, number>()
+    for (const job of paid)
+      if (job.customer_id) customers.set(job.customer_id, (customers.get(job.customer_id) ?? 0) + 1)
+    const groups = new Map<
+      string,
+      {
+        product: string
+        source: string
+        mode: string
+        paidJobs: number
+        completed: number
+        failed: number
+        attributedJobs: number
+        observedWorkerSeconds: number
+      }
+    >()
+    for (const job of paid) {
+      const key = `${job.kind}:${job.source}:${job.mode}`
+      const group = groups.get(key) ?? {
+        product: job.kind,
+        source: job.source,
+        mode: job.mode,
+        paidJobs: 0,
+        completed: 0,
+        failed: 0,
+        attributedJobs: 0,
+        observedWorkerSeconds: 0,
+      }
+      group.paidJobs++
+      if (job.status === 'complete') group.completed++
+      if (job.status === 'failed') group.failed++
+      if (job.customer_id) group.attributedJobs++
+      if (
+        job.started_at !== null &&
+        job.completed_at !== null &&
+        job.completed_at >= job.started_at
+      )
+        group.observedWorkerSeconds += (job.completed_at - job.started_at) / 1000
+      groups.set(key, group)
+    }
+    const seconds = [...groups.values()].reduce(
+      (sum, group) => sum + group.observedWorkerSeconds,
+      0,
+    )
+    let documents: unknown[] = []
+    try {
+      documents = this.conn
+        .prepare(
+          'SELECT day,product,source,event,mode,count FROM growth_daily WHERE day>=? AND day<=? ORDER BY day,product,source,event',
+        )
+        .all(
+          new Date(now - 29 * 86400000).toISOString().slice(0, 10),
+          new Date(now).toISOString().slice(0, 10),
+        )
+    } catch {
+      /* Old/missing analytics are explicitly unavailable. */
+    }
+    return {
+      schema: 'viewport-witness-growth/v1',
+      observedAt: new Date(now).toISOString(),
+      windowDays: 30,
+      documents,
+      products: [...groups.values()],
+      paidJobs: paid.length,
+      completed: paid.filter((j) => j.status === 'complete').length,
+      trackedCustomerIdentities: customers.size,
+      repeatTrackedIdentities: [...customers.values()].filter((count) => count > 1).length,
+      attributedJobs: paid.filter((j) => j.customer_id).length,
+      excludedControlledJobs: excludedJobIds.length,
+      testOrTestnetJobs: jobs.filter((j) => ['test', 'testnet'].includes(j.mode)).length,
+      unknownModePaymentIdentityJobs: jobs.filter(
+        (j) => j.mode === 'unknown' && j.payment_id !== null,
+      ).length,
+      observedWorkerSeconds: seconds,
+      estimatedWorkerCostUsdc:
+        costPerWorkerSecondUsdc === undefined ? null : seconds * costPerWorkerSecondUsdc,
+      limitations: [
+        'Sources are caller-declared or protocol labels, not verified acquisition attribution.',
+        'Document/challenge counts are requests, not unique visitors or a matched conversion funnel.',
+        'Job metrics cover retained jobs only; default retention is seven days. Historical unknown mode is not proven production.',
+        'Exclude operator-known smoke/indexing job IDs before interpreting external demand.',
+        'Worker time excludes queue time and may omit interrupted attempts. Cost is unknown without an operator rate; a supplied rate is an estimate, not measured expense.',
+        'No customer labels, payment identifiers or target URLs are returned.',
+      ],
+    }
   }
 
   getJob(id: string): JobRecord | null {
