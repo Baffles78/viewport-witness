@@ -63,4 +63,4 @@ Report Markdown contains verdict summaries and links to retained browser evidenc
 
 ## Repository status
 
-This repository is **private**. The example workflow and manifest are not Marketplace publications. There is no automatic registry or public submission associated with running this tool.
+The repository is currently public. The example workflow and manifest are repository examples, not published Marketplace actions. Running the client does not submit a registry entry or publish a report.
