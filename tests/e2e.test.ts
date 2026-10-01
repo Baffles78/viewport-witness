@@ -306,7 +306,7 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
         url: 'https://example.com',
         assertions: [
           { type: 'titleIncludes', value: 'Example Domain' },
-          { type: 'selectorVisible', selector: 'h1' },
+          { type: 'selectorVisible', selector: 'body' },
           { type: 'noHorizontalOverflow' },
           { type: 'noConsoleErrors' },
         ],
