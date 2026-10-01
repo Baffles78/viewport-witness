@@ -296,6 +296,34 @@ export class JobStore {
       windowDays: 30,
       documents,
       products: [...groups.values()],
+      protocolUsage: {
+        buyerTypeVerification: 'not_available',
+        description:
+          'MCP and agent-client labels describe access paths, not verified AI customers.',
+        sources: ['mcp', 'agent-client', 'github-action'].map((source) => {
+          const selected = paid.filter((job) => job.source === source)
+          const identities = new Map<string, number>()
+          for (const job of selected)
+            if (job.customer_id)
+              identities.set(job.customer_id, (identities.get(job.customer_id) ?? 0) + 1)
+          const workerSeconds = [...groups.values()]
+            .filter((group) => group.source === source)
+            .reduce((sum, group) => sum + group.observedWorkerSeconds, 0)
+          return {
+            source,
+            paidJobs: selected.length,
+            completed: selected.filter((job) => job.status === 'complete').length,
+            failed: selected.filter((job) => job.status === 'failed').length,
+            trackedCustomerIdentities: identities.size,
+            repeatTrackedIdentities: [...identities.values()].filter((count) => count > 1).length,
+            observedWorkerSeconds: workerSeconds,
+            estimatedWorkerCostUsdc:
+              costPerWorkerSecondUsdc === undefined
+                ? null
+                : workerSeconds * costPerWorkerSecondUsdc,
+          }
+        }),
+      },
       paidJobs: paid.length,
       completed: paid.filter((j) => j.status === 'complete').length,
       trackedCustomerIdentities: customers.size,

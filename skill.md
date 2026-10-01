@@ -15,8 +15,9 @@ errors, failed network requests, layout overflow, and keyboard/focus observation
 ## Payment
 
 - Costs: 0.08 USDC for `check_page`, 0.10 for `verify_page`, 0.12 for `compare_page`
-- Networks: Base mainnet for production or Base Sepolia for testnet; a Solana rail is available
-  only when it appears in the endpoint's live 402 challenge and `/.well-known/x402` response
+- Networks: Base and Solana mainnet are supported; confirm the current network, recipient,
+  USDC asset and Solana fee payer in the live 402 challenge against the caller's approved policy.
+  Base Sepolia is available for configured testnet instances.
 - Protocol: x402 upfront — send a valid PAYMENT-SIGNATURE header before the job is created
 - Payment discovery: GET https://qa.honeygate.app/.well-known/x402
 

@@ -878,6 +878,7 @@ export const openApiSpec = {
               'SHA-256 of report content. Evidence of integrity, not a cryptographic signature.',
           },
           feedbackUrl: { type: 'string', example: FEEDBACK_URL },
+          agent: { $ref: '#/components/schemas/AgentResult' },
           summary: {
             type: 'object',
             properties: {
@@ -941,6 +942,76 @@ export const openApiSpec = {
               phonePortrait: { $ref: '#/components/schemas/ViewportResult' },
               phoneLandscape: { $ref: '#/components/schemas/ViewportResult' },
               desktop: { $ref: '#/components/schemas/ViewportResult' },
+            },
+          },
+        },
+      },
+      AgentResult: {
+        type: 'object',
+        required: [
+          'schema',
+          'reportID',
+          'kind',
+          'decision',
+          'reportExpiresAt',
+          'evidenceBound',
+          'findings',
+          'allowedNextSteps',
+          'dataTrust',
+        ],
+        description:
+          'Bounded browser evidence for agent callers. Does not authorize deployment, fixes or payment. Re-evaluated at report retrieval.',
+        properties: {
+          schema: { type: 'string', const: 'viewport-witness-agent-result/v1' },
+          reportID: { type: 'string' },
+          kind: { type: 'string' },
+          decision: { type: 'string', enum: ['safe_to_ship', 'review', 'failed', 'inconclusive'] },
+          reportExpiresAt: { type: 'string' },
+          evidenceBound: { type: 'boolean' },
+          dataTrust: { type: 'string' },
+          allowedNextSteps: {
+            type: 'array',
+            items: { type: 'string', enum: ['inspect_report', 'recheck', 'compare', 'none'] },
+          },
+          findings: {
+            type: 'array',
+            maxItems: 12,
+            items: {
+              type: 'object',
+              properties: {
+                code: { type: 'string' },
+                severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+                viewports: {
+                  type: 'array',
+                  items: { type: 'string', enum: ['phonePortrait', 'phoneLandscape', 'desktop'] },
+                },
+                locators: { type: 'array', maxItems: 5, items: { type: 'string', maxLength: 200 } },
+                fix: { type: 'string', maxLength: 500 },
+              },
+            },
+          },
+          comparisonBaseline: {
+            type: 'object',
+            properties: {
+              jobId: { type: 'string' },
+              expiresAt: { type: 'string', format: 'date-time' },
+            },
+          },
+          recheck: {
+            type: 'object',
+            properties: {
+              tool: { type: 'string', enum: ['check_page', 'verify_page'] },
+              assertions: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: { type: 'string', enum: ['noHorizontalOverflow', 'noConsoleErrors'] },
+                  },
+                },
+              },
+              requiresFreshBudget: { type: 'boolean', const: true },
+              requiresCallerFix: { type: 'boolean', const: true },
             },
           },
         },

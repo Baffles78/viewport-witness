@@ -297,17 +297,26 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
       }
 
       const baseline = await createAndPoll('/v1/checks', { url: 'https://example.com' })
+      expect(baseline['agent']).toMatchObject({
+        schema: 'viewport-witness-agent-result/v1',
+        reportID: baseline['id'],
+        evidenceBound: true,
+      })
       const verified = await createAndPoll('/v1/verify', {
         url: 'https://example.com',
         assertions: [
           { type: 'titleIncludes', value: 'Example Domain' },
-          { type: 'selectorVisible', selector: 'h1' },
+          { type: 'selectorVisible', selector: 'body' },
           { type: 'noHorizontalOverflow' },
           { type: 'noConsoleErrors' },
         ],
       })
       expect((verified['assertions'] as { failed: number }).failed).toBe(0)
       expect(verified['verdict']).toBeDefined()
+      expect(verified['agent']).toMatchObject({
+        schema: 'viewport-witness-agent-result/v1',
+        kind: 'verify',
+      })
       expect(
         (verified['diagnosis'] as { findings: Array<{ code: string }> }).findings.some(
           (finding) => finding.code === 'failed-assertions',
@@ -339,6 +348,7 @@ describe.skipIf(!playwrightAvailable)('E2E: Full viewport check', () => {
         baselineJobId: baseline['id'],
       })
       expect(incomplete['status']).toBe('INCONCLUSIVE')
+      expect((incomplete['agent'] as { decision: string }).decision).not.toBe('safe_to_ship')
       expect((incomplete['verdict'] as { decision: string }).decision).toBe('review')
       expect((incomplete['comparison'] as { evidenceComplete: boolean }).evidenceComplete).toBe(
         false,

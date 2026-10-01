@@ -55,8 +55,19 @@ function terminalReport(
     url,
     kind: 'check',
     status,
-    verdict: { decision, reasons: [] },
-    viewports: { phonePortrait: {}, phoneLandscape: {}, desktop: {} },
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    verdict: { decision, reasons: [], blockingIssues: status === 'FAIL' ? 1 : 0 },
+    viewports: Object.fromEntries(
+      ['phonePortrait', 'phoneLandscape', 'desktop'].map((vp) => [
+        vp,
+        {
+          loadStatus: 'success',
+          accessibility: { completed: true },
+          screenshotUrl: `/screenshots/${vp}`,
+          screenshotSha256: 'fixture-sha256',
+        },
+      ]),
+    ),
   }
 }
 

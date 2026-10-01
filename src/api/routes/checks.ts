@@ -10,6 +10,7 @@ import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
 import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
+import { buildAgentResult } from '../../agent-result.js'
 import { challengeIfUnsigned } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
@@ -295,6 +296,7 @@ export function createChecksRouter(
             summary: report.summary,
             verdict: report.verdict,
             diagnosis: report.diagnosis,
+            agent: buildAgentResult(report),
             ...(report.assertions ? { assertions: report.assertions } : {}),
             ...(report.comparison ? { comparison: report.comparison } : {}),
             feedbackUrl: FEEDBACK_URL,

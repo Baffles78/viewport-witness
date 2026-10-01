@@ -1,13 +1,31 @@
 import { createHash } from 'node:crypto'
 import { validatePublicHttpsUrl } from './ssrf.js'
+import { buildAgentResult } from './agent-result.js'
+import type { QAReport } from './types.js'
 
 type Decision = 'PASS' | 'FAIL' | 'INCONCLUSIVE'
-type Requirement = { scheme: string; network: string; asset: string; amount: string; payTo: string }
-type Challenge = { x402Version: number; resource: { url: string }; accepts: Requirement[] }
+export type Requirement = {
+  scheme: string
+  network: string
+  asset: string
+  amount: string
+  payTo: string
+  maxTimeoutSeconds?: number
+  extra?: Record<string, unknown>
+}
+export type Challenge = {
+  x402Version: number
+  resource: { url: string }
+  accepts: Requirement[]
+  extensions?: Record<string, unknown>
+}
 export interface ReleaseManifest {
   runId: string
   pages: string[]
   maxBudgetUsdc: string
+  allowedNetwork?: string
+  allowedPayTo?: string
+  allowedFeePayer?: string
 }
 export interface ReleasePage {
   index: number
@@ -16,6 +34,7 @@ export interface ReleasePage {
   reservedAtomic: string
   jobId?: string
   decision?: Decision
+  terminal?: boolean
 }
 export interface ReleaseState {
   schema: 'viewport-witness-release/v1'
@@ -55,7 +74,7 @@ const allowedAssets: Record<string, string> = {
   'eip155:84532': '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
   'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
 }
-function requirementFor(challenge: Challenge, url: string): Requirement {
+function requirementFor(challenge: Challenge, url: string, manifest: ReleaseManifest): Requirement {
   if (
     challenge.x402Version !== 2 ||
     challenge.resource?.url !== url ||
@@ -75,6 +94,9 @@ function requirementFor(challenge: Challenge, url: string): Requirement {
       r.payTo.length <= 100 &&
       typeof r.asset === 'string' &&
       typeof r.network === 'string' &&
+      (!manifest.allowedNetwork || r.network === manifest.allowedNetwork) &&
+      (!manifest.allowedPayTo || r.payTo === manifest.allowedPayTo) &&
+      (!manifest.allowedFeePayer || r.extra?.feePayer === manifest.allowedFeePayer) &&
       (r.network.startsWith('eip155:')
         ? allowedAssets[r.network] === r.asset.toLowerCase()
         : allowedAssets[r.network] === r.asset),
@@ -143,7 +165,17 @@ function safeText(value: unknown): string {
 export async function runReleaseCheck(manifest: ReleaseManifest, options: Options = {}) {
   if (
     !manifest ||
-    Object.keys(manifest).some((key) => !['runId', 'pages', 'maxBudgetUsdc'].includes(key)) ||
+    Object.keys(manifest).some(
+      (key) =>
+        ![
+          'runId',
+          'pages',
+          'maxBudgetUsdc',
+          'allowedNetwork',
+          'allowedPayTo',
+          'allowedFeePayer',
+        ].includes(key),
+    ) ||
     !/^[-a-zA-Z0-9_]{1,60}$/.test(manifest.runId) ||
     !Array.isArray(manifest.pages) ||
     manifest.pages.length < 1 ||
@@ -155,6 +187,18 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       'A release needs a stable run ID, one to five unique pages and an explicit USDC budget',
     )
   const budget = usdcAtomic(manifest.maxBudgetUsdc)
+  if (
+    (manifest.allowedNetwork !== undefined &&
+      !Object.hasOwn(allowedAssets, manifest.allowedNetwork)) ||
+    (manifest.allowedPayTo !== undefined &&
+      (typeof manifest.allowedPayTo !== 'string' ||
+        !manifest.allowedPayTo ||
+        manifest.allowedPayTo.length > 100)) ||
+    (manifest.allowedFeePayer !== undefined &&
+      (typeof manifest.allowedFeePayer !== 'string' ||
+        !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(manifest.allowedFeePayer)))
+  )
+    throw new Error('Invalid approved network or recipient')
   if (budget <= 0n) throw new Error('Budget must be positive')
   const validate = options.validateTarget ?? validatePublicHttpsUrl
   for (const page of manifest.pages) {
@@ -270,8 +314,13 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
     const encoded = response.headers.get('payment-required')
     if (!encoded || encoded.length > 65536)
       throw new Error('Missing or oversized payment challenge')
-    const challenge = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Challenge
-    const requirement = requirementFor(challenge, endpoint)
+    let challenge: Challenge
+    try {
+      challenge = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Challenge
+    } catch {
+      throw new Error('Malformed payment challenge; no payment attempted')
+    }
+    const requirement = requirementFor(challenge, endpoint, manifest)
     planned += BigInt(requirement.amount)
     preflights.push({ challenge, requirement })
   }
@@ -294,6 +343,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
     decision: Decision
     reportUrl?: string
     reasons: string[]
+    terminal: boolean
   }> = []
   for (const [index, url] of manifest.pages.entries()) {
     const page = state.pages[index]!,
@@ -337,6 +387,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       reasons = [
         'No terminal report within the bounded polling window; retain job ID and resume without repaying.',
       ]
+    let terminal = false
     for (let poll = 0; poll < attempts; poll++) {
       let body: Record<string, unknown>
       try {
@@ -348,20 +399,24 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       }
       if (body.id !== page.jobId || typeof body.url !== 'string' || body.url !== url) break
       if (['PASS', 'FAIL', 'INCONCLUSIVE'].includes(String(body.status)) && body.kind === 'check') {
+        terminal = true
         decision = body.status as Decision
         const verdict = body.verdict as { decision?: unknown; reasons?: unknown[] } | undefined
         const expectedVerdictDecision =
           decision === 'PASS' ? 'safe_to_ship' : decision === 'FAIL' ? 'failed' : undefined
         if (expectedVerdictDecision && verdict?.decision !== expectedVerdictDecision) {
+          terminal = false
           decision = 'INCONCLUSIVE'
           reasons = ['Verdict decision inconsistent with reported status; treated as inconclusive.']
           break
         }
         if (decision === 'PASS') {
-          const viewports = body.viewports as Record<string, unknown> | undefined
-          if (!['phonePortrait', 'phoneLandscape', 'desktop'].every((v) => viewports?.[v])) {
+          if (buildAgentResult(body as unknown as QAReport).decision !== 'safe_to_ship') {
+            terminal = false
             decision = 'INCONCLUSIVE'
-            reasons = ['Missing one or more viewport reports; treated as inconclusive.']
+            reasons = [
+              'Incomplete, expired or inconsistent report evidence; treated as inconclusive.',
+            ]
             break
           }
         }
@@ -381,8 +436,9 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
         )
     }
     page.decision = decision
+    page.terminal = terminal
     await options.checkpoint!.save(state)
-    reports.push({ index, url: safeDisplayUrl(url), decision, reportUrl, reasons })
+    reports.push({ index, url: safeDisplayUrl(url), decision, reportUrl, reasons, terminal })
   }
   const decision: Decision = reports.some((r) => r.decision === 'FAIL')
     ? 'FAIL'
@@ -405,6 +461,9 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
     '\nReview targets and report contents before sharing. Reports expire under the service retention policy.',
   ].join('\n')
   return {
+    schema: 'viewport-witness-release-summary/v1',
+    runId: manifest.runId,
+    manifestHash,
     decision,
     dryRun: false,
     maximumAtomic: budget.toString(),
