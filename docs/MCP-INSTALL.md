@@ -20,14 +20,20 @@ Transport: **Streamable HTTP** (stateless JSON-RPC over HTTP POST).
 
 ## Available tools
 
-| Tool | Cost | Read-only? |
-|------|------|-----------|
-| `check_page` | $0.08 USDC | No (enqueues a paid job) |
-| `verify_page` | $0.10 USDC | No (enqueues a paid job) |
-| `compare_page` | $0.12 USDC | No (enqueues a paid job) |
-| `get_report` | Free | Yes |
+| Tool               | Cost        | Read-only?                            |
+| ------------------ | ----------- | ------------------------------------- |
+| `check_page`       | $0.08 USDC  | No (enqueues a paid job)              |
+| `verify_page`      | $0.10 USDC  | No (enqueues a paid job)              |
+| `compare_page`     | $0.12 USDC  | No (enqueues a paid job)              |
+| `extract_page`     | $0.005 USDC | No (creates a paid extraction report) |
+| `web_release_gate` | $0.05 USDC  | No (creates a paid security report)   |
+| `get_report`       | Free        | Yes                                   |
 
 Payment is via x402 on Base (or Solana if advertised). See `GET https://qa.honeygate.app/.well-known/x402` for current payment options and rail details.
+
+Paid tools inspect the target website without modifying it. Successful paid calls settle an authorized USDC payment and create a stored report. Settlement reduces the payer's balance and cannot be undone by these tools; `compare_page` also leaves the existing baseline report unchanged.
+
+The paid tools retain `readOnlyHint: false` and `destructiveHint: true` to warn clients about that irreversible payment effect, not website deletion or modification. These annotations are hints, not payment authorization: the x402 payment exchange still requires a valid client-authorized payment. Test mode does not settle a payment. `get_report` remains free and read-only.
 
 ---
 
@@ -36,7 +42,7 @@ Payment is via x402 on Base (or Solana if advertised). See `GET https://qa.honey
 1. Enable Developer mode under **Settings > Security and login**.
 2. Open **ChatGPT Plugins**, select the plus button, and create a connection.
 3. Enter `https://qa.honeygate.app/mcp` as the public MCP server URL.
-4. Review the four discovered tools before enabling the connection in a chat.
+4. Review the six discovered tools before enabling the connection in a chat.
 
 Discovery works without payment. Paid calls still require an x402-capable payment path.
 
