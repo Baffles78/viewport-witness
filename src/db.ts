@@ -340,6 +340,9 @@ export class JobStore {
       limitations: [
         'Sources are caller-declared or protocol labels, not verified acquisition attribution.',
         'Document/challenge counts are requests, not unique visitors or a matched conversion funnel.',
+        'HTTP stage counters count attempts/responses, not unique jobs. A payment header is unverified presence; payment acceptance reads downstream settled state and may include repeated accepted responses.',
+        'HTTP request-stage observation begins after JSON parsing. Malformed JSON and parser body-limit failures are not included; input_rejected_after_parser counts only later rejection responses.',
+        'Monitor/test-client source labels are self-declared, not authenticated controlled clients. HTTP stage counters do not cover MCP payments; job metrics and anonymous daily counters have different retention windows.',
         'Job metrics cover retained jobs only; default retention is seven days. Historical unknown mode is not proven production.',
         'Exclude operator-known smoke/indexing job IDs before interpreting external demand.',
         'Worker time excludes queue time and may omit interrupted attempts. Cost is unknown without an operator rate; a supplied rate is an estimate, not measured expense.',

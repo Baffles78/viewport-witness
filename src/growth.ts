@@ -10,6 +10,8 @@ export const GROWTH_SOURCES = [
   'mcp',
   'registry',
   'report-share',
+  'monitor',
+  'test-client',
 ] as const
 export const GROWTH_PRODUCTS = [
   'check',
@@ -19,7 +21,15 @@ export const GROWTH_PRODUCTS = [
   'security',
   'discovery',
 ] as const
-export const GROWTH_EVENTS = ['document_request', 'unpaid_challenge'] as const
+export const GROWTH_EVENTS = [
+  'document_request',
+  'unpaid_challenge',
+  'payment_header_attempt',
+  'input_rejected_after_parser',
+  'payment_rejected_response',
+  'service_unavailable_response',
+  'payment_accepted_response',
+] as const
 export type GrowthSource = (typeof GROWTH_SOURCES)[number]
 export type GrowthProduct = (typeof GROWTH_PRODUCTS)[number]
 export type GrowthEvent = (typeof GROWTH_EVENTS)[number]
@@ -50,16 +60,37 @@ const documentPaths = new Set([
 
 export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHandler {
   return (req, res, next) => {
+    // Registered after express.json(): parser failures never reach this observer.
+    // Input rejection below covers only requests that successfully reached this middleware.
     const source = growthSource(req.headers['x-viewportwitness-source'])
-    // Only allowlisted labels survive. Headers, referrers, bodies and IPs are never retained.
+    // Labels (including monitor/test-client) are caller-declared, never verified attribution.
+    // Only allowlisted categories survive. Raw headers, bodies, URLs and IPs are never retained.
     const product = req.method === 'POST' ? productPaths[req.path] : undefined
     const document = req.method === 'GET' && documentPaths.has(req.path)
+    const paymentHeader = req.headers['payment-signature'] ?? req.headers['x-payment']
+    const hasPaymentHeader = typeof paymentHeader === 'string' && paymentHeader.length > 0
+    // Presence is an attempt, not proof of a valid signature, buyer or settled payment.
+    if (product && hasPaymentHeader) {
+      try {
+        store.recordGrowth(product, source, 'payment_header_attempt', mode)
+      } catch {
+        /* Observer failure must not affect payment or request processing. */
+      }
+    }
     res.once('finish', () => {
       try {
         if (document && res.statusCode === 200)
           store.recordGrowth('discovery', source, 'document_request', mode)
         if (product && res.statusCode === 402)
           store.recordGrowth(product, source, 'unpaid_challenge', mode)
+        if (product && [400, 422].includes(res.statusCode))
+          store.recordGrowth(product, source, 'input_rejected_after_parser', mode)
+        if (product && hasPaymentHeader && res.statusCode === 402)
+          store.recordGrowth(product, source, 'payment_rejected_response', mode)
+        if (product && res.statusCode === 503)
+          store.recordGrowth(product, source, 'service_unavailable_response', mode)
+        if (product && mode !== 'test' && req.paymentResult?.settled === true && req.paymentResult.mode === mode)
+          store.recordGrowth(product, source, 'payment_accepted_response', mode)
       } catch {
         /* Observer failure cannot interrupt a delivered response. */
       }
