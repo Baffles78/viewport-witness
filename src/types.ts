@@ -70,7 +70,9 @@ export interface ViewportResult {
   interactionObservations: {
     visibleControls: number
     focusableControls: number
+    /** Legacy compatibility field: potential focusability, not verified keyboard operation. */
     keyboardReachable: boolean
+    keyboardObservation?: 'focusability_heuristic' | 'unavailable'
   }
   assertions?: AssertionResult[]
 }

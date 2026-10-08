@@ -97,14 +97,14 @@ After connecting, call `tools/list` (or the equivalent discovery command) to see
 
 To call `check_page`, `verify_page`, or `compare_page`, your client must send a valid x402 payment in `_meta`. The flow is:
 
-1. Client calls `tools/list` — discovers the tool and that it is paid.
-2. Client sends a tool call without payment — server returns a 402 challenge with payment requirements (network, payTo address, amount).
+1. Client calls `tools/list` â€” discovers the tool and that it is paid.
+2. Client sends a tool call without payment â€” server returns a 402 challenge with payment requirements (network, payTo address, amount).
 3. Client signs a payment transaction using a funded wallet and resends the tool call with the payment in `_meta[x402]`.
 4. Server verifies and settles the payment, then enqueues the browser job.
 5. Server returns `{ id, status: "queued", pollUrl }`.
 6. Client polls `get_report` with the job ID until status is `"complete"`.
 
-An x402-aware SDK is required for steps 2–4. See [x402.org](https://x402.org) for client libraries.
+An x402-aware SDK is required for steps 2â€“4. See [x402.org](https://x402.org) for client libraries.
 
 ---
 
@@ -118,7 +118,7 @@ npx playwright install chromium
 npm run dev
 ```
 
-Configure your MCP client to use `http://localhost:3000/mcp` instead. In test mode all tools run without x402 payment and results are labeled `paymentMode: "test"` — these do not represent real payment settlements.
+Configure your MCP client to use `http://localhost:3000/mcp` instead. In test mode all tools run without x402 payment and results are labeled `paymentMode: "test"` â€” these do not represent real payment settlements.
 
 ---
 
@@ -132,3 +132,13 @@ The official MCP Registry manifest is `server.json` at the repository root and u
 
 - Privacy policy: `GET https://qa.honeygate.app/privacy`
 - Terms of service: `GET https://qa.honeygate.app/terms`
+
+## Reading a report before deciding to ship
+
+A completed report is evidence from the recorded viewports, not a guarantee that the whole product works. Inspect `status`, `checksPerformed`, `limitations`, per-viewport errors and assertion results. A test-mode report is simulated payment evidence, not a sale. `INCONCLUSIVE` means required evidence is missing.
+
+The legacy `keyboardReachable` field describes potential focusability. `keyboardObservation: "focusability_heuristic"` explicitly means no Tab traversal or keyboard activation was tested; `"unavailable"` means that observation failed. A visible control alone does not establish keyboard access. Do a separate keyboard playthrough before relying on keyboard usability.
+
+### Illustrative first-use request (no payment executed)
+
+After discovering the tools, choose `check_page` for observations or `verify_page` for explicit requirements. For example, `check_page` accepts your own public page as `{ "url": "https://example.com" }`; the service always checks the fixed phone portrait (375x812), phone landscape (812x375), and desktop (1440x900) viewports. Inspect the discovered schema before constructing a call; discovery does not sign payments or run a job. The unpaid challenge describes the currently advertised payment requirements. Use a compatible payment client only after separately approving the payment. Poll the returned job's report and inspect the evidence above. This walkthrough is an illustration, not proof of a completed buyer integration or production payment.

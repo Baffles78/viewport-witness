@@ -202,7 +202,9 @@ export class WorkerRunner {
     if (!job) throw new Error(`Job ${item.jobId} not found`)
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
-    const limitations: string[] = []
+    const limitations: string[] = [
+      'Keyboard observations measure potential focusability only; Tab traversal and keyboard activation were not tested.',
+    ]
 
     for (const viewport of VIEWPORTS_ORDER) {
       if (signal.aborted) throw new Error('job_aborted')
