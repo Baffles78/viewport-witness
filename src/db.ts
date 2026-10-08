@@ -13,6 +13,7 @@ import type { PaymentMode } from './types.js'
 
 export class JobStore {
   private db: DatabaseSync | null = null
+  private growthWriteFailures = 0
 
   constructor(private readonly dbPath: string) {}
 
@@ -29,9 +30,13 @@ export class JobStore {
         mode TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(day,product,source,event,mode));
         CREATE TABLE IF NOT EXISTS growth_jobs (
         job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
-        source TEXT NOT NULL, mode TEXT NOT NULL);`)
+        source TEXT NOT NULL, mode TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS growth_job_events (
+        job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, event TEXT NOT NULL,
+        PRIMARY KEY(job_id,event));`)
     } catch {
       console.warn('Growth measurement unavailable; job service remains authoritative.')
+      this.growthWriteFailures++
     }
   }
 
@@ -143,8 +148,12 @@ export class JobStore {
       this.conn
         .prepare('INSERT OR IGNORE INTO growth_jobs(job_id,source,mode) VALUES(?,?,?)')
         .run(params.id, context?.source ?? 'unknown', context?.mode ?? 'unknown')
+      this.recordJobGrowth(params.id, 'job_created')
+      if (params.paymentId && (params.initialStatus ?? 'queued') !== 'payment_pending')
+        this.recordJobGrowth(params.id, 'accepted_paid_job')
     } catch {
       /* Measurement cannot block an accepted job. */
+      this.growthWriteFailures++
     }
     return this.getJob(params.id) as JobRecord
   }
@@ -175,6 +184,37 @@ export class JobStore {
         .run(day, product, source, event, mode)
     } catch {
       /* Measurement must never affect request delivery. */
+      this.growthWriteFailures++
+    }
+  }
+
+  // Observation only: a failed measurement must not change job or payment decisions.
+  // A per-job/event marker and daily increment commit together, even inside a caller transaction.
+  private recordJobGrowth(id: string, event: GrowthEvent): void {
+    let savepoint = false
+    try {
+      const row = this.conn.prepare(`SELECT j.kind,j.payment_id,g.source,g.mode FROM jobs j
+        JOIN growth_jobs g ON g.job_id=j.id WHERE j.id=?`).get(id) as
+        { kind: GrowthProduct; source: GrowthSource; mode: PaymentMode; payment_id: string | null } | undefined
+      if (!row || !GROWTH_PRODUCTS.includes(row.kind) || !GROWTH_SOURCES.includes(row.source)
+        || !['test', 'testnet', 'production'].includes(row.mode)) return
+      if (event === 'accepted_paid_job' && (row.mode === 'test' || !row.payment_id)) return
+      const now = Date.now()
+      this.pruneGrowthDaily(now)
+      this.conn.exec('SAVEPOINT growth_measurement')
+      savepoint = true
+      const inserted = this.conn.prepare('INSERT OR IGNORE INTO growth_job_events(job_id,event) VALUES(?,?)').run(id, event)
+      if (Number(inserted.changes) === 1) {
+        this.conn.prepare(`INSERT INTO growth_daily(day,product,source,event,mode,count) VALUES(?,?,?,?,?,1)
+          ON CONFLICT(day,product,source,event,mode) DO UPDATE SET count=MIN(count+1,2147483647)`)
+          .run(new Date(now).toISOString().slice(0, 10), row.kind, row.source, event, row.mode)
+      }
+      this.conn.exec('RELEASE growth_measurement')
+    } catch {
+      this.growthWriteFailures++
+      if (savepoint) {
+        try { this.conn.exec('ROLLBACK TO growth_measurement; RELEASE growth_measurement') } catch { /* Optional observer only. */ }
+      }
     }
   }
 
@@ -278,6 +318,7 @@ export class JobStore {
       0,
     )
     let documents: unknown[] = []
+    let dailyCountersAvailable = true
     try {
       documents = this.conn
         .prepare(
@@ -289,12 +330,18 @@ export class JobStore {
         )
     } catch {
       /* Old/missing analytics are explicitly unavailable. */
+      dailyCountersAvailable = false
     }
     return {
       schema: 'viewport-witness-growth/v1',
       observedAt: new Date(now).toISOString(),
       windowDays: 30,
       documents,
+      counterObservation: {
+        dailyReadAvailable: dailyCountersAvailable,
+        writeFailuresThisProcess: this.growthWriteFailures,
+        history: 'Write failures before this process are unknown; anonymous counters may be incomplete.',
+      },
       products: [...groups.values()],
       protocolUsage: {
         buyerTypeVerification: 'not_available',
@@ -341,9 +388,10 @@ export class JobStore {
         'Sources are caller-declared or protocol labels, not verified acquisition attribution.',
         'Document/challenge counts are requests, not unique visitors or a matched conversion funnel.',
         'HTTP stage counters count attempts/responses, not unique jobs. A payment header is unverified presence; payment acceptance reads downstream settled state and may include repeated accepted responses.',
-        'HTTP request-stage observation begins after JSON parsing. Malformed JSON and parser body-limit failures are not included; input_rejected_after_parser counts only later rejection responses.',
+        'Parser rejection counters observe normalized JSON-parser error categories without changing response status. input_rejected_after_parser counts later 400/422 rejection responses.',
         'Monitor/test-client source labels are self-declared, not authenticated controlled clients. HTTP stage counters do not cover MCP payments; job metrics and anonymous daily counters have different retention windows.',
         'Job metrics cover retained jobs only; default retention is seven days. Historical unknown mode is not proven production.',
+        'Anonymous lifecycle counters retain thirty recorded days after private job deletion and deduplicate each job/event. accepted_paid_job observes existing settled-state admission, not a bank or chain revenue reconciliation. Missing/unknown job attribution and measurement failures can leave counters incomplete.',
         'Exclude operator-known smoke/indexing job IDs before interpreting external demand.',
         'Worker time excludes queue time and may omit interrupted attempts. Cost is unknown without an operator rate; a supplied rate is an estimate, not measured expense.',
         'No customer labels, payment identifiers or target URLs are returned.',
@@ -420,6 +468,8 @@ export class JobStore {
 
     values.push(id)
     this.conn.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+    if (status === 'complete') this.recordJobGrowth(id, 'job_complete')
+    if (status === 'failed') this.recordJobGrowth(id, 'job_failed')
   }
 
   markJobRetryable(id: string): void {
@@ -435,6 +485,7 @@ export class JobStore {
     const result = this.conn
       .prepare("UPDATE jobs SET status = 'queued' WHERE id = ? AND status = 'payment_pending'")
       .run(id)
+    if (Number(result.changes) === 1) this.recordJobGrowth(id, 'accepted_paid_job')
     return Number(result.changes) === 1
   }
 
@@ -444,6 +495,7 @@ export class JobStore {
         "UPDATE jobs SET status = 'failed', completed_at = ?, error = ? WHERE id = ? AND status = 'payment_pending'",
       )
       .run(Date.now(), error.slice(0, 1000), id)
+    if (Number(result.changes) === 1) this.recordJobGrowth(id, 'payment_pending_failed')
     return Number(result.changes) === 1
   }
 

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { RequestHandler } from 'express'
+import type { RequestHandler, ErrorRequestHandler } from 'express'
 import type { JobStore } from './db.js'
 import type { PaymentMode } from './types.js'
 
@@ -29,6 +29,12 @@ export const GROWTH_EVENTS = [
   'payment_rejected_response',
   'service_unavailable_response',
   'payment_accepted_response',
+  'job_created',
+  'accepted_paid_job',
+  'job_complete',
+  'job_failed',
+  'payment_pending_failed',
+  'parser_rejected_response',
 ] as const
 export type GrowthSource = (typeof GROWTH_SOURCES)[number]
 export type GrowthProduct = (typeof GROWTH_PRODUCTS)[number]
@@ -60,8 +66,7 @@ const documentPaths = new Set([
 
 export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHandler {
   return (req, res, next) => {
-    // Registered after express.json(): parser failures never reach this observer.
-    // Input rejection below covers only requests that successfully reached this middleware.
+    // Registered before express.json(); its error observer marks only normalized parser categories.
     const source = growthSource(req.headers['x-viewportwitness-source'])
     // Labels (including monitor/test-client) are caller-declared, never verified attribution.
     // Only allowlisted categories survive. Raw headers, bodies, URLs and IPs are never retained.
@@ -85,6 +90,8 @@ export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHan
           store.recordGrowth(product, source, 'unpaid_challenge', mode)
         if (product && [400, 422].includes(res.statusCode))
           store.recordGrowth(product, source, 'input_rejected_after_parser', mode)
+        if (product && res.locals['growthParserRejected'] === true)
+          store.recordGrowth(product, source, 'parser_rejected_response', mode)
         if (product && hasPaymentHeader && res.statusCode === 402)
           store.recordGrowth(product, source, 'payment_rejected_response', mode)
         if (product && res.statusCode === 503)
@@ -99,5 +106,16 @@ export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHan
       { source: source === 'unknown' && req.path === '/mcp' ? 'mcp' : source, mode },
       next,
     )
+  }
+}
+
+export function growthErrorObserver(): ErrorRequestHandler {
+  return (error: unknown, _req, res, next) => {
+    // Do not retain error messages, stacks, rejected bodies or headers.
+    if (error && typeof error === 'object' && 'type' in error
+      && ['entity.parse.failed', 'entity.too.large', 'request.aborted', 'request.size.invalid'].includes(String(error.type))) {
+      res.locals['growthParserRejected'] = true
+    }
+    next(error)
   }
 }
