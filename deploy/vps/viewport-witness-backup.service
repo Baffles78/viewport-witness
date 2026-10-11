@@ -1,0 +1,18 @@
+[Unit]
+Description=ViewportWitness encrypted database recovery backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/viewport-witness-operations/operations/backup_sqlite.py
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/viewport-witness-backups /opt/apex-errors
+ReadOnlyPaths=/var/lib/docker/volumes/viewport-witness_vw-data/_data /root/.apex-recovery-keys /root/.config/rclone
+MemoryMax=384M
+CPUQuota=50%
+TimeoutStartSec=300
