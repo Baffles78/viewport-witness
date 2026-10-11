@@ -1,4 +1,5 @@
-import importlib.util, pathlib, tempfile, sqlite3, os, shutil, unittest
+import importlib.util, pathlib, tempfile, sqlite3, os, shutil, unittest, runpy
+from unittest.mock import patch
 s=importlib.util.spec_from_file_location('backup',pathlib.Path(__file__).with_name('backup_sqlite.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 class BackupTests(unittest.TestCase):
  def setUp(self):
@@ -27,4 +28,12 @@ class BackupTests(unittest.TestCase):
   self.live.close();self.db.write_bytes(b'not sqlite');self.live=sqlite3.connect(':memory:')
   with self.assertRaises(sqlite3.DatabaseError):self.run_backup()
   self.assertEqual(self.calls,0)
+ def test_timeout_hook_reports_fixed_failure_without_live_delivery(self):
+  with patch.dict(os.environ, {'SERVICE_RESULT':'timeout'}), patch('subprocess.run') as call:
+   runpy.run_path(str(pathlib.Path(__file__).with_name('report_backup_failure.py')))
+   self.assertEqual(call.call_count,1);self.assertEqual(call.call_args.args[0][1],'viewport-witness-backup')
+ def test_success_hook_is_silent(self):
+  with patch.dict(os.environ, {'SERVICE_RESULT':'success'}), patch('subprocess.run') as call:
+   runpy.run_path(str(pathlib.Path(__file__).with_name('report_backup_failure.py')))
+   call.assert_not_called()
 if __name__=='__main__':unittest.main()

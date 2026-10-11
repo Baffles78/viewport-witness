@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Online SQLite recovery, encrypted offsite and verified before publishing success."""
 import datetime, hashlib, json, os, pathlib, sqlite3, subprocess, tempfile
+from contextlib import closing
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 DATABASE = pathlib.Path('/var/lib/docker/volumes/viewport-witness_vw-data/_data/vw.db')
 WORK_ROOT = pathlib.Path('/var/lib/viewport-witness-backups')
@@ -15,7 +16,7 @@ def digest(p):
     return h.hexdigest()
 
 def inspect(p):
-    with sqlite3.connect(p.as_uri() + '?mode=ro', uri=True) as c:
+    with closing(sqlite3.connect(p.as_uri() + '?mode=ro', uri=True)) as c:
         if c.execute('PRAGMA integrity_check').fetchone()[0] != 'ok': raise ValueError('DATABASE_INTEGRITY')
         tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         return {t: c.execute('SELECT COUNT(*) FROM "' + t.replace('"', '""') + '"').fetchone()[0] for t in tables}
@@ -30,7 +31,8 @@ def backup(database=DATABASE, work_root=WORK_ROOT, key_path=KEY, destination=DES
     os.umask(0o077)
     for p in [database, key_path]:
         if p.is_symlink() or not p.is_file(): raise ValueError('INPUT_NOT_REGULAR')
-    if key_path.stat().st_mode & 0o077: raise ValueError('RECOVERY_KEY_PERMISSIONS')
+    if key_path.stat().st_mode & 0o077 or key_path.stat().st_uid != os.geteuid(): raise ValueError('RECOVERY_KEY_PERMISSIONS')
+    if key_path.resolve() != key_path or work_root.resolve() != work_root: raise ValueError('PATH_SYMLINK')
     key = key_path.read_bytes()
     if len(key) != 32: raise ValueError('RECOVERY_KEY_LENGTH')
     if work_root.is_symlink(): raise ValueError('WORK_ROOT_SYMLINK')
@@ -39,8 +41,8 @@ def backup(database=DATABASE, work_root=WORK_ROOT, key_path=KEY, destination=DES
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     with tempfile.TemporaryDirectory(prefix='run-', dir=work_root) as td:
         d = pathlib.Path(td); saved = d / 'vw.db'
-        with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=15) as src:
-            with sqlite3.connect(saved) as dst: src.backup(dst, pages=128, sleep=0.05)
+        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=15)) as src:
+            with closing(sqlite3.connect(saved)) as dst: src.backup(dst, pages=128, sleep=0.05)
         if saved.stat().st_size > LIMIT: raise ValueError('DATABASE_SIZE_LIMIT')
         counts = inspect(saved)
         nonce = os.urandom(12); enc = d / 'vw.db.apexenc'
@@ -72,6 +74,9 @@ def backup(database=DATABASE, work_root=WORK_ROOT, key_path=KEY, destination=DES
         tmp = work_root / ('receipt-' + stamp + '.tmp')
         with tmp.open('x') as out: json.dump(receipt, out, indent=2); out.write('\n'); out.flush(); os.fsync(out.fileno())
         os.replace(tmp, work_root / 'latest-success.json')
+        fd = os.open(work_root, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
         return receipt
 
 if __name__ == '__main__':
@@ -79,9 +84,4 @@ if __name__ == '__main__':
     except Exception as e:
         # Never print arbitrary exception text, SQL, key bytes or provider output.
         print(json.dumps({'ok': False, 'error': type(e).__name__, 'latest_success_preserved': True}))
-        try:
-            subprocess.run(['/usr/local/bin/apex-error', 'viewport-witness-backup', 'error',
-                            'Encrypted database recovery backup failed; inspect the backup service journal.',
-                            'source=viewport-witness-backup'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-        except (subprocess.SubprocessError, OSError): pass
         raise SystemExit(1)

@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /opt/viewport-witness-operations/operations/backup_sqlite.py
+ExecStopPost=/usr/bin/python3 /opt/viewport-witness-operations/operations/report_backup_failure.py
 User=root
 UMask=0077
 NoNewPrivileges=true
