@@ -4,7 +4,7 @@ Status: prepared and locally tested; not deployed or accepted as a paid producti
 
 ## What was broken
 
-Real Python urllib POST requests from Windows and the VPS receive Cloudflare 403/error 1010 before payment. Public GET documentation works. Browser-style POST receives the expected 402. The same unsigned request reaches the origin and receives 402. This is an edge access barrier, not a missing wallet balance. Cloudflare configuration access is pending. The HTTP endpoint also redirects with 301; a prepared 308 configuration preserves POST methods, but it has not been applied.
+Real Python urllib POST requests from Windows and the VPS receive Cloudflare 403/error 1010 before payment. Public GET documentation works. Browser-style POST receives the expected 402. The same unsigned request reaches the origin and receives 402. This is an edge access barrier, not a missing wallet balance. The scoped Cloudflare exception has since been approved, deployed and verified; see the production access repair below. The HTTP endpoint also redirects with 301; a prepared 308 configuration preserves POST methods, and it has since been applied and verified.
 
 The release client prematurely stopped polling because queued/running responses omit the target URL. The regression test failed before the fix and passes afterward; terminal results still require the expected target.
 
@@ -29,11 +29,15 @@ Recommendation: retain the focused deployment-verification offer for a bounded d
 
 ## Open acceptance gates
 
-1. Inspect and repair the narrowly scoped Cloudflare rule; repeat real Python requests from Windows and VPS.
+1. Completed: scoped Cloudflare repair and real Python checks from Windows and VPS.
 2. Validate deployed exact source, static evidence, unchanged payment policy and method-preserving redirect.
 3. Reconcile controlled usage and obtain actual cost inputs.
 4. Obtain an authorized customer-owned funded-wallet workflow receipt before claiming paid production acceptance.
 
 ## Task record
 
-User intervention: scope approval; credential location requested, answer pending. Elapsed user time is unknown. Correction: a Node request with an imitated Python user agent was insufficient; actual urllib reproduced the failure. No subscription-limit interruption observed. No other agent used. No spending, prospect messages, credential revocation or retired automation restoration.
+User intervention: scope approval; browser sign-in and scoped security approval supplied. Elapsed user time is unknown. Correction: a Node request with an imitated Python user agent was insufficient; actual urllib reproduced the failure. No subscription-limit interruption observed. No other agent used. No spending, prospect messages, credential revocation or retired automation restoration.
+
+## Production access repair
+
+Owner approved and deployed the scoped Cloudflare API exception on 14 October. Actual urllib probes pass 40/40 across Windows and VPS, including unpaid HTTPS 402 challenges and HTTP 308 redirects. Preserved origin configuration: `/opt/viewport-witness-recovery/20261014-api-access/qa.honeygate.app.before.conf`. Roll back by disabling only rule `6c6809c5b1a44e1ea9995fd91e612205` and restoring that configuration with nginx validation and graceful reload. No payments were made. This supersedes the pending-access notes above; client improvements remain undeployed.
