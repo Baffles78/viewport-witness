@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Website Testing MCP for AI Agents | ViewportWitness</title>
+    <title>Check a deployed website before sign-off | ViewportWitness</title>
     <meta
       name="description"
-      content="Agent-native website testing through MCP and x402: browser QA, screenshots, accessibility, visual regression, HTML-to-Markdown extraction, assertions, and passive release security."
+      content="Check a deployed public website before sign-off: screenshots, accessibility and layout evidence across three screen sizes, without setting up a browser. MCP and x402 access."
     />
     <link rel="canonical" href="https://qa.honeygate.app/agents" />
     <script type="application/ld+json">
@@ -17,7 +17,7 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Web",
         "url": "https://qa.honeygate.app/agents",
-        "description": "Agent-native website testing with browser QA, screenshots, accessibility findings, visual regression, Markdown extraction, assertions, and passive release security.",
+        "description": "Check a deployed public website before sign-off: three-screen-size screenshots, accessibility and layout evidence without setting up a browser.",
         "featureList": [
           "Three-viewport browser QA",
           "Website assertion testing",
@@ -30,12 +30,44 @@
   </head>
   <body>
     <main>
-      <h1>ViewportWitness: website testing tools for AI agents</h1>
+      <h1>Check a deployed website before sign-off</h1>
+      <p>
+        Get screenshots, accessibility findings, and layout evidence across three screen sizes,
+        without setting up a browser. For coding agents and release checks on public HTTPS pages.
+      </p>
+      <p>
+        <a href="/samples/example/">See a complete sample report and three screenshots</a> — a
+        static local-test demonstration, free to view.
+      </p>
+      <p>
+        Standard browser QA costs $0.08 USDC per page. Assertions cost $0.10 and include browser QA;
+        a comparison costs $0.12 and needs an unexpired baseline. Reports are retained for seven
+        days.
+      </p>
       <p>
         Connect an MCP client to <code>https://qa.honeygate.app/mcp</code>, or use the x402 HTTP
         endpoints directly. Paid calls settle in USDC. Report retrieval is free.
       </p>
 
+      <h2>Start with a deployment check</h2>
+      <ol>
+        <li>Review the free sample to understand the evidence and its limits.</li>
+        <li>
+          Use the
+          <a href="https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md"
+            >release-check quickstart</a
+          >
+          to preview your page list and maximum budget without loading a wallet.
+        </li>
+        <li>
+          Authorize a run using your existing wallet connector, then inspect its saved report.
+          Connecting MCP alone does not enable payments.
+        </li>
+      </ol>
+      <p>
+        Public HTTPS pages only: authenticated sites and private staging networks are outside this
+        offer. A report supplies evidence for your decision; it does not authorize deployment.
+      </p>
       <h2>Choose a tool by intent</h2>
       <dl>
         <dt><code>check_page</code> — browser QA and screenshots</dt>
@@ -47,7 +79,7 @@
         <dt><code>verify_page</code> — website assertions</dt>
         <dd>
           Use when an agent has explicit pass/fail assertions such as visible text, a title, a
-          selector, horizontal overflow, or console errors.
+          selector, horizontal overflow, or console errors. Includes the full browser QA pass.
         </dd>
 
         <dt><code>compare_page</code> — visual regression testing</dt>

@@ -1,5 +1,8 @@
 # MCP Installation and Discovery Guide
 
+For your first deployed-page check, start with the [quickstart](QUICKSTART.md): see a sample,
+preview a budget without a wallet, then authorize execution through your existing connector.
+
 ViewportWitness exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) endpoint at the following address:
 
 ```

@@ -3,6 +3,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import express from 'express'
 import http from 'http'
+import { PNG } from 'pngjs'
 import { createInfoRouter } from '../src/api/routes/info.js'
 import type { Config } from '../src/config.js'
 import type { JobStore } from '../src/db.js'
@@ -73,6 +74,35 @@ afterEach(async () => {
         }),
     ),
   )
+})
+
+describe('durable public demonstration', () => {
+  it('serves real test-mode evidence without a retained job or payment', async () => {
+    const { port } = await startServer(makeConfig())
+    const base = `http://127.0.0.1:${port}/samples/example/`
+    const page = await fetch(base)
+    expect(page.status).toBe(200)
+    expect(await page.text()).toContain('SAVED DEMONSTRATION')
+    const report = await (await fetch(`${base}report.json`)).json()
+    expect(report.url).toBe('https://example.com')
+    expect(report.paymentMode).toBe('test')
+    const provenance = await (await fetch(`${base}provenance.json`)).json()
+    expect(provenance.paymentSettled).toBe(false)
+    for (const viewport of ['phonePortrait', 'phoneLandscape', 'desktop']) {
+      const response = await fetch(`${base}${viewport}.png`)
+      expect(response.status).toBe(200)
+      const image = PNG.sync.read(Buffer.from(await response.arrayBuffer()))
+      expect(image.width).toBe(report.viewports[viewport].screenshotDimensions.w)
+      expect(image.height).toBe(report.viewports[viewport].screenshotDimensions.h)
+    }
+  })
+
+  it('does not expose arbitrary files or the test database', async () => {
+    const { port } = await startServer(makeConfig())
+    for (const file of ['test.db', '.env', 'other-job.json']) {
+      expect((await fetch(`http://127.0.0.1:${port}/samples/example/${file}`)).status).toBe(404)
+    }
+  })
 })
 
 describe('GET /', () => {

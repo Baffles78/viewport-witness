@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sample deployment report | ViewportWitness</title>
+  </head>
+  <body>
+    <main>
+      <a href="/agents">ViewportWitness</a>
+      <p class="label">SAVED DEMONSTRATION · NO PAYMENT</p>
+      <h1>See what a deployment check returns</h1>
+      <p>
+        Actual browser evidence from <a href="https://example.com">Example Domain</a>, generated
+        locally in test mode on 2026-10-14T04:35:11.853Z.
+      </p>
+      <p class="notice">
+        This is a static example, not a fresh production check or customer result. No wallet or
+        payment was used. The original test job has an expiry date; these demonstration files remain
+        available independently.
+      </p>
+      <section class="summary">
+        <h2>Observed result: PASS</h2>
+        <p>
+          3 actionable problem types were found. Start with the high-severity fixes and rerun the
+          same check.
+        </p>
+        <p>
+          PASS means the required blocking checks passed; it does not mean there are no findings.
+          This report records 0 blocking issues and 9 warnings. Review the evidence before sign-off.
+        </p>
+        <dl>
+          <dt>Accessibility violations across viewports</dt>
+          <dd>9 observations; the same rule can appear in multiple views.</dd>
+          <dt>Browser errors</dt>
+          <dd>0</dd>
+          <dt>Evidence limits</dt>
+          <dd>
+            One public page at one point in time. Automated checks do not replace manual review or
+            authorize deployment.
+          </dd>
+        </dl>
+        <h3>accessibility:landmark-one-main</h3>
+        <p>Ensure the document has a main landmark</p>
+        <p>
+          <strong>Suggested action:</strong> Follow the linked landmark-one-main guidance and
+          correct each affected element, starting with the locator hints below.
+        </p>
+        <h3>accessibility:page-has-heading-one</h3>
+        <p>Ensure that the page, or at least one of its frames contains a level-one heading</p>
+        <p>
+          <strong>Suggested action:</strong> Follow the linked page-has-heading-one guidance and
+          correct each affected element, starting with the locator hints below.
+        </p>
+        <h3>accessibility:region</h3>
+        <p>Ensure all page content is contained by landmarks</p>
+        <p>
+          <strong>Suggested action:</strong> Follow the linked region guidance and correct each
+          affected element, starting with the locator hints below.
+        </p>
+        <p>
+          <a href="report.json">Download the complete JSON report</a> ·
+          <a href="provenance.json">Generation details</a>
+        </p>
+      </section>
+      <h2>Three real screenshots</h2>
+      <div class="grid">
+        <figure>
+          <figcaption>
+            <strong>phonePortrait</strong><br />375 × 812 viewport · success load
+          </figcaption>
+          <a href="phonePortrait.png">Open the phonePortrait screenshot</a>
+        </figure>
+        <figure>
+          <figcaption>
+            <strong>phoneLandscape</strong><br />812 × 375 viewport · success load
+          </figcaption>
+          <a href="phoneLandscape.png">Open the phoneLandscape screenshot</a>
+        </figure>
+        <figure>
+          <figcaption><strong>desktop</strong><br />1440 × 900 viewport · success load</figcaption>
+          <a href="desktop.png">Open the desktop screenshot</a>
+        </figure>
+      </div>
+      <footer>
+        <p>
+          Check your own deployed public HTTPS page from $0.08 USDC.
+          <a href="https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md"
+            >Start with a no-payment budget preview</a
+          >.
+        </p>
+        <p>
+          Regular API reports expire after seven days. This saved sample is not a live report ID.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "sample": true,
+  "generatedAt": "2026-10-14T04:35:15.411Z",
+  "target": "https://example.com",
+  "paymentMode": "test",
+  "paymentSettled": false,
+  "method": "Local isolated ViewportWitness API and browser worker; public Example Domain.",
+  "exportChanges": "Viewport screenshotUrl fields point to durable sample copies; test job timestamps and measured evidence are preserved.",
+  "retention": "Static demonstration; original test job expiry does not remove these copies.",
+  "limitation": "One page at one point in time; not customer evidence or a live health guarantee."
+}
