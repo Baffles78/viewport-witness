@@ -6,6 +6,11 @@ Base URL: https://qa.honeygate.app
 
 ## What this service does
 
+Check a deployed public website before sign-off without installing browser dependencies.
+Free static evidence: https://qa.honeygate.app/samples/example/ . This is a local-test
+demonstration, not a current production check.
+Setup and no-payment budget preview: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+
 Submit a public HTTPS URL; receive a structured browser QA report and screenshots across three
 viewports: phone portrait (375×812), phone landscape (812×375), and desktop (1440×900).
 
@@ -51,7 +56,7 @@ new/resolved accessibility issue IDs, and the browser-error count change.
 ## MCP
 
 Connect an MCP Streamable HTTP client to `https://qa.honeygate.app/mcp`. Tools are
-`check_page`, `verify_page`, `compare_page`, and the free `get_report`. Paid tools use the
+`check_page`, `verify_page`, `compare_page`, `extract_page`, `web_release_gate`, and the free `get_report`. Paid tools use the
 standard x402 MCP payment exchange in `_meta`; payment settles before browser work is activated.
 
 Response (202 Accepted):
@@ -111,8 +116,9 @@ GET https://qa.honeygate.app/v1/checks/<id>/screenshots/desktop
 
 Returns `image/png`. Available once the check is `complete`.
 
-Three representative screenshots from a report on https://example.com are available by
-completing a check and fetching the URLs above — no pre-generated static examples exist.
+A durable demonstration report and all three screenshots are available free at
+https://qa.honeygate.app/samples/example/ . They were generated locally in test mode,
+without payment or customer data. They are static evidence, not a fresh check of the target.
 
 ## Limits
 

@@ -19,6 +19,7 @@ const privacyPath = join(__dirname, '../../../docs/PRIVACY.md')
 const termsPath = join(__dirname, '../../../docs/TERMS.md')
 const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
 const agentsPath = join(__dirname, '../../../agents.html')
+const samplesPath = join(__dirname, '../../../samples/example')
 
 // mcpub.dev probes this location before accepting a remote MCP listing.
 // Keep this payload aligned with the validated official MCP Registry manifest in server.json.
@@ -86,11 +87,12 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       service: 'ViewportWitness by Apex Labs',
       version: '0.2.1',
       description:
-        'Agent-native website testing: browser QA, screenshots, accessibility, visual comparison, Markdown extraction, and passive release security',
+        'Check a deployed public website before sign-off: three-viewport screenshots, accessibility and layout evidence without setting up a browser. Also offers assertions, visual comparison, HTML extraction and passive release security.',
       docs: '/openapi.json',
       agentDocs: '/llms.txt',
       skillDocs: '/skill.md',
       agentLanding: '/agents',
+      sampleReport: '/samples/example/',
       health: '/health',
       ready: '/ready',
       paymentDiscovery: '/.well-known/x402',
@@ -156,6 +158,22 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
     res.sendFile(agentsPath)
   })
 
+  // Fixed public demonstration files; never serve a data directory or job ID here.
+  router.get('/samples/example/', (_req: Request, res: Response) => {
+    res.sendFile(join(samplesPath, 'index.html'))
+  })
+  for (const file of [
+    'report.json',
+    'provenance.json',
+    'phonePortrait.png',
+    'phoneLandscape.png',
+    'desktop.png',
+  ]) {
+    router.get(`/samples/example/${file}`, (_req: Request, res: Response) => {
+      res.sendFile(join(samplesPath, file))
+    })
+  }
+
   router.get('/robots.txt', (_req: Request, res: Response) => {
     res
       .type('text/plain')
@@ -163,7 +181,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
   })
 
   router.get('/sitemap.xml', (_req: Request, res: Response) => {
-    const paths = ['/agents', '/llms.txt', '/skill.md', '/openapi.json']
+    const paths = ['/agents', '/samples/example/', '/llms.txt', '/skill.md', '/openapi.json']
     const urls = paths.map((path) => `  <url><loc>${PUBLIC_BASE_URL}${path}</loc></url>`).join('\n')
     res
       .type('application/xml')

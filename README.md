@@ -1,5 +1,12 @@
 # ViewportWitness by Apex Labs
 
+**Check a deployed website before sign-off.** Get screenshots, accessibility and layout
+evidence across three screen sizes without setting up a browser. Public HTTPS pages only.
+
+[Free sample report](https://qa.honeygate.app/samples/example/) · [Start with a no-payment budget preview](docs/QUICKSTART.md)
+
+The sample is a static local-test demonstration. Its public URL becomes available when this change is deployed.
+
 Two low-resource paid agent tools complement browser QA: `extract_page` converts one public HTML page to deterministic Markdown for $0.005 USDC, and `web_release_gate` passively checks one public page's release security controls for $0.05 USDC. Both share the Base/Solana x402 rails, idempotency protection, single-worker queue, and seven-day report lifecycle. They do not accept caller-supplied HTML, credentials, cookies, custom headers, uploads, or private-network targets.
 
 Remote MCP server and x402 API for AI-agent browser QA. Submit a public HTTPS URL and receive
@@ -56,7 +63,7 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/checks', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://example.com' }),
-}).then(r => r.json())
+}).then((r) => r.json())
 // Poll GET pollUrl until { status: 'complete' }
 ```
 
@@ -76,7 +83,7 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/verify', {
       { type: 'titleIncludes', value: 'Example Domain' },
     ],
   }),
-}).then(r => r.json())
+}).then((r) => r.json())
 ```
 
 ### POST /v1/compare — 0.12 USDC
@@ -94,7 +101,7 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/compare', {
     url: 'https://example.com',
     baselineJobId: 'JOB_ID_FROM_PREVIOUS_CHECKS',
   }),
-}).then(r => r.json())
+}).then((r) => r.json())
 ```
 
 > **Safety**: Only public HTTPS URLs are accepted. Loopback, private, link-local, and metadata
@@ -132,25 +139,25 @@ Local defaults to `PAYMENT_MODE=test`. No CDP keys needed for test mode. Results
 
 ## API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Service info |
-| GET | `/health` | Liveness probe |
-| GET | `/ready` | Readiness probe (DB + worker) |
-| GET | `/openapi.json` | OpenAPI 3.1 spec |
-| GET | `/llms.txt` | Agent usage guide |
-| GET | `/skill.md` | Concise agent skill manifest |
-| GET | `/privacy` | Privacy policy |
-| GET | `/terms` | Terms of service |
-| GET | `/logo.png` | Directory and integration logo |
-| GET | `/.well-known/x402` | Payment discovery |
-| POST | `/v1/checks` | Create a QA check job |
-| POST | `/v1/verify` | Check explicit read-only assertions |
-| POST | `/v1/compare` | Compare against an unexpired baseline job |
-| POST | `/mcp` | Remote MCP interface with x402-paid tools |
-| GET | `/v1/checks/:id` | Poll job status / get report |
-| GET | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG |
-| GET | `/v1/checks/:id/diffs/:viewport` | Download comparison diff PNG |
+| Method | Path                                   | Description                               |
+| ------ | -------------------------------------- | ----------------------------------------- |
+| GET    | `/`                                    | Service info                              |
+| GET    | `/health`                              | Liveness probe                            |
+| GET    | `/ready`                               | Readiness probe (DB + worker)             |
+| GET    | `/openapi.json`                        | OpenAPI 3.1 spec                          |
+| GET    | `/llms.txt`                            | Agent usage guide                         |
+| GET    | `/skill.md`                            | Concise agent skill manifest              |
+| GET    | `/privacy`                             | Privacy policy                            |
+| GET    | `/terms`                               | Terms of service                          |
+| GET    | `/logo.png`                            | Directory and integration logo            |
+| GET    | `/.well-known/x402`                    | Payment discovery                         |
+| POST   | `/v1/checks`                           | Create a QA check job                     |
+| POST   | `/v1/verify`                           | Check explicit read-only assertions       |
+| POST   | `/v1/compare`                          | Compare against an unexpired baseline job |
+| POST   | `/mcp`                                 | Remote MCP interface with x402-paid tools |
+| GET    | `/v1/checks/:id`                       | Poll job status / get report              |
+| GET    | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG                   |
+| GET    | `/v1/checks/:id/diffs/:viewport`       | Download comparison diff PNG              |
 
 Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1440×900)
 
@@ -158,10 +165,10 @@ Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1
 
 ## Payment modes
 
-| Mode | Payment required | Network |
-|------|-----------------|---------|
-| `test` | No | — (local dev only) |
-| `testnet` | Yes (x402) | Base Sepolia; optional Solana Devnet |
+| Mode         | Payment required       | Network                               |
+| ------------ | ---------------------- | ------------------------------------- |
+| `test`       | No                     | — (local dev only)                    |
+| `testnet`    | Yes (x402)             | Base Sepolia; optional Solana Devnet  |
 | `production` | Yes (x402, $0.08 USDC) | Base mainnet; optional Solana mainnet |
 
 Production mode requires `ENABLE_MAINNET_PAYMENTS=true` and a reviewed release.
