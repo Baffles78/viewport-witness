@@ -76,6 +76,34 @@ afterEach(async () => {
   )
 })
 
+describe('synthetic buyer workflow evidence', () => {
+  it('serves failure and fix evidence while refusing non-public artifacts', async () => {
+    const { port } = await startServer(makeConfig())
+    const base = `http://127.0.0.1:${port}/samples/release-demo/`
+    expect((await fetch(base)).status).toBe(200)
+    const proof = await (await fetch(`${base}proof.json`)).json()
+    expect(proof.simulation).toBe(true)
+    expect(proof.onChainPayments).toBe(0)
+    expect(proof.productionCalls).toBe(0)
+    expect(proof.receipts.map((receipt: { decision: string }) => receipt.decision)).toEqual([
+      'FAIL',
+      'PASS',
+    ])
+    for (const version of ['broken', 'fixed']) {
+      expect((await fetch(`${base}${version}/report.json`)).status).toBe(200)
+      for (const viewport of ['phonePortrait', 'phoneLandscape', 'desktop']) {
+        const response = await fetch(`${base}${version}/${viewport}.png`)
+        expect(response.status).toBe(200)
+        const png = PNG.sync.read(Buffer.from(await response.arrayBuffer()))
+        expect(png.width).toBeGreaterThan(300)
+      }
+    }
+    for (const file of ['checkpoint.json', 'broken/checkpoint.json', 'fixed/vw.db', 'index.ts']) {
+      expect((await fetch(`${base}${file}`)).status).toBe(404)
+    }
+  })
+})
+
 describe('durable public demonstration', () => {
   it('serves real test-mode evidence without a retained job or payment', async () => {
     const { port } = await startServer(makeConfig())

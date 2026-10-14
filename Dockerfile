@@ -37,6 +37,7 @@ COPY --chown=pwuser:pwuser llms.txt ./
 COPY --chown=pwuser:pwuser skill.md ./
 COPY --chown=pwuser:pwuser agents.html ./
 COPY --chown=pwuser:pwuser samples/example/ ./samples/example/
+COPY --chown=pwuser:pwuser samples/release-demo/ ./samples/release-demo/
 COPY --chown=pwuser:pwuser docs/PRIVACY.md docs/TERMS.md ./docs/
 COPY --chown=pwuser:pwuser assets/viewport-witness.png ./assets/
 
