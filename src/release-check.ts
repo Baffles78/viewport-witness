@@ -69,6 +69,10 @@ export function usdcAtomic(value: string): bigint {
   const [whole, fraction = ''] = value.split('.')
   return BigInt(whole!) * 1000000n + BigInt(fraction.padEnd(6, '0'))
 }
+function displayUsdc(value: bigint): string {
+  const fraction = (value % 1000000n).toString().padStart(6, '0').replace(/0+$/, '')
+  return `${value / 1000000n}${fraction ? '.' + fraction : ''}`
+}
 const allowedAssets: Record<string, string> = {
   'eip155:8453': '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   'eip155:84532': '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
@@ -202,8 +206,16 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
   if (budget <= 0n) throw new Error('Budget must be positive')
   const validate = options.validateTarget ?? validatePublicHttpsUrl
   for (const page of manifest.pages) {
-    if (typeof page !== 'string' || page.length > 2048 || !(await validate(page)).valid)
+    if (typeof page !== 'string' || page.length > 2048)
       throw new Error('Every target must be a public HTTPS URL')
+    const validation = await validate(page)
+    if (!validation.valid) {
+      if (validation.reason?.startsWith('dns_error:'))
+        throw new Error(
+          'Target DNS lookup failed. Check the client machine resolver; no payment was attempted.',
+        )
+      throw new Error('Every target must be a public HTTPS URL')
+    }
   }
   const service = new URL(options.serviceUrl ?? 'https://qa.honeygate.app')
   if (
@@ -306,7 +318,17 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       preflights.push({ response: body })
       continue
     }
-    if (response.status !== 402) throw new Error('Preflight refused; no payment adapter invoked')
+    if (response.status !== 402) {
+      if (response.status === 403)
+        throw new Error(
+          'Service gateway refused this client (HTTP 403). Check API edge compatibility; no payment adapter invoked.',
+        )
+      if (response.status === 429)
+        throw new Error(
+          'Service rate limit reached (HTTP 429). Retry the unpaid preview later; no payment adapter invoked.',
+        )
+      throw new Error(`Preflight refused (HTTP ${response.status}); no payment adapter invoked`)
+    }
     if (page.state === 'payment-attempted')
       throw new Error(
         'Prior payment attempt is uncertain; reconcile using the same run ID before any further payment',
@@ -335,7 +357,12 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       reservedAtomic: reserved.toString(),
       pages: manifest.pages.map(safeDisplayUrl),
       markdown:
-        '# Release check preview\nNo payment adapter invoked. No release verdict is available.\n',
+        [
+          '# Release check preview',
+          `Pages: ${manifest.pages.length}. Additional quoted price: ${displayUsdc(planned)} USDC. Maximum approved budget: ${displayUsdc(budget)} USDC.`,
+          `Previously reserved: ${displayUsdc(reserved)} USDC (not an actual-settlement receipt).`,
+          'No payment adapter invoked. No release verdict is available.',
+        ].join('\n') + '\n',
     }
   const reports: Array<{
     index: number
@@ -343,6 +370,8 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
     decision: Decision
     reportUrl?: string
     reasons: string[]
+    warnings?: number
+    findings?: Array<{ diagnosis: string; fix: string }>
     terminal: boolean
   }> = []
   for (const [index, url] of manifest.pages.entries()) {
@@ -388,6 +417,8 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
         'No terminal report within the bounded polling window; retain job ID and resume without repaying.',
       ]
     let terminal = false
+    let warnings: number | undefined
+    let findings: Array<{ diagnosis: string; fix: string }> | undefined
     for (let poll = 0; poll < attempts; poll++) {
       let body: Record<string, unknown>
       try {
@@ -397,8 +428,9 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       } catch {
         break
       }
-      if (body.id !== page.jobId || typeof body.url !== 'string' || body.url !== url) break
+      if (body.id !== page.jobId || (body.url !== undefined && body.url !== url)) break
       if (['PASS', 'FAIL', 'INCONCLUSIVE'].includes(String(body.status)) && body.kind === 'check') {
+        if (typeof body.url !== 'string' || body.url !== url) break
         terminal = true
         decision = body.status as Decision
         const verdict = body.verdict as { decision?: unknown; reasons?: unknown[] } | undefined
@@ -424,6 +456,24 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
           .slice(0, 5)
           .map(safeText)
           .filter(Boolean)
+        const warningCount = (body.verdict as { warnings?: unknown })?.warnings
+        if (
+          typeof warningCount === 'number' &&
+          Number.isInteger(warningCount) &&
+          warningCount >= 0 &&
+          warningCount <= 100000
+        )
+          warnings = warningCount
+        const diagnosis = body.diagnosis as
+          { findings?: Array<{ diagnosis?: unknown; fix?: unknown }> } | undefined
+        if (Array.isArray(diagnosis?.findings))
+          findings = diagnosis.findings
+            .slice(0, 5)
+            .map((finding) => ({
+              diagnosis: safeText(finding?.diagnosis),
+              fix: safeText(finding?.fix),
+            }))
+            .filter((finding) => finding.diagnosis || finding.fix)
         break
       }
       if (['failed', 'retryable'].includes(String(body.status))) {
@@ -438,7 +488,16 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
     page.decision = decision
     page.terminal = terminal
     await options.checkpoint!.save(state)
-    reports.push({ index, url: safeDisplayUrl(url), decision, reportUrl, reasons, terminal })
+    reports.push({
+      index,
+      url: safeDisplayUrl(url),
+      decision,
+      reportUrl,
+      reasons,
+      terminal,
+      ...(warnings !== undefined ? { warnings } : {}),
+      ...(findings ? { findings } : {}),
+    })
   }
   const decision: Decision = reports.some((r) => r.decision === 'FAIL')
     ? 'FAIL'
@@ -457,6 +516,13 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
         (v) => `[${v} screenshot](${r.reportUrl}/screenshots/${v})`,
       ),
       ...r.reasons.map((x) => '- ' + x),
+      ...(r.warnings !== undefined
+        ? [`Warnings: ${r.warnings}. PASS can still contain non-blocking findings.`]
+        : []),
+      ...(r.findings ?? []).flatMap((finding) => [
+        `Finding: ${finding.diagnosis}`,
+        `Suggested fix: ${finding.fix}`,
+      ]),
     ]),
     '\nReview targets and report contents before sharing. Reports expire under the service retention policy.',
   ].join('\n')

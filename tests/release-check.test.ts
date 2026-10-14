@@ -180,6 +180,31 @@ describe('runReleaseCheck — validation', () => {
   })
 })
 
+describe('real asynchronous report lifecycle', () => {
+  it('keeps polling queued/running responses without a target URL, then validates the terminal target', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }))
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'running' }))
+      .mockResolvedValueOnce(jsonResponse(terminalReport(id, 'https://example.com')))
+    const result = await runReleaseCheck(makeManifest(), {
+      serviceUrl: 'http://127.0.0.1:3000',
+      testMode: true,
+      execute: true,
+      fetchFn,
+      checkpoint: makeCheckpoint(),
+      validateTarget: noValidation,
+      pollAttempts: 3,
+      pollIntervalMs: 0,
+      sleep: async () => {},
+    })
+    expect(result.decision).toBe('PASS')
+    expect(fetchFn).toHaveBeenCalledTimes(4)
+  })
+})
+
 describe('runReleaseCheck — preflight dry-run', () => {
   it('returns dryRun result without calling adapter when execute=false', async () => {
     const endpoint = 'http://127.0.0.1:3000/v1/checks'

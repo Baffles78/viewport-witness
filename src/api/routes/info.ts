@@ -20,6 +20,7 @@ const termsPath = join(__dirname, '../../../docs/TERMS.md')
 const logoPath = join(__dirname, '../../../assets/viewport-witness.png')
 const agentsPath = join(__dirname, '../../../agents.html')
 const samplesPath = join(__dirname, '../../../samples/example')
+const releaseDemoPath = join(__dirname, '../../../samples/release-demo')
 
 // mcpub.dev probes this location before accepting a remote MCP listing.
 // Keep this payload aligned with the validated official MCP Registry manifest in server.json.
@@ -172,6 +173,25 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
     router.get(`/samples/example/${file}`, (_req: Request, res: Response) => {
       res.sendFile(join(samplesPath, file))
     })
+  }
+  router.get('/samples/release-demo/', (_req: Request, res: Response) => {
+    res.sendFile(join(releaseDemoPath, 'index.html'))
+  })
+  router.get('/samples/release-demo/proof.json', (_req: Request, res: Response) => {
+    res.sendFile(join(releaseDemoPath, 'proof.json'))
+  })
+  for (const version of ['broken', 'fixed']) {
+    for (const file of [
+      'report.json',
+      'report.md',
+      'phonePortrait.png',
+      'phoneLandscape.png',
+      'desktop.png',
+    ]) {
+      router.get(`/samples/release-demo/${version}/${file}`, (_req: Request, res: Response) => {
+        res.sendFile(join(releaseDemoPath, version, file))
+      })
+    }
   }
 
   router.get('/robots.txt', (_req: Request, res: Response) => {

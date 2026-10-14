@@ -23,26 +23,19 @@ npm ci
 npm run build
 ```
 
-Create `release.json` with your public page URL and a new ID for this deployment:
-
-```json
-{
-  "runId": "my-deployment-001",
-  "pages": ["https://example.com"],
-  "maxBudgetUsdc": "0.08"
-}
-```
+For one page, no handwritten configuration is needed:
 
 ```sh
-node scripts/release-check.mjs --manifest release.json --output out/
+npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/
 ```
 
-This previews the budget; it does not load a wallet, make a payment, or return a QA verdict.
-You may include up to five pages; five standard checks quote $0.40 USDC.
+This displays the quoted price and budget without loading a wallet or paying. It does not
+return a QA verdict. For up to five pages, use the manifest-based client in
+[AGENT-CLIENT.md](AGENT-CLIENT.md).
 
 ## Authorize and run
 
-Use your existing customer-owned wallet connector. Follow [AGENT-CLIENT.md](AGENT-CLIENT.md)
+Use your existing customer-owned wallet connector. An existing Coinbase CDP Base account can use the supplied `examples/wallets/existing-cdp-base.mjs` connector; see the environment setup in [AGENT-CLIENT.md](AGENT-CLIENT.md). Follow [AGENT-CLIENT.md](AGENT-CLIENT.md)
 to configure the approved network, recipient, and (for Solana) facilitator fee payer in the
 manifest. The connector must expose the signing interface documented there; an MCP connection
 or wallet balance alone is insufficient. Never put keys or seed phrases in this repository.
@@ -50,7 +43,7 @@ or wallet balance alone is insufficient. Never put keys or seed phrases in this 
 Only after granting spending authority for that run:
 
 ```sh
-node scripts/release-check.mjs --manifest release.json --state out/checkpoint.json --output out/ --execute --wallet-module ./existing-customer-wallet.mjs
+npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/ --execute --network base --recipient <approved-recipient> --wallet-module ./examples/wallets/existing-cdp-base.mjs
 ```
 
 Keep the checkpoint and generated reports. On interruption, resume the same run and checkpoint;
@@ -81,3 +74,11 @@ results must remain visible; the sample must not be curated into a fictitious PA
 If Node's resolver points to an unavailable local DNS server, set `VW_SAMPLE_DNS_SERVERS` to
 your working network resolver before generation. This affects only the generator process;
 private-target checks remain enabled. It does not change Windows or production DNS settings.
+
+## Reproduce a useful failure and fix without paying
+
+Run `npm run demo:buyer -- out/demo` with Playwright Chromium installed. This checks a deliberately
+broken fictional release, then its fixed version, with real browser captures and locally verified
+Base SDK signatures. The gateway and payment acceptance are simulated; there are no production
+calls or on-chain payments. It also proves preview and checkpoint resume do not sign again.
+The saved evidence is in `samples/release-demo/`; it is explicitly synthetic, not customer usage.
