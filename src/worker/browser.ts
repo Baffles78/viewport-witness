@@ -537,6 +537,7 @@ export async function runViewportCheck(
       visibleControls: 0,
       focusableControls: 0,
       keyboardReachable: false,
+      keyboardObservation: 'unavailable',
     }
 
     try {
@@ -557,13 +558,22 @@ export async function runViewportCheck(
             )
           }
           const visible = controls.filter(isVisible).length
-          const focusable = Array.from(document.querySelectorAll('[tabindex]')).filter((el) => {
-            const ti = el.getAttribute('tabindex')
-            return ti !== null && parseInt(ti, 10) >= 0 && isVisible(el)
+          const candidates = new Set([
+            ...controls,
+            ...Array.from(document.querySelectorAll('[tabindex]')),
+          ])
+          const focusable = Array.from(candidates).filter((el) => {
+            return (
+              isVisible(el) &&
+              (el as HTMLElement).tabIndex >= 0 &&
+              !el.matches(':disabled') &&
+              !el.closest('[inert]') &&
+              el.getAttribute('aria-disabled') !== 'true'
+            )
           }).length
 
-          // Simple keyboard reachability: check if there are any focusable elements
-          const anyFocusable = visible > 0 || focusable > 0
+          // Potential focusability only: no Tab traversal or keyboard action is tested.
+          const anyFocusable = focusable > 0
           return { visible, focusable, anyFocusable }
         }),
         5_000,
@@ -573,6 +583,7 @@ export async function runViewportCheck(
         visibleControls: interactionData.visible,
         focusableControls: interactionData.focusable,
         keyboardReachable: interactionData.anyFocusable,
+        keyboardObservation: 'focusability_heuristic',
       }
     } catch {
       // ignore

@@ -225,7 +225,9 @@ export class WorkerRunner {
     if (!this.browser) throw new Error('Browser not initialized')
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
-    const limitations: string[] = []
+    const limitations: string[] = [
+      'Keyboard observations measure potential focusability only; Tab traversal and keyboard activation were not tested.',
+    ]
 
     for (const viewport of VIEWPORTS_ORDER) {
       if (signal.aborted) throw new Error('job_aborted')
