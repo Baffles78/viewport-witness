@@ -159,6 +159,26 @@ Local defaults to `PAYMENT_MODE=test`. No CDP keys needed for test mode. Results
 | GET    | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG                   |
 | GET    | `/v1/checks/:id/diffs/:viewport`       | Download comparison diff PNG              |
 
+### Page history archive (off by default)
+
+With `ARCHIVE_ENABLED=true`, every completed check, verify and compare report is also copied into a
+separate archive (`ARCHIVE_DIR`) that outlives the seven-day job retention. Agents can then ask for
+past snapshots of one exact public URL. The archived copy holds only public page evidence (screenshots,
+findings, verdict); it drops the job ID, payment data, caller assertions and baseline references.
+
+| Method | Path                                              | Description                                       |
+| ------ | ------------------------------------------------- | ------------------------------------------------- |
+| GET    | `/v1/history/availability?url=`                   | Free: how many snapshots exist and their range    |
+| POST   | `/v1/history`                                     | Paid (`HISTORY_PRICE_USDC`, default 0.02): list   |
+| GET    | `/v1/history/snapshots/:id`                       | Full archived snapshot (ID from the paid listing) |
+| GET    | `/v1/history/snapshots/:id/screenshots/:viewport` | Archived screenshot PNG                           |
+
+`POST /v1/history` takes `{ "url": "https://example.com", "limit": 5, "before": "<ISO time>" }`
+and returns snapshots newest first with a `nextBefore` cursor. A signed request for a URL with no
+snapshots gets `404 no_snapshots` before any payment settles. Limits are set in `.env`:
+`ARCHIVE_RETENTION_DAYS` (90), `ARCHIVE_MAX_STORAGE_GB` (5), `ARCHIVE_MAX_SNAPSHOTS_PER_URL` (30),
+`HISTORY_MAX_RESULTS` (10).
+
 Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1440×900)
 
 ---

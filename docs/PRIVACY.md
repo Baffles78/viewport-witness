@@ -27,6 +27,10 @@ This policy describes how the ViewportWitness service handles data submitted to 
 - Full response bodies from the checked page
 - Names, email addresses, or other personal identifiers
 
+## Page history archive
+
+The archive is off on the live service. If an operator enables it, completed browser QA reports and screenshots are also copied into a separate archive kept for 90 days by default. The archived copy contains the checked URL and the public page evidence only; it does not contain the job ID, payment identifiers or customer labels, or any assertions you supplied. Anyone who knows the exact URL can see how many archived snapshots exist and pay to retrieve them. Extraction and security gate reports are not archived.
+
 ## Retention
 
 Job records, screenshots, and reports are retained on the active service volume for seven days by default, then deleted. A configurable storage ceiling triggers oldest-first cleanup before the seven-day period if disk space is exhausted. Infrastructure backups or provider snapshots may retain encrypted or access-controlled copies for their own backup lifecycle; they are not available through the service API.

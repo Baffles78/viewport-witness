@@ -77,6 +77,25 @@ export class JobStore {
         job_id TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS archive_snapshots (
+        id TEXT PRIMARY KEY,
+        url_key TEXT NOT NULL,
+        url TEXT NOT NULL,
+        source_job_id TEXT NOT NULL UNIQUE,
+        captured_at INTEGER NOT NULL,
+        archived_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        snapshot_path TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_archive_url_captured
+        ON archive_snapshots(url_key, captured_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_archive_expires_at ON archive_snapshots(expires_at);
     `)
     const columns = this.conn.prepare('PRAGMA table_info(jobs)').all() as unknown as Array<{
       name: string
@@ -489,6 +508,105 @@ export class JobStore {
     return row ?? null
   }
 
+  insertArchiveSnapshot(snapshot: ArchiveSnapshotRecord): void {
+    this.conn
+      .prepare(
+        `INSERT INTO archive_snapshots (id, url_key, url, source_job_id, captured_at, archived_at,
+         expires_at, status, decision, content_hash, bytes, snapshot_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        snapshot.id,
+        snapshot.urlKey,
+        snapshot.url,
+        snapshot.sourceJobId,
+        snapshot.capturedAt,
+        snapshot.archivedAt,
+        snapshot.expiresAt,
+        snapshot.status,
+        snapshot.decision,
+        snapshot.contentHash,
+        snapshot.bytes,
+        snapshot.snapshotPath,
+      )
+  }
+
+  getArchiveSnapshot(id: string): ArchiveSnapshotRecord | null {
+    const row = this.conn.prepare('SELECT * FROM archive_snapshots WHERE id = ?').get(id) as
+      RawArchiveRow | undefined
+    return row ? rowToArchive(row) : null
+  }
+
+  hasArchiveSnapshotForJob(jobId: string): boolean {
+    return (
+      this.conn.prepare('SELECT 1 FROM archive_snapshots WHERE source_job_id = ?').get(jobId) !==
+      undefined
+    )
+  }
+
+  // Newest first. `beforeMs` pages backwards through older captures.
+  listArchiveSnapshots(
+    urlKey: string,
+    { limit, beforeMs, now = Date.now() }: { limit: number; beforeMs?: number; now?: number },
+  ): ArchiveSnapshotRecord[] {
+    const rows = this.conn
+      .prepare(
+        `SELECT * FROM archive_snapshots WHERE url_key = ? AND expires_at > ? AND captured_at < ?
+         ORDER BY captured_at DESC, id DESC LIMIT ?`,
+      )
+      .all(urlKey, now, beforeMs ?? Number.MAX_SAFE_INTEGER, limit) as unknown as RawArchiveRow[]
+    return rows.map(rowToArchive)
+  }
+
+  archiveAvailability(
+    urlKey: string,
+    now = Date.now(),
+  ): { count: number; newest: number | null; oldest: number | null } {
+    const row = this.conn
+      .prepare(
+        `SELECT COUNT(*) AS count, MAX(captured_at) AS newest, MIN(captured_at) AS oldest
+         FROM archive_snapshots WHERE url_key = ? AND expires_at > ?`,
+      )
+      .get(urlKey, now) as { count: number; newest: number | null; oldest: number | null }
+    return { count: Number(row.count), newest: row.newest, oldest: row.oldest }
+  }
+
+  // Snapshots beyond the newest `keep` for one URL, oldest first.
+  listArchiveSnapshotsBeyondCap(urlKey: string, keep: number): ArchiveSnapshotRecord[] {
+    const rows = this.conn
+      .prepare(
+        `SELECT * FROM archive_snapshots WHERE url_key = ?
+         ORDER BY captured_at DESC, id DESC LIMIT -1 OFFSET ?`,
+      )
+      .all(urlKey, keep) as unknown as RawArchiveRow[]
+    return rows.map(rowToArchive).reverse()
+  }
+
+  listExpiredArchiveSnapshots(now: number): ArchiveSnapshotRecord[] {
+    const rows = this.conn
+      .prepare('SELECT * FROM archive_snapshots WHERE expires_at <= ?')
+      .all(now) as unknown as RawArchiveRow[]
+    return rows.map(rowToArchive)
+  }
+
+  listOldestArchiveSnapshots(limit: number): ArchiveSnapshotRecord[] {
+    const rows = this.conn
+      .prepare('SELECT * FROM archive_snapshots ORDER BY captured_at ASC, id ASC LIMIT ?')
+      .all(limit) as unknown as RawArchiveRow[]
+    return rows.map(rowToArchive)
+  }
+
+  archiveTotalBytes(): number {
+    const row = this.conn
+      .prepare('SELECT COALESCE(SUM(bytes), 0) AS total FROM archive_snapshots')
+      .get() as { total: number }
+    return Number(row.total)
+  }
+
+  deleteArchiveSnapshot(id: string): void {
+    this.conn.prepare('DELETE FROM archive_snapshots WHERE id = ?').run(id)
+  }
+
   getIdempotencyEntry(key: string): { jobId: string } | null {
     const row = this.conn.prepare('SELECT job_id FROM idempotency_keys WHERE key = ?').get(key) as
       { job_id: string } | undefined
@@ -506,6 +624,53 @@ export class JobStore {
       this.db.close()
       this.db = null
     }
+  }
+}
+
+export interface ArchiveSnapshotRecord {
+  id: string
+  urlKey: string
+  url: string
+  sourceJobId: string
+  capturedAt: number
+  archivedAt: number
+  expiresAt: number
+  status: string
+  decision: string
+  contentHash: string
+  bytes: number
+  snapshotPath: string
+}
+
+interface RawArchiveRow {
+  id: string
+  url_key: string
+  url: string
+  source_job_id: string
+  captured_at: number
+  archived_at: number
+  expires_at: number
+  status: string
+  decision: string
+  content_hash: string
+  bytes: number
+  snapshot_path: string
+}
+
+function rowToArchive(row: RawArchiveRow): ArchiveSnapshotRecord {
+  return {
+    id: row.id,
+    urlKey: row.url_key,
+    url: row.url,
+    sourceJobId: row.source_job_id,
+    capturedAt: row.captured_at,
+    archivedAt: row.archived_at,
+    expiresAt: row.expires_at,
+    status: row.status,
+    decision: row.decision,
+    contentHash: row.content_hash,
+    bytes: row.bytes,
+    snapshotPath: row.snapshot_path,
   }
 }
 
