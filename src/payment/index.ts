@@ -60,6 +60,7 @@ export interface PaymentMiddlewareOptions {
     | 'POST /v1/compare'
     | 'POST /v1/extract'
     | 'POST /v1/security-gate'
+    | 'POST /v1/history'
   description?: string
 }
 
@@ -163,7 +164,9 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       ? { url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }] }
       : route === 'POST /v1/compare'
         ? { url: 'https://example.com', baselineJobId: '550e8400-e29b-41d4-a716-446655440000' }
-        : { url: 'https://example.com' }
+        : route === 'POST /v1/history'
+          ? { url: 'https://example.com', limit: 5 }
+          : { url: 'https://example.com' }
   const properties: Record<string, unknown> = {
     url: {
       type: 'string',
@@ -202,6 +205,46 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       maximum: 12000,
       description: 'Optional approximate Markdown output budget.',
     }
+  }
+  if (route === 'POST /v1/history') {
+    properties['limit'] = {
+      type: 'integer',
+      minimum: 1,
+      description: 'Maximum archived snapshots to return, newest first.',
+    }
+    properties['before'] = {
+      type: 'string',
+      format: 'date-time',
+      description: 'Only return snapshots captured before this time, for paging.',
+    }
+    return declareDiscoveryExtension({
+      bodyType: 'json',
+      input,
+      inputSchema: { type: 'object', required, additionalProperties: false, properties },
+      output: {
+        example: {
+          url: 'https://example.com/',
+          snapshots: [
+            {
+              snapshotId: '550e8400-e29b-41d4-a716-446655440000',
+              capturedAt: '2026-10-01T12:00:00.000Z',
+              status: 'PASS',
+              snapshotUrl: '/v1/history/snapshots/550e8400-e29b-41d4-a716-446655440000',
+            },
+          ],
+          nextBefore: null,
+        },
+        schema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            snapshots: { type: 'array', items: { type: 'object' } },
+            nextBefore: { type: ['string', 'null'] },
+          },
+          required: ['url', 'snapshots', 'nextBefore'],
+        },
+      },
+    })
   }
   return declareDiscoveryExtension({
     bodyType: 'json',
@@ -252,6 +295,8 @@ function bazaarTags(route: PaymentMiddlewareOptions['route']): string[] {
         'web-content',
         'markdown',
       ]
+    case 'POST /v1/history':
+      return ['page-history', 'website-snapshots', 'screenshot-archive', 'browser-qa', 'qa']
     case 'POST /v1/security-gate':
       return [
         'website-security',

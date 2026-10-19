@@ -14,6 +14,7 @@ import type {
   StoredReport,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
+import type { ArchiveManager } from '../archive.js'
 import { buildDiagnosis } from '../report-guidance.js'
 import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
 import { runBoundedWebAnalysis } from '../web-analysis-runner.js'
@@ -40,6 +41,7 @@ export class WorkerRunner {
     private readonly screenshotsDir: string,
     private readonly timeoutMs: number,
     private readonly paymentMode: string,
+    private readonly archive: ArchiveManager | null = null,
   ) {}
 
   async start(): Promise<void> {
@@ -172,6 +174,12 @@ export class WorkerRunner {
         completedAt: Date.now(),
         reportPath,
       })
+      if (this.archive && report.kind !== 'extract' && report.kind !== 'security') {
+        // The archive is a secondary copy: a failure here never changes the job result.
+        await this.archive.capture(job, report as QAReport).catch((err: unknown) => {
+          console.warn('[archive] capture skipped:', (err as Error).message?.slice(0, 200))
+        })
+      }
     } catch (err: unknown) {
       const msg = (err as Error).message ?? 'unknown'
       if (msg === 'job_timeout' || msg === 'job_aborted') {

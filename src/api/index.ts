@@ -10,8 +10,15 @@ import type { WorkerRunner } from '../worker/runner.js'
 import type { Config } from '../config.js'
 import { createPaymentMiddleware } from '../payment/index.js'
 import { growthMiddleware } from '../growth.js'
+import { createHistoryRouter } from './routes/history.js'
+import type { ArchiveManager } from '../archive.js'
 
-export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): Express {
+export function createApp(
+  store: JobStore,
+  runner: WorkerRunner,
+  cfg: Config,
+  archive: ArchiveManager | null = null,
+): Express {
   const app = express()
 
   // Nginx reaches the loopback-published Docker port through the fixed bridge
@@ -124,6 +131,23 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
   })
 
+  const historyPaymentMiddleware = createPaymentMiddleware({
+    payTo: cfg.PAY_TO,
+    solanaPayTo:
+      cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
+    enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
+    priceUsdc: cfg.HISTORY_PRICE_USDC ?? '0.02',
+    route: 'POST /v1/history',
+    description:
+      'Page history archive: past ViewportWitness screenshots and QA findings for one public URL',
+    mode: cfg.PAYMENT_MODE,
+    enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
+    facilitatorUrl: cfg.FACILITATOR_URL,
+    cdpApiKeyId: cfg.CDP_API_KEY_ID,
+    cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
+    customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+  })
+
   // Mount routers
   const infoRouter = createInfoRouter(store, runner, cfg)
   app.use(infoRouter)
@@ -142,6 +166,8 @@ export function createApp(store: JobStore, runner: WorkerRunner, cfg: Config): E
       securityPaymentMiddleware,
     ),
   )
+
+  app.use(createHistoryRouter(store, archive, cfg, historyPaymentMiddleware))
 
   const checksRouter = createChecksRouter(store, runner, cfg, paymentMiddleware)
   app.use(checksRouter)
