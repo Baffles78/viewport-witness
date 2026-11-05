@@ -1210,6 +1210,8 @@ export const openApiSpec = {
           error: { type: 'string' },
           detail: { type: 'string' },
           code: { type: 'string' },
+          nextAction: { type: 'string', enum: ['stop', 'retry_lookup'] },
+          retryAfterSeconds: { type: 'integer' },
         },
       },
     },
