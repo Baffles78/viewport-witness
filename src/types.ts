@@ -60,6 +60,8 @@ export type PageAssertion =
 export interface AssertionResult {
   assertion: PageAssertion
   passed: boolean
+  /** False when evidence was unavailable and the assertion was not evaluated. */
+  measured?: boolean
   detail: string
 }
 
@@ -202,6 +204,7 @@ export interface QAReport {
   assertions?: {
     passed: number
     failed: number
+    unavailable?: number
     results: Partial<Record<Viewport, AssertionResult[]>>
   }
   comparison?: {
