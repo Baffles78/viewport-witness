@@ -492,7 +492,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
       async ({ jobId }) => {
         const job = store.getJob(jobId)
-        if (!job) return jsonResult({ error: 'not_found' }, true)
+        if (!job) return jsonResult({ error: 'not_found', nextAction: 'stop' }, true)
         if (job.status !== 'complete' || !job.reportPath) {
           return jsonResult({ id: job.id, status: job.status, pollUrl: `/v1/checks/${job.id}`, ...reconcileJobStatus(job.status) })
         }
@@ -506,7 +506,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
               : {}),
           })
         } catch {
-          return jsonResult({ error: 'report_unavailable' }, true)
+          return jsonResult({ error: 'report_unavailable', nextAction: 'stop' }, true)
         }
       },
     )
