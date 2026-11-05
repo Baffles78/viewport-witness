@@ -262,6 +262,7 @@ export async function runViewportCheck(
     // Layout checks
     let overflowDetected = false
     let offscreenElements = 0
+    let layoutObservation: ViewportResult['layoutObservation'] = 'unavailable'
 
     try {
       const layoutData = await withTimeout(
@@ -279,6 +280,7 @@ export async function runViewportCheck(
       )
       overflowDetected = layoutData.overflow
       offscreenElements = layoutData.offscreen
+      layoutObservation = 'measured'
     } catch {
       // ignore
     }
@@ -431,6 +433,7 @@ export async function runViewportCheck(
       failedRequests,
       overflowDetected,
       offscreenElements,
+      layoutObservation,
       accessibility: accessibilityResult,
       interactionObservations,
       ...(assertionResults ? { assertions: assertionResults } : {}),
