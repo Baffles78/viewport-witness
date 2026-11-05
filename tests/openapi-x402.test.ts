@@ -84,6 +84,24 @@ describe('openapi spec — report value fields', () => {
     expect(schemas['ViewportResult']?.properties).toHaveProperty('layoutLocatorHints')
   })
 
+  it('documents unavailable keyboard, layout, and assertion evidence', () => {
+    const schemas = openApiSpec.components.schemas as Record<
+      string,
+      { properties?: Record<string, unknown> }
+    >
+    const report = schemas['QAReport']?.properties as Record<string, unknown>
+    const viewport = schemas['ViewportResult']?.properties as Record<string, unknown>
+    const assertion = schemas['AssertionResult']?.properties as Record<string, unknown>
+    expect(report).toHaveProperty('assertions')
+    expect(viewport).toHaveProperty('layoutObservation')
+    expect(assertion).toHaveProperty('measured')
+    const interactions = viewport['interactionObservations'] as {
+      properties: Record<string, { description?: string }>
+    }
+    expect(interactions.properties).toHaveProperty('keyboardObservation')
+    expect(interactions.properties.keyboardReachable?.description).toContain('potential focusability')
+  })
+
   it('represents both new completed report variants without widening QAReport kind', () => {
     const schemas = openApiSpec.components.schemas as Record<
       string,

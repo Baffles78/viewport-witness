@@ -24,6 +24,7 @@ function makeViewport(vp: Viewport): ViewportResult {
     overflowDetected: false,
     offscreenElements: 0,
     layoutLocatorHints: [],
+    layoutObservation: 'measured',
     performance: {
       navigation: {},
       paint: {},

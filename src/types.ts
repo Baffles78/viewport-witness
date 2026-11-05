@@ -60,6 +60,8 @@ export type PageAssertion =
 export interface AssertionResult {
   assertion: PageAssertion
   passed: boolean
+  /** False when evidence was unavailable and the assertion was not evaluated. */
+  measured?: boolean
   detail: string
 }
 
@@ -128,6 +130,7 @@ export interface ViewportResult {
   overflowDetected: boolean
   offscreenElements: number
   layoutLocatorHints: string[]
+  layoutObservation?: 'measured' | 'unavailable'
   performance: PerformanceEvidence
   accessibility: {
     completed: boolean
@@ -139,7 +142,9 @@ export interface ViewportResult {
   interactionObservations: {
     visibleControls: number
     focusableControls: number
+    /** Legacy compatibility field: potential focusability, not verified keyboard operation. */
     keyboardReachable: boolean
+    keyboardObservation?: 'focusability_heuristic' | 'unavailable'
   }
   assertions?: AssertionResult[]
 }
@@ -199,6 +204,7 @@ export interface QAReport {
   assertions?: {
     passed: number
     failed: number
+    unavailable?: number
     results: Partial<Record<Viewport, AssertionResult[]>>
   }
   comparison?: {

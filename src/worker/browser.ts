@@ -4,6 +4,8 @@ import path from 'path'
 import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
+import { observeInteraction } from './interaction.js'
+import { observeLayout, evaluateNoHorizontalOverflow } from './layout.js'
 import type {
   Viewport,
   ViewportResult,
@@ -328,50 +330,8 @@ export async function runViewportCheck(
     }
 
     // Layout checks
-    let overflowDetected = false
-    let offscreenElements = 0
-    let layoutLocatorHints: string[] = []
-
-    try {
-      const layoutData = await withTimeout(
-        page.evaluate(() => {
-          const overflow = document.body.scrollWidth > window.innerWidth
-          const allElements = Array.from(document.querySelectorAll('*'))
-          const offscreen = allElements.filter((el) => {
-            const rect = el.getBoundingClientRect()
-            return rect.right > window.innerWidth * 1.2 && rect.width > 10
-          })
-          const locatorFor = (element: Element): string => {
-            const parts: string[] = []
-            let current: Element | null = element
-            while (current && parts.length < 5 && current !== document.documentElement) {
-              const tag = current.tagName.toLowerCase()
-              const siblings = current.parentElement
-                ? Array.from(current.parentElement.children).filter(
-                    (sibling) => sibling.tagName === current?.tagName,
-                  )
-                : []
-              const position = Math.max(1, siblings.indexOf(current) + 1)
-              parts.unshift(`${tag}:nth-of-type(${position})`)
-              current = current.parentElement
-            }
-            return parts.join(' > ').slice(0, 200)
-          }
-          return {
-            overflow,
-            offscreen: offscreen.length,
-            locators: offscreen.slice(0, 5).map(locatorFor),
-          }
-        }),
-        5_000,
-        'layout_timeout',
-      )
-      overflowDetected = layoutData.overflow
-      offscreenElements = layoutData.offscreen
-      layoutLocatorHints = layoutData.locators
-    } catch {
-      // ignore
-    }
+    const layoutData = await observeLayout(page)
+    const { overflowDetected, offscreenElements, layoutLocatorHints, layoutObservation } = layoutData
 
     let performanceEvidence: PerformanceEvidence = {
       navigation: {},
@@ -466,8 +426,8 @@ export async function runViewportCheck(
           let passed = false
           let detail = ''
           if (assertion.type === 'noHorizontalOverflow') {
-            passed = !overflowDetected
-            detail = passed ? 'No horizontal overflow detected.' : 'Horizontal overflow detected.'
+            assertionResults.push(evaluateNoHorizontalOverflow(layoutData))
+            continue
           } else if (assertion.type === 'noConsoleErrors') {
             passed = consoleErrors.length === 0
             detail = passed
@@ -537,35 +497,12 @@ export async function runViewportCheck(
       visibleControls: 0,
       focusableControls: 0,
       keyboardReachable: false,
+      keyboardObservation: 'unavailable',
     }
 
     try {
       const interactionData = await withTimeout(
-        page.evaluate(() => {
-          const controls = Array.from(
-            document.querySelectorAll('button, a[href], input, select, textarea, [role="button"]'),
-          )
-          const isVisible = (el: Element): boolean => {
-            const rect = el.getBoundingClientRect()
-            const style = window.getComputedStyle(el)
-            return (
-              rect.width > 0 &&
-              rect.height > 0 &&
-              style.display !== 'none' &&
-              style.visibility !== 'hidden' &&
-              style.opacity !== '0'
-            )
-          }
-          const visible = controls.filter(isVisible).length
-          const focusable = Array.from(document.querySelectorAll('[tabindex]')).filter((el) => {
-            const ti = el.getAttribute('tabindex')
-            return ti !== null && parseInt(ti, 10) >= 0 && isVisible(el)
-          }).length
-
-          // Simple keyboard reachability: check if there are any focusable elements
-          const anyFocusable = visible > 0 || focusable > 0
-          return { visible, focusable, anyFocusable }
-        }),
+        observeInteraction(page),
         5_000,
         'interaction_timeout',
       )
@@ -573,9 +510,10 @@ export async function runViewportCheck(
         visibleControls: interactionData.visible,
         focusableControls: interactionData.focusable,
         keyboardReachable: interactionData.anyFocusable,
+        keyboardObservation: 'focusability_heuristic',
       }
     } catch {
-      // ignore
+      // Observation unavailable; no Tab traversal or activation is claimed.
     }
 
     // Screenshot
@@ -627,6 +565,7 @@ export async function runViewportCheck(
       overflowDetected,
       offscreenElements,
       layoutLocatorHints,
+      layoutObservation,
       performance: performanceEvidence,
       accessibility: accessibilityResult,
       interactionObservations,

@@ -14,6 +14,7 @@ import type {
   StoredReport,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
+import { summarizeAssertions } from './assertions.js'
 import type { ArchiveManager } from '../archive.js'
 import { buildDiagnosis } from '../report-guidance.js'
 import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
@@ -233,7 +234,9 @@ export class WorkerRunner {
     if (!this.browser) throw new Error('Browser not initialized')
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
-    const limitations: string[] = []
+    const limitations: string[] = [
+      'Keyboard observations measure potential focusability only; Tab traversal and keyboard activation were not tested.',
+    ]
 
     for (const viewport of VIEWPORTS_ORDER) {
       if (signal.aborted) throw new Error('job_aborted')
@@ -248,6 +251,9 @@ export class WorkerRunner {
           job.request.assertions ?? [],
         )
         viewportResults[viewport] = result
+        if (result.layoutObservation !== 'measured') {
+          limitations.push(`viewport:${viewport} layout observation unavailable.`)
+        }
         if (result.screenshotBytes > 0) {
           this.store.recordScreenshot(
             item.jobId,
@@ -335,18 +341,9 @@ export class WorkerRunner {
     }
 
     if (job.kind === 'verify') {
-      const results: NonNullable<QAReport['assertions']>['results'] = {}
-      let passed = 0
-      let failed = 0
-      for (const [viewport, result] of Object.entries(publicViewportResults) as Array<
-        [Viewport, ViewportResult]
-      >) {
-        const viewportAssertions = result.assertions ?? []
-        results[viewport] = viewportAssertions
-        passed += viewportAssertions.filter((assertion) => assertion.passed).length
-        failed += viewportAssertions.filter((assertion) => !assertion.passed).length
-      }
-      reportObj.assertions = { passed, failed, results }
+      const summary = summarizeAssertions(publicViewportResults)
+      reportObj.assertions = summary
+      const { failed } = summary
       if (failed > 0) {
         reportObj.status = 'FAIL'
         reportObj.verdict = this.buildVerdict('FAIL', publicViewportResults)
@@ -601,7 +598,7 @@ export class WorkerRunner {
     if (!allViewportsCovered) return 'INCONCLUSIVE'
 
     const evidenceComplete = results.every(
-      (r) => r.screenshotBytes > 0 && r.accessibility.completed,
+      (r) => r.screenshotBytes > 0 && r.accessibility.completed && r.layoutObservation === 'measured',
     )
     if (!evidenceComplete) return 'INCONCLUSIVE'
 

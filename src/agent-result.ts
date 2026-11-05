@@ -60,7 +60,11 @@ function checkEvidenceBound(viewports: QAReport['viewports']): boolean {
     hasAllScreenshots(viewports) &&
     REQUIRED_VIEWPORTS.every((vp) => {
       const result = viewports[vp]
-      return result?.loadStatus === 'success' && result?.accessibility?.completed === true
+      return (
+        result?.loadStatus === 'success' &&
+        result?.accessibility?.completed === true &&
+        result?.layoutObservation === 'measured'
+      )
     })
   )
 }
