@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import express from 'express'
 import http from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
+import { promises as fs } from 'node:fs'
 import { createChecksRouter } from '../src/api/routes/checks.js'
 import type { Config } from '../src/config.js'
 import type { JobStore } from '../src/db.js'
@@ -8,19 +11,29 @@ import type { WorkerRunner } from '../src/worker/runner.js'
 import type { JobStatus } from '../src/types.js'
 
 const servers: http.Server[] = []
+const dirs: string[] = []
 const id = '11111111-1111-4111-8111-111111111111'
 
 async function getJobStatus(status: JobStatus | null) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-reconcile-'))
+  dirs.push(dir)
+  let reportPath: string | null = null
+  if (status === 'complete') {
+    const reportDir = path.join(dir, id)
+    await fs.mkdir(reportDir)
+    reportPath = path.join(reportDir, 'report.json')
+    await fs.writeFile(reportPath, JSON.stringify({ id, kind: 'extract', status: 'PASS' }))
+  }
   const store = {
     getJob: () => status ? {
       id,
       status,
       createdAt: Date.now(),
-      reportPath: null,
+      reportPath,
     } : null,
   } as unknown as JobStore
   const runner = {} as WorkerRunner
-  const cfg = { PAYMENT_MODE: 'test', SCREENSHOTS_DIR: '/tmp', RETENTION_DAYS: 7 } as Config
+  const cfg = { PAYMENT_MODE: 'test', SCREENSHOTS_DIR: dir, RETENTION_DAYS: 7 } as Config
   const app = express()
   app.use(createChecksRouter(store, runner, cfg, (_req, _res, next) => next()))
   const server = http.createServer(app)
@@ -35,6 +48,7 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve) => server.close(() => resolve())),
   ))
+  await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
 describe('HTTP same-job reconciliation', () => {
@@ -52,6 +66,17 @@ describe('HTTP same-job reconciliation', () => {
       })
     })
   }
+
+  it('completed report asks for inspection without another job', async () => {
+    const response = await getJobStatus('complete')
+    expect(response.code).toBe(200)
+    expect(response.body).toMatchObject({
+      id,
+      status: 'PASS',
+      jobStatus: 'complete',
+      nextAction: 'inspect_report',
+    })
+  })
 
   it('permanent failure stops', async () => {
     const response = await getJobStatus('failed')
