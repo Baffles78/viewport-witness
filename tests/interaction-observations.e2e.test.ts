@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, type Browser, type Page } from 'playwright'
 import { observeInteraction } from '../src/worker/interaction.js'
+import { observeLayout } from '../src/worker/layout.js'
 
 describe('interaction observations in Chromium', () => {
   let browser: Browser
@@ -45,4 +46,22 @@ describe('interaction observations in Chromium', () => {
     expect(result.anyFocusable).toBe(true)
     expect(await page.evaluate(() => document.activeElement?.id)).not.toBe('target')
   })
+  it('records measured overflow and offscreen elements', async () => {
+    await page.setContent('<!doctype html><html><body><div style="position:absolute;left:2000px;width:100px;height:20px">Offscreen</div></body></html>')
+    const result = await observeLayout(page)
+    expect(result.layoutObservation).toBe('measured')
+    expect(result.overflowDetected).toBe(true)
+    expect(result.offscreenElements).toBeGreaterThan(0)
+  })
+
+  it('records a measured clean layout', async () => {
+    await page.setContent('<!doctype html><html><body><main>In view</main></body></html>')
+    const result = await observeLayout(page)
+    expect(result).toEqual({
+      overflowDetected: false,
+      offscreenElements: 0,
+      layoutObservation: 'measured',
+    })
+  })
+
 })
