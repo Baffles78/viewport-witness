@@ -1,4 +1,5 @@
 import type { Page } from 'playwright'
+import type { AssertionResult } from '../types.js'
 
 export interface LayoutObservation {
   overflowDetected: boolean
@@ -60,5 +61,24 @@ export async function observeLayout(page: Page, timeoutMs = 5_000): Promise<Layo
     }
   } finally {
     if (timer) clearTimeout(timer)
+  }
+}
+
+export function evaluateNoHorizontalOverflow(layout: LayoutObservation): AssertionResult {
+  if (layout.layoutObservation !== 'measured') {
+    return {
+      assertion: { type: 'noHorizontalOverflow' },
+      passed: false,
+      measured: false,
+      detail: 'Horizontal overflow could not be measured.',
+    }
+  }
+  return {
+    assertion: { type: 'noHorizontalOverflow' },
+    passed: !layout.overflowDetected,
+    measured: true,
+    detail: layout.overflowDetected
+      ? 'Horizontal overflow detected.'
+      : 'No horizontal overflow detected.',
   }
 }
