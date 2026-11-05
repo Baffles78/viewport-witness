@@ -63,6 +63,7 @@ function terminalReport(
         {
           loadStatus: 'success',
           accessibility: { completed: true },
+          layoutObservation: 'measured',
           screenshotUrl: `/screenshots/${vp}`,
           screenshotSha256: 'fixture-sha256',
         },
