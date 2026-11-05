@@ -60,6 +60,7 @@ describe('interaction observations in Chromium', () => {
     expect(result).toEqual({
       overflowDetected: false,
       offscreenElements: 0,
+      layoutLocatorHints: [],
       layoutObservation: 'measured',
     })
   })
