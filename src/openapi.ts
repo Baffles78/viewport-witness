@@ -936,6 +936,23 @@ export const openApiSpec = {
               },
             },
           },
+          assertions: {
+            type: 'object',
+            description: 'Verify result counts. Unavailable assertions were not measured and are excluded from failed.',
+            properties: {
+              passed: { type: 'integer' },
+              failed: { type: 'integer' },
+              unavailable: { type: 'integer' },
+              results: {
+                type: 'object',
+                properties: {
+                  phonePortrait: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
+                  phoneLandscape: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
+                  desktop: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
+                },
+              },
+            },
+          },
           viewports: {
             type: 'object',
             properties: {
@@ -1016,6 +1033,16 @@ export const openApiSpec = {
           },
         },
       },
+      AssertionResult: {
+        type: 'object',
+        required: ['assertion', 'passed', 'detail'],
+        properties: {
+          assertion: { type: 'object' },
+          passed: { type: 'boolean', description: 'True only when the assertion was measured and passed.' },
+          measured: { type: 'boolean', description: 'False means the assertion could not be measured; it is neither a pass nor a failure.' },
+          detail: { type: 'string' },
+        },
+      },
       ViewportResult: {
         type: 'object',
         properties: {
@@ -1057,6 +1084,11 @@ export const openApiSpec = {
           },
           overflowDetected: { type: 'boolean' },
           offscreenElements: { type: 'integer' },
+          layoutObservation: {
+            type: 'string',
+            enum: ['measured', 'unavailable'],
+            description: 'Unavailable when the layout evaluation failed or timed out; zero overflow values then do not imply a clean layout.',
+          },
           layoutLocatorHints: {
             type: 'array',
             maxItems: 5,
@@ -1118,7 +1150,15 @@ export const openApiSpec = {
             properties: {
               visibleControls: { type: 'integer' },
               focusableControls: { type: 'integer' },
-              keyboardReachable: { type: 'boolean' },
+              keyboardReachable: {
+                type: 'boolean',
+                description: 'Legacy compatibility field: potential focusability only, not verified Tab traversal or keyboard activation.',
+              },
+              keyboardObservation: {
+                type: 'string',
+                enum: ['focusability_heuristic', 'unavailable'],
+                description: 'The focusability heuristic does not verify keyboard traversal or activation.',
+              },
             },
           },
         },
