@@ -320,6 +320,15 @@ export function createChecksRouter(
         }
       }
 
+      if (job.status === 'complete') {
+        res.status(500).json({
+          error: 'report_unavailable',
+          code: 'report_unavailable',
+          nextAction: 'stop',
+        })
+        return
+      }
+
       if (job.status === 'failed') {
         res.json({
           id: job.id,
