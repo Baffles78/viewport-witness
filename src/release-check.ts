@@ -476,9 +476,12 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
             .filter((finding) => finding.diagnosis || finding.fix)
         break
       }
-      if (['failed', 'retryable'].includes(String(body.status))) {
-        reasons = ['The existing job needs attention; no new payment was attempted.']
+      if (body.status === 'failed') {
+        reasons = ['The existing job failed permanently; no new payment was attempted.']
         break
+      }
+      if (body.status === 'retryable') {
+        reasons = ['The worker is recovering the same job; retain its ID and do not repay.']
       }
       if (poll + 1 < attempts)
         await (options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
