@@ -14,11 +14,11 @@ const servers: http.Server[] = []
 const dirs: string[] = []
 const id = '11111111-1111-4111-8111-111111111111'
 
-async function getJobStatus(status: JobStatus | null) {
+async function getJobStatus(status: JobStatus | null, missingReport = false) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-reconcile-'))
   dirs.push(dir)
   let reportPath: string | null = null
-  if (status === 'complete') {
+  if (status === 'complete' && !missingReport) {
     const reportDir = path.join(dir, id)
     await fs.mkdir(reportDir)
     reportPath = path.join(reportDir, 'report.json')
@@ -76,6 +76,12 @@ describe('HTTP same-job reconciliation', () => {
       jobStatus: 'complete',
       nextAction: 'inspect_report',
     })
+  })
+
+  it('completed job without a report stops', async () => {
+    const response = await getJobStatus('complete', true)
+    expect(response.code).toBe(500)
+    expect(response.body).toMatchObject({ error: 'report_unavailable', nextAction: 'stop' })
   })
 
   it('permanent failure stops', async () => {
