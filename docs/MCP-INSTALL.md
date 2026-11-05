@@ -98,7 +98,7 @@ Add this to `.vscode/mcp.json`:
 }
 ```
 
-After connecting, call `tools/list` (or the equivalent discovery command) to see the four tools and their input schemas.
+After connecting, call `tools/list` (or the equivalent discovery command) to see the six tools and their input schemas.
 
 ---
 
@@ -111,7 +111,7 @@ To call `check_page`, `verify_page`, or `compare_page`, your client must send a 
 3. Client signs a payment transaction using a funded wallet and resends the tool call with the payment in `_meta[x402]`.
 4. Server verifies and settles the payment, then enqueues the browser job.
 5. Server returns `{ id, status: "queued", pollUrl }`.
-6. Client polls `get_report` with the job ID until status is `"complete"`.
+6. Client polls `get_report` with the job ID until `jobStatus` is `"complete"`. The completed report's `status` is `PASS`, `FAIL`, or `INCONCLUSIVE`; a job `status` of `failed` is terminal, while `retryable` means the worker will retry.
 
 An x402-aware SDK is required for steps 2–4. See [x402.org](https://x402.org) for client libraries.
 
