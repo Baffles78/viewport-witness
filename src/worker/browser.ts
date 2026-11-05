@@ -4,6 +4,7 @@ import path from 'path'
 import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
+import { observeInteraction } from './interaction.js'
 import type {
   Viewport,
   ViewportResult,
@@ -368,40 +369,7 @@ export async function runViewportCheck(
 
     try {
       const interactionData = await withTimeout(
-        page.evaluate(() => {
-          const controls = Array.from(
-            document.querySelectorAll('button, a[href], input, select, textarea, [role="button"]'),
-          )
-          const isVisible = (el: Element): boolean => {
-            const rect = el.getBoundingClientRect()
-            const style = window.getComputedStyle(el)
-            return (
-              rect.width > 0 &&
-              rect.height > 0 &&
-              style.display !== 'none' &&
-              style.visibility !== 'hidden' &&
-              style.opacity !== '0'
-            )
-          }
-          const visible = controls.filter(isVisible).length
-          const candidates = new Set([
-            ...controls,
-            ...Array.from(document.querySelectorAll('[tabindex]')),
-          ])
-          const focusable = Array.from(candidates).filter((el) => {
-            return (
-              isVisible(el) &&
-              (el as HTMLElement).tabIndex >= 0 &&
-              !el.matches(':disabled') &&
-              !el.closest('[inert]') &&
-              el.getAttribute('aria-disabled') !== 'true'
-            )
-          }).length
-
-          // Potential focusability only: no Tab traversal or keyboard action is tested.
-          const anyFocusable = focusable > 0
-          return { visible, focusable, anyFocusable }
-        }),
+        observeInteraction(page),
         5_000,
         'interaction_timeout',
       )
