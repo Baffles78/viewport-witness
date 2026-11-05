@@ -60,6 +60,7 @@ export interface ViewportResult {
   failedRequests: Array<{ url: string; status: number | null; reason: string }>
   overflowDetected: boolean
   offscreenElements: number
+  layoutObservation?: 'measured' | 'unavailable'
   accessibility: {
     completed: boolean
     violations: AccessibilityViolation[]
