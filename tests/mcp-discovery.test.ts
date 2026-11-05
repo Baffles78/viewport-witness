@@ -193,6 +193,12 @@ describe('MCP get_report same-job reconciliation', () => {
     expect(result.body).toMatchObject({ error: 'not_found', nextAction: 'stop' })
   })
 
+  it('completed job without a report stops', async () => {
+    const result = await poll('complete')
+    expect(result.isError).toBe(true)
+    expect(result.body).toMatchObject({ error: 'report_unavailable', nextAction: 'stop' })
+  })
+
   it('completed report asks for inspection', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-mcp-reconcile-'))
     try {
