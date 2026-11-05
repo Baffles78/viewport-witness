@@ -722,7 +722,12 @@ export const openApiSpec = {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          status: { type: 'string', enum: ['queued'] },
+          status: { type: 'string', enum: ['payment_pending', 'queued', 'running', 'retryable', 'complete', 'failed'] },
+          jobStatus: { type: 'string', enum: ['payment_pending', 'queued', 'running', 'retryable', 'complete', 'failed'] },
+          nextAction: { type: 'string', enum: ['poll_same_job', 'inspect_report', 'stop'] },
+          retryAfterSeconds: { type: 'integer' },
+          idempotent: { type: 'boolean' },
+          paymentReplay: { type: 'boolean' },
           pollUrl: { type: 'string' },
           paymentMode: { type: 'string', enum: ['test', 'testnet', 'production'] },
         },
