@@ -98,6 +98,7 @@ export function createChecksRouter(
       res.status(202).json({
         id: existing.id,
         status: existing.status,
+        ...reconcileJobStatus(existing.status),
         pollUrl: `/v1/checks/${existing.id}`,
         paymentMode: cfg.PAYMENT_MODE,
         idempotent: true,
@@ -173,6 +174,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existingPaymentJob.id,
             status: existingPaymentJob.status,
+        ...reconcileJobStatus(existingPaymentJob.status),
             pollUrl: `/v1/checks/${existingPaymentJob.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             paymentReplay: true,
@@ -189,6 +191,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existing.id,
             status: existing.status,
+        ...reconcileJobStatus(existing.status),
             pollUrl: `/v1/checks/${existing.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             idempotent: true,
@@ -219,6 +222,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existing.id,
             status: existing.status,
+        ...reconcileJobStatus(existing.status),
             pollUrl: `/v1/checks/${existing.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             idempotent: true,
@@ -251,6 +255,7 @@ export function createChecksRouter(
       res.status(202).json({
         id: jobId,
         status: 'queued',
+        ...reconcileJobStatus('queued'),
         pollUrl: `/v1/checks/${jobId}`,
         paymentMode: cfg.PAYMENT_MODE,
       })
