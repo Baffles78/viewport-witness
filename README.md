@@ -64,7 +64,9 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/checks', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://example.com' }),
 }).then((r) => r.json())
-// Poll GET pollUrl until { status: 'complete' }
+// Poll GET pollUrl until jobStatus === 'complete'.
+// The completed report's status is PASS, FAIL, or INCONCLUSIVE.
+// A job status of 'failed' is terminal; 'retryable' means the worker will retry.
 ```
 
 ### POST /v1/verify — 0.10 USDC
@@ -126,7 +128,7 @@ curl -s -X POST http://localhost:3000/v1/checks \
   -d '{"url": "https://example.com"}' | jq .
 
 # Poll result
-curl -s http://localhost:3000/v1/checks/JOB_ID | jq .status
+curl -s http://localhost:3000/v1/checks/JOB_ID | jq '{jobStatus, status}'
 
 # Get screenshot
 curl -o desktop.png http://localhost:3000/v1/checks/JOB_ID/screenshots/desktop
