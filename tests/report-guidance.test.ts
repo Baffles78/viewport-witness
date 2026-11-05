@@ -73,6 +73,36 @@ describe('buildDiagnosis', () => {
     expect(JSON.stringify(diagnosis)).not.toContain('private customer phrase')
   })
 
+  it('excludes unmeasured assertions from failed viewport guidance', () => {
+    const diagnosis = buildDiagnosis(
+      'FAIL',
+      { phonePortrait: result(), desktop: result({ viewport: 'desktop' }) },
+      {
+        assertions: {
+          passed: 0,
+          failed: 1,
+          unavailable: 1,
+          results: {
+            phonePortrait: [{
+              assertion: { type: 'textVisible', value: 'missing' },
+              passed: false,
+              detail: 'Expected visible text not found.',
+            }],
+            desktop: [{
+              assertion: { type: 'noHorizontalOverflow' },
+              passed: false,
+              measured: false,
+              detail: 'Horizontal overflow could not be measured.',
+            }],
+          },
+        },
+      },
+    )
+    expect(diagnosis.findings).toContainEqual(
+      expect.objectContaining({ code: 'failed-assertions', viewports: ['phonePortrait'] }),
+    )
+  })
+
   it('reports incomplete baseline comparison evidence', () => {
     const comparison: NonNullable<QAReport['comparison']> = {
       baselineJobId: 'baseline-id',
