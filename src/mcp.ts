@@ -493,7 +493,10 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       async ({ jobId }) => {
         const job = store.getJob(jobId)
         if (!job) return jsonResult({ error: 'not_found', nextAction: 'stop' }, true)
-        if (job.status !== 'complete' || !job.reportPath) {
+        if (job.status === 'complete' && !job.reportPath) {
+          return jsonResult({ error: 'report_unavailable', nextAction: 'stop' }, true)
+        }
+        if (job.status !== 'complete') {
           return jsonResult({ id: job.id, status: job.status, pollUrl: `/v1/checks/${job.id}`, ...reconcileJobStatus(job.status) })
         }
         try {
