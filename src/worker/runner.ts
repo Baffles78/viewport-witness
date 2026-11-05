@@ -189,13 +189,15 @@ export class WorkerRunner {
           this.store.markJobRetryable(item.jobId)
         }
         const retryable = this.store.getJob(item.jobId)
-        if (
-          msg === 'job_timeout' &&
-          !this.shuttingDown &&
-          retryable?.status === 'retryable' &&
-          retryable.retryCount <= 1
-        ) {
-          this.queue.push(item)
+        if (msg === 'job_timeout' && !this.shuttingDown && retryable?.status === 'retryable') {
+          if (retryable.retryCount <= 1) {
+            this.queue.push(item)
+          } else {
+            this.store.updateJobStatus(item.jobId, 'failed', {
+              completedAt: Date.now(),
+              error: 'job_timeout',
+            })
+          }
         }
       } else {
         this.store.updateJobStatus(item.jobId, 'failed', {
