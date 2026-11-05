@@ -268,7 +268,7 @@ export function createChecksRouter(
 
       const job = store.getJob(id)
       if (!job) {
-        res.status(404).json({ error: 'not_found', detail: 'Job not found', code: 'not_found' })
+        res.status(404).json({ error: 'not_found', detail: 'Job not found or expired', code: 'not_found', nextAction: 'stop' })
         return
       }
 
@@ -309,6 +309,7 @@ export function createChecksRouter(
             error: 'report_unavailable',
             detail: 'Report file could not be read.',
             code: 'report_unavailable',
+            nextAction: 'stop',
           })
           return
         }
