@@ -11,6 +11,7 @@ import type { Config } from '../../config.js'
 import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
+import { reconcileJobStatus } from '../../job-reconciliation.js'
 import { challengeIfUnsigned } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
@@ -278,7 +279,7 @@ export function createChecksRouter(
           const reportJson = await fs.readFile(job.reportPath, 'utf8')
           const report = JSON.parse(reportJson) as StoredReport
           if (report.kind === 'extract' || report.kind === 'security') {
-            res.json({ ...report, feedbackUrl: FEEDBACK_URL, jobStatus: 'complete' })
+            res.json({ ...report, feedbackUrl: FEEDBACK_URL, ...reconcileJobStatus('complete') })
             return
           }
           res.json({
@@ -300,7 +301,7 @@ export function createChecksRouter(
             ...(report.assertions ? { assertions: report.assertions } : {}),
             ...(report.comparison ? { comparison: report.comparison } : {}),
             feedbackUrl: FEEDBACK_URL,
-            jobStatus: 'complete',
+            ...reconcileJobStatus('complete'),
           })
           return
         } catch {
@@ -319,6 +320,7 @@ export function createChecksRouter(
           status: 'failed',
           createdAt: new Date(job.createdAt).toISOString(),
           error: 'check_failed',
+          ...reconcileJobStatus('failed'),
         })
         return
       }
@@ -328,6 +330,7 @@ export function createChecksRouter(
         status: job.status,
         createdAt: new Date(job.createdAt).toISOString(),
         pollUrl: `/v1/checks/${job.id}`,
+        ...reconcileJobStatus(job.status),
       })
     }),
   )
