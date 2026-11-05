@@ -5,7 +5,7 @@ import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
 import { observeInteraction } from './interaction.js'
-import { observeLayout } from './layout.js'
+import { observeLayout, evaluateNoHorizontalOverflow } from './layout.js'
 import type {
   Viewport,
   ViewportResult,
@@ -330,8 +330,8 @@ export async function runViewportCheck(
     }
 
     // Layout checks
-    const { overflowDetected, offscreenElements, layoutLocatorHints, layoutObservation } =
-      await observeLayout(page)
+    const layoutData = await observeLayout(page)
+    const { overflowDetected, offscreenElements, layoutLocatorHints, layoutObservation } = layoutData
 
     let performanceEvidence: PerformanceEvidence = {
       navigation: {},
@@ -426,8 +426,8 @@ export async function runViewportCheck(
           let passed = false
           let detail = ''
           if (assertion.type === 'noHorizontalOverflow') {
-            passed = !overflowDetected
-            detail = passed ? 'No horizontal overflow detected.' : 'Horizontal overflow detected.'
+            assertionResults.push(evaluateNoHorizontalOverflow(layoutData))
+            continue
           } else if (assertion.type === 'noConsoleErrors') {
             passed = consoleErrors.length === 0
             detail = passed
