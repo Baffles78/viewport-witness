@@ -5,6 +5,7 @@ import type { Browser, Page } from 'playwright'
 import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
 import { observeInteraction } from './interaction.js'
+import { observeLayout } from './layout.js'
 import type {
   Viewport,
   ViewportResult,
@@ -260,30 +261,7 @@ export async function runViewportCheck(
     }
 
     // Layout checks
-    let overflowDetected = false
-    let offscreenElements = 0
-    let layoutObservation: ViewportResult['layoutObservation'] = 'unavailable'
-
-    try {
-      const layoutData = await withTimeout(
-        page.evaluate(() => {
-          const overflow = document.body.scrollWidth > window.innerWidth
-          const allElements = Array.from(document.querySelectorAll('*'))
-          const offscreen = allElements.filter((el) => {
-            const rect = el.getBoundingClientRect()
-            return rect.right > window.innerWidth * 1.2 && rect.width > 10
-          }).length
-          return { overflow, offscreen }
-        }),
-        5_000,
-        'layout_timeout',
-      )
-      overflowDetected = layoutData.overflow
-      offscreenElements = layoutData.offscreen
-      layoutObservation = 'measured'
-    } catch {
-      // ignore
-    }
+    const { overflowDetected, offscreenElements, layoutObservation } = await observeLayout(page)
 
     // Declarative, read-only assertions. These only inspect the loaded DOM and
     // observations already collected above; they never click, type, or submit.
