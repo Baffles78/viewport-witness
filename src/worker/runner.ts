@@ -219,6 +219,9 @@ export class WorkerRunner {
           job.request.assertions ?? [],
         )
         viewportResults[viewport] = result
+        if (result.layoutObservation !== 'measured') {
+          limitations.push(`viewport:${viewport} layout observation unavailable.`)
+        }
         if (result.screenshotBytes > 0) {
           this.store.recordScreenshot(
             item.jobId,
@@ -563,7 +566,7 @@ export class WorkerRunner {
     if (!allViewportsCovered) return 'INCONCLUSIVE'
 
     const evidenceComplete = results.every(
-      (r) => r.screenshotBytes > 0 && r.accessibility.completed,
+      (r) => r.screenshotBytes > 0 && r.accessibility.completed && r.layoutObservation === 'measured',
     )
     if (!evidenceComplete) return 'INCONCLUSIVE'
 
