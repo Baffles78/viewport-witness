@@ -50,8 +50,14 @@ describe('interaction observations in Chromium', () => {
     await page.setContent('<!doctype html><html><body><div style="position:absolute;left:2000px;width:100px;height:20px">Offscreen</div></body></html>')
     const result = await observeLayout(page)
     expect(result.layoutObservation).toBe('measured')
-    expect(result.overflowDetected).toBe(true)
     expect(result.offscreenElements).toBeGreaterThan(0)
+  })
+
+  it('records in-flow horizontal overflow', async () => {
+    await page.setContent('<!doctype html><html><body style="margin:0"><div style="width:2000px;height:20px">Wide</div></body></html>')
+    const result = await observeLayout(page)
+    expect(result.layoutObservation).toBe('measured')
+    expect(result.overflowDetected).toBe(true)
   })
 
   it('records a measured clean layout', async () => {
