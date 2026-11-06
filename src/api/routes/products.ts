@@ -263,7 +263,6 @@ export function createProductsRouter(
     '/v1/verify',
     requireWorkerAvailable(runner),
     challengeIfUnsigned(verifyPayment, cfg),
-    requirePaymentEnvelope,
     asyncHandler(async (req, res, next) => {
       const parsed = verifySchema.safeParse(req.body)
       if (!parsed.success) {
@@ -284,6 +283,7 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
+    requirePaymentEnvelope,
     idempotencyPreflight('verify'),
     verifyPayment,
     asyncHandler(async (req, res) => {
@@ -311,7 +311,6 @@ export function createProductsRouter(
     '/v1/compare',
     requireWorkerAvailable(runner),
     challengeIfUnsigned(comparePayment, cfg),
-    requirePaymentEnvelope,
     asyncHandler(async (req, res, next) => {
       const parsed = compareSchema.safeParse(req.body)
       if (!parsed.success) {
@@ -347,6 +346,7 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
+    requirePaymentEnvelope,
     idempotencyPreflight('compare'),
     comparePayment,
     asyncHandler(async (req, res) => {
