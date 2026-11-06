@@ -25,6 +25,14 @@ const id = '11111111-1111-4111-8111-111111111111'
 const baselineId = '22222222-2222-4222-8222-222222222222'
 const originalHeader = 'already-settled-synthetic-payment'
 
+function paymentHeader(nonce: string): string {
+  return Buffer.from(JSON.stringify({
+    x402Version: 2,
+    accepted: { scheme: 'exact', network: 'eip155:8453' },
+    payload: { nonce },
+  })).toString('base64')
+}
+
 function job(kind: JobKind): JobRecord {
   return {
     id,
@@ -32,7 +40,7 @@ function job(kind: JobKind): JobRecord {
     url: 'https://example.com',
     status: 'queued',
     idempotencyKey: 'same-key',
-    paymentId: createHash('sha256').update(originalHeader).digest('hex'),
+    paymentId: createHash('sha256').update(paymentHeader(originalHeader)).digest('hex'),
     customerId: null,
     createdAt: Date.now(),
     startedAt: null,
@@ -89,7 +97,7 @@ async function post(port: number, route: string, body: unknown, header: string) 
   const response = await fetch(`http://127.0.0.1:${port}${route}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'same-key',
-      'Payment-Signature': header },
+      'Payment-Signature': paymentHeader(header) },
     body: JSON.stringify(body),
   })
   return { status: response.status, body: await response.json() as Record<string, unknown> }
