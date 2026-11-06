@@ -88,9 +88,19 @@ afterEach(async () => {
 })
 
 function makeStore() {
-  let job: { id: string; status: string; paymentId: string } | null = null
-  const createJob = vi.fn((input: { id: string; initialStatus: string; paymentId: string }) => {
-    job = { id: input.id, status: input.initialStatus, paymentId: input.paymentId }
+  let job: {
+    id: string; status: string; paymentId: string; kind: string; url: string;
+    request: { assertions?: unknown[]; maxOutputTokens?: number }; baselineJobId: string | null
+  } | null = null
+  const createJob = vi.fn((input: {
+    id: string; initialStatus: string; paymentId: string; kind: string; url: string;
+    request: { assertions?: unknown[]; maxOutputTokens?: number }; baselineJobId?: string
+  }) => {
+    job = {
+      id: input.id, status: input.initialStatus, paymentId: input.paymentId,
+      kind: input.kind, url: input.url, request: input.request,
+      baselineJobId: input.baselineJobId ?? null,
+    }
   })
   const updateJobStatus = vi.fn()
   const store = {
@@ -118,7 +128,7 @@ async function makeServer(store: JobStore, runner: WorkerRunner) {
   return (server.address() as { port: number }).port
 }
 
-async function callCheck(port: number) {
+async function callTool(port: number, name: string, args: Record<string, unknown>) {
   const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
     method: 'POST',
     headers: {
@@ -128,7 +138,7 @@ async function callCheck(port: number) {
     },
     body: JSON.stringify({
       jsonrpc: '2.0', id: 1, method: 'tools/call',
-      params: { name: 'check_page', arguments: { url: 'https://example.com' },
+      params: { name, arguments: args,
         _meta: { 'mock-payment': paymentPayload } },
     }),
   })
@@ -140,6 +150,8 @@ async function callCheck(port: number) {
     body: JSON.parse(payload.result?.content?.[0]?.text ?? '{}') as Record<string, unknown>,
   }
 }
+
+const callCheck = (port: number) => callTool(port, 'check_page', { url: 'https://example.com' })
 
 describe('MCP paid admission with mocked settlement', () => {
   it('never enters the paid wrapper while worker is quarantined', async () => {
