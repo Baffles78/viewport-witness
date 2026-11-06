@@ -63,10 +63,11 @@ function makeMockRunner(): WorkerRunner {
 async function startMcpServer(
   cfg: Config,
   store: JobStore = makeMockStore(),
+  runner: WorkerRunner = makeMockRunner(),
 ): Promise<{ port: number; close: () => Promise<void> }> {
   const app = express()
   app.use(express.json())
-  app.use(createMcpRouter(store, makeMockRunner(), cfg))
+  app.use(createMcpRouter(store, runner, cfg))
   const server = http.createServer(app)
   servers.push(server)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -478,5 +479,33 @@ describe('GET /favicon.ico', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('image/png')
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
+  })
+})
+
+describe('MCP worker admission', () => {
+  it('rejects a new tool job when quarantined while free retrieval remains available', async () => {
+    const store = makeMockStore()
+    const runner = { isHealthy: () => false, enqueue: async () => {
+      throw new Error('should not enqueue')
+    } } as unknown as WorkerRunner
+    const { port } = await startMcpServer(makeConfig(), store, runner)
+    const call = async (name: string, args: Record<string, string>) => {
+      const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'tools/call',
+          params: { name, arguments: args } }),
+      })
+      return response.json() as Promise<{ result?: { content?: Array<{ text?: string }>; isError?: boolean } }>
+    }
+    const blocked = await call('check_page', { url: 'https://example.com' })
+    expect(blocked.result?.isError).toBe(true)
+    expect(JSON.parse(blocked.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+      error: 'worker_unavailable',
+    })
+    const retrieval = await call('get_report', { jobId: '11111111-1111-4111-8111-111111111111' })
+    expect(JSON.parse(retrieval.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+      error: 'not_found',
+    })
   })
 })
