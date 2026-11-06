@@ -186,11 +186,15 @@ export class JobStore {
     return this.getJob(params.id) as JobRecord
   }
 
-  claimPaymentAdmission(key: string): boolean {
+  claimPaymentAdmission(key: string, limit = 10_000): boolean {
     const hash = createHash('sha256').update(key).digest('hex')
+    // Reserve and check the global cap in one SQLite write statement. Uncertain
+    // admissions do not expire automatically; cap them rather than growing disk
+    // without bound. A full table fails closed before payment middleware.
     const inserted = this.conn.prepare(`INSERT OR IGNORE INTO payment_admissions(key_hash,created_at)
-      SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE idempotency_key=?)`)
-      .run(hash, Date.now(), key)
+      SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE idempotency_key=?)
+        AND (SELECT COUNT(*) FROM payment_admissions) < ?`)
+      .run(hash, Date.now(), key, limit)
     return Number(inserted.changes) === 1
   }
 
