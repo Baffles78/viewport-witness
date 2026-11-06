@@ -43,6 +43,18 @@ function response() {
 describe('durable paid admission', () => {
   const cfg = { PAYMENT_MODE: 'production' } as Config
 
+  it('caps unresolved admissions and fails closed before payment', async () => {
+    const dbPath = await databasePath()
+    const first = openStore(dbPath)
+    const second = openStore(dbPath)
+    expect(first.claimPaymentAdmission('one', 2)).toBe(true)
+    expect(second.claimPaymentAdmission('two', 2)).toBe(true)
+    expect(first.claimPaymentAdmission('three', 2)).toBe(false)
+    expect(second.claimPaymentAdmission('one', 2)).toBe(false)
+    first.releasePaymentAdmission('one')
+    expect(second.claimPaymentAdmission('three', 2)).toBe(true)
+  })
+
   it('claims one key across two store instances and retains uncertainty after restart', async () => {
     const dbPath = await databasePath()
     const first = openStore(dbPath)
