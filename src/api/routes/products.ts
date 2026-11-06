@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
-import { canReplayJob } from '../../idempotency-replay.js'
+import { canReplayJob, sameJobIntent } from '../../idempotency-replay.js'
 import type { JobKind, PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 
@@ -99,6 +99,10 @@ function paymentIdentity(
   }
 }
 
+export class JobReplayConflictError extends Error {
+  constructor() { super('job_replay_conflict') }
+}
+
 export async function createProductJob(params: {
   store: JobStore
   runner: ProductRunner
@@ -113,10 +117,19 @@ export async function createProductJob(params: {
   customerId?: string
   deferEnqueue?: boolean
 }): Promise<{ id: string; status: string; pollUrl: string; paymentMode: string }> {
+  const matchesExisting = (job: import('../../types.js').JobRecord): boolean =>
+    sameJobIntent(job, {
+      kind: params.kind,
+      url: params.url,
+      ...(params.assertions ? { assertions: params.assertions } : {}),
+      ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
+      ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
+    }) && (!params.paymentId || job.paymentId === params.paymentId)
   const existing =
     (params.idempotencyKey ? params.store.getJobByIdempotencyKey(params.idempotencyKey) : null) ??
     (params.paymentId ? params.store.getJobByPaymentId(params.paymentId) : null)
   if (existing) {
+    if (!matchesExisting(existing)) throw new JobReplayConflictError()
     return {
       id: existing.id,
       status: existing.status,
@@ -146,6 +159,7 @@ export async function createProductJob(params: {
       (params.idempotencyKey ? params.store.getJobByIdempotencyKey(params.idempotencyKey) : null) ??
       (params.paymentId ? params.store.getJobByPaymentId(params.paymentId) : null)
     if (!raced) throw error
+    if (!matchesExisting(raced)) throw new JobReplayConflictError()
     return {
       id: raced.id,
       status: raced.status,
