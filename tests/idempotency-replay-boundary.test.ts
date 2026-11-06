@@ -3,7 +3,7 @@ import express from 'express'
 import http from 'node:http'
 import { createHash } from 'node:crypto'
 import { createChecksRouter } from '../src/api/routes/checks.js'
-import { createProductsRouter } from '../src/api/routes/products.js'
+import { createProductsRouter, createProductJob, JobReplayConflictError } from '../src/api/routes/products.js'
 import { createWebProductsRouter } from '../src/api/routes/web-products.js'
 import type { Config } from '../src/config.js'
 import type { JobStore } from '../src/db.js'
@@ -115,6 +115,24 @@ describe('paid idempotency replay boundary', () => {
       expect(payment).not.toHaveBeenCalled()
     })
   }
+
+  it('rejects a conflicting paid product replay discovered after preflight', async () => {
+    const existing = job('verify')
+    const store = {
+      getJobByIdempotencyKey: () => existing,
+      getJobByPaymentId: () => null,
+    } as unknown as JobStore
+    await expect(createProductJob({
+      store,
+      runner: { enqueue: vi.fn(), isHealthy: () => true },
+      cfg: { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config,
+      kind: 'verify',
+      url: existing.url,
+      assertions: [{ type: 'noConsoleErrors' }],
+      idempotencyKey: 'same-key',
+      paymentId: 'another-settled-payment',
+    })).rejects.toBeInstanceOf(JobReplayConflictError)
+  })
 
   it('rejects changed work even with the original payment payload', async () => {
     const { port, payment } = await serve('check')
