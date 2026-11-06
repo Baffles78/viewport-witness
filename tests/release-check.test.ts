@@ -206,6 +206,73 @@ describe('real asynchronous report lifecycle', () => {
   })
 })
 
+describe('same-job recovery conformance', () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+  const options = (fetchFn: typeof fetch, checkpoint = makeCheckpoint()) => ({
+    serviceUrl: 'http://127.0.0.1:3000',
+    testMode: true,
+    execute: true,
+    fetchFn,
+    checkpoint,
+    validateTarget: noValidation,
+    pollAttempts: 3,
+    pollIntervalMs: 0,
+    sleep: async () => {},
+  })
+
+  it('continues the same ID through retryable and running to a report', async () => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'retryable', nextAction: 'poll_same_job' }))
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'running', nextAction: 'poll_same_job' }))
+      .mockResolvedValueOnce(jsonResponse(terminalReport(id, 'https://example.com')))
+    const result = await runReleaseCheck(makeManifest(), options(fetchFn))
+    expect(result.decision).toBe('PASS')
+    expect(fetchFn).toHaveBeenCalledTimes(4)
+    expect(fetchFn.mock.calls.filter(([url]) => String(url).endsWith('/v1/checks'))).toHaveLength(1)
+  })
+
+  it('stops at a permanent job failure without resubmitting', async () => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'failed', nextAction: 'stop' }))
+    const result = await runReleaseCheck(makeManifest(), options(fetchFn))
+    expect(result.decision).toBe('INCONCLUSIVE')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats an expired completed report as inconclusive', async () => {
+    const expired = {
+      ...terminalReport(id, 'https://example.com'),
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      jobStatus: 'complete',
+      nextAction: 'inspect_report',
+    }
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse(expired))
+    const result = await runReleaseCheck(makeManifest(), options(fetchFn))
+    expect(result.decision).toBe('INCONCLUSIVE')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the accepted ID after an interrupted poll and resumes without another POST', async () => {
+    const checkpoint = makeCheckpoint()
+    const firstFetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
+      .mockRejectedValueOnce(new Error('network interrupted'))
+    const first = await runReleaseCheck(makeManifest(), options(firstFetch, checkpoint))
+    expect(first.decision).toBe('INCONCLUSIVE')
+    expect(checkpoint.get()?.pages[0]?.jobId).toBe(id)
+
+    const secondFetch = vi.fn().mockResolvedValue(jsonResponse(terminalReport(id, 'https://example.com')))
+    const second = await runReleaseCheck(makeManifest(), options(secondFetch, checkpoint))
+    expect(second.decision).toBe('PASS')
+    expect(secondFetch).toHaveBeenCalledTimes(1)
+    expect(String(secondFetch.mock.calls[0]?.[0])).toContain('/v1/checks/' + id)
+  })
+})
+
 describe('runReleaseCheck — preflight dry-run', () => {
   it('returns dryRun result without calling adapter when execute=false', async () => {
     const endpoint = 'http://127.0.0.1:3000/v1/checks'

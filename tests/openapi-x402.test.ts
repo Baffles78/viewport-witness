@@ -102,6 +102,19 @@ describe('openapi spec — report value fields', () => {
     expect(interactions.properties.keyboardReachable?.description).toContain('potential focusability')
   })
 
+  it('documents same-job retry and terminal reconciliation actions', () => {
+    const schemas = openApiSpec.components.schemas as Record<
+      string,
+      { properties?: Record<string, { enum?: readonly string[]; const?: string }> }
+    >
+    const pending = schemas['JobPending']?.properties
+    expect(pending?.['status']?.enum).toContain('retryable')
+    expect(pending?.['status']?.enum).toContain('payment_pending')
+    expect(pending?.['nextAction']?.const).toBe('poll_same_job')
+    expect(schemas['JobFailed']?.properties?.['nextAction']?.const).toBe('stop')
+    expect(schemas['QAReport']?.properties?.['nextAction']?.const).toBe('inspect_report')
+  })
+
   it('represents both new completed report variants without widening QAReport kind', () => {
     const schemas = openApiSpec.components.schemas as Record<
       string,

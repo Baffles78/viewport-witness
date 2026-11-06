@@ -25,7 +25,7 @@ Operate within the caller's approved network, recipient, operation and spending 
 
 ### 3. Submit the check
 
-Send the target URL. Use an idempotency key so that a retry for the same intent does not create a duplicate job and does not trigger a second charge.
+Send the target URL. Use an idempotency key for the same intent and persist it with the payment reference. Authorized retries can reuse an accepted job, but the key alone does not provide an unpaid lookup or guarantee against a second charge after uncertain settlement. If creation is interrupted before an ID arrives, stop and reconcile the payment outside this API before signing again.
 
 ```
 POST /v1/checks
@@ -36,7 +36,7 @@ Record the returned job `id`.
 
 ### 4. Poll the same job
 
-Call `GET /v1/checks/{id}` at a bounded interval (for example, every 5 seconds). Browser reports finish with `status` `PASS`, `FAIL` or `INCONCLUSIVE`; job failures return `failed`. MCP additionally returns `jobStatus: complete` for a stored report. Always poll the original job by its `id`. Do not submit a second paid job while its outcome is uncertain.
+Call `GET /v1/checks/{id}` at a bounded interval (for example, every 5 seconds). Browser reports finish with `status` `PASS`, `FAIL` or `INCONCLUSIVE`; job failures return `failed`. MCP additionally returns `jobStatus: complete` for a stored report. Always poll the original job by its `id`. `nextAction: poll_same_job` includes the worker's `retryable` state; it does not authorize a new paid submission. Stop after a bounded window and retain the ID for later reconciliation. `nextAction: stop` means permanent failure. A missing or expired ID is not evidence that repaying is safe. Do not submit a second paid job while its outcome is uncertain.
 
 ### 5. Call `buildAgentResult` / review the agent result
 

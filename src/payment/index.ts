@@ -158,7 +158,7 @@ export function customerFingerprint(
 
 // Bazaar discovery extension: describes the request/response schema for marketplace indexing.
 // Request: strict {url:string} only. Response: the accepted 202 job object, not the eventual report.
-function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
+export function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
   const input =
     route === 'POST /v1/verify'
       ? { url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }] }
@@ -246,6 +246,8 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       },
     })
   }
+  const isCheck = route === 'POST /v1/checks'
+  const jobStatuses = ['payment_pending', 'queued', 'running', 'retryable', 'complete', 'failed']
   return declareDiscoveryExtension({
     bodyType: 'json',
     input,
@@ -259,6 +261,11 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       example: {
         id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'queued',
+        ...(isCheck ? {
+          jobStatus: 'queued',
+          nextAction: 'poll_same_job',
+          retryAfterSeconds: 5,
+        } : {}),
         pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
         paymentMode: 'production',
       },
@@ -266,7 +273,14 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Job UUID' },
-          status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
+          status: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
+          ...(isCheck ? {
+            jobStatus: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
+            nextAction: { type: 'string', enum: ['poll_same_job', 'inspect_report', 'stop'], description: 'Next reconciliation action' },
+            retryAfterSeconds: { type: 'integer', minimum: 1, description: 'Suggested poll delay' },
+            paymentReplay: { type: 'boolean', description: 'Existing job returned for this payment' },
+          } : {}),
+          idempotent: { type: 'boolean', description: 'Existing job returned for this key' },
           pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
           paymentMode: {
             type: 'string',
@@ -274,7 +288,10 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
             description: 'Payment mode used for this job',
           },
         },
-        required: ['id', 'status', 'pollUrl', 'paymentMode'],
+        required: [
+          'id', 'status', 'pollUrl', 'paymentMode',
+          ...(isCheck ? ['jobStatus', 'nextAction'] : []),
+        ],
         additionalProperties: false,
       },
     },

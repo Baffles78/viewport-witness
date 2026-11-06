@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import express from 'express'
 import http from 'http'
+import os from 'node:os'
+import path from 'node:path'
+import { promises as fs } from 'node:fs'
 import { createMcpRouter } from '../src/mcp.js'
 import { createInfoRouter } from '../src/api/routes/info.js'
 import type { Config } from '../src/config.js'
@@ -57,10 +60,14 @@ function makeMockRunner(): WorkerRunner {
   } as unknown as WorkerRunner
 }
 
-async function startMcpServer(cfg: Config): Promise<{ port: number; close: () => Promise<void> }> {
+async function startMcpServer(
+  cfg: Config,
+  store: JobStore = makeMockStore(),
+  runner: WorkerRunner = makeMockRunner(),
+): Promise<{ port: number; close: () => Promise<void> }> {
   const app = express()
   app.use(express.json())
-  app.use(createMcpRouter(makeMockStore(), makeMockRunner(), cfg))
+  app.use(createMcpRouter(store, runner, cfg))
   const server = http.createServer(app)
   servers.push(server)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -129,6 +136,82 @@ afterEach(async () => {
         }),
     ),
   )
+})
+
+describe('MCP get_report same-job reconciliation', () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+
+  async function poll(status: string | null, reportPath: string | null = null) {
+    const store = {
+      ...makeMockStore(),
+      getJob: () => status ? { id, status, reportPath } : null,
+    } as unknown as JobStore
+    const { port } = await startMcpServer(makeConfig(), store)
+    const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'get_report', arguments: { jobId: id } },
+      }),
+    })
+    const payload = await response.json() as {
+      result?: { content?: Array<{ text?: string }>; isError?: boolean }
+    }
+    return {
+      isError: payload.result?.isError,
+      body: JSON.parse(payload.result?.content?.[0]?.text ?? '{}') as Record<string, unknown>,
+    }
+  }
+
+  for (const status of ['queued', 'running', 'retryable']) {
+    it(`${status} keeps polling the same ID`, async () => {
+      const result = await poll(status)
+      expect(result.body).toMatchObject({
+        id,
+        status,
+        jobStatus: status,
+        nextAction: 'poll_same_job',
+        retryAfterSeconds: 5,
+      })
+    })
+  }
+
+  it('permanent failure stops', async () => {
+    expect((await poll('failed')).body).toMatchObject({
+      id, status: 'failed', jobStatus: 'failed', nextAction: 'stop',
+    })
+  })
+
+  it('missing or expired ID stops', async () => {
+    const result = await poll(null)
+    expect(result.isError).toBe(true)
+    expect(result.body).toMatchObject({ error: 'not_found', nextAction: 'stop' })
+  })
+
+  it('completed job without a report stops', async () => {
+    const result = await poll('complete')
+    expect(result.isError).toBe(true)
+    expect(result.body).toMatchObject({ error: 'report_unavailable', nextAction: 'stop' })
+  })
+
+  it('completed report asks for inspection', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-mcp-reconcile-'))
+    try {
+      const reportPath = path.join(dir, 'report.json')
+      await fs.writeFile(reportPath, JSON.stringify({ id, kind: 'extract', status: 'PASS' }))
+      expect((await poll('complete', reportPath)).body).toMatchObject({
+        id, status: 'PASS', jobStatus: 'complete', nextAction: 'inspect_report',
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('MCP tools/list — tool annotations', () => {
@@ -396,5 +479,33 @@ describe('GET /favicon.ico', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('image/png')
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
+  })
+})
+
+describe('MCP worker admission', () => {
+  it('rejects a new tool job when quarantined while free retrieval remains available', async () => {
+    const store = makeMockStore()
+    const runner = { isHealthy: () => false, enqueue: async () => {
+      throw new Error('should not enqueue')
+    } } as unknown as WorkerRunner
+    const { port } = await startMcpServer(makeConfig(), store, runner)
+    const call = async (name: string, args: Record<string, string>) => {
+      const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'tools/call',
+          params: { name, arguments: args } }),
+      })
+      return response.json() as Promise<{ result?: { content?: Array<{ text?: string }>; isError?: boolean } }>
+    }
+    const blocked = await call('check_page', { url: 'https://example.com' })
+    expect(blocked.result?.isError).toBe(true)
+    expect(JSON.parse(blocked.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+      error: 'worker_unavailable',
+    })
+    const retrieval = await call('get_report', { jobId: '11111111-1111-4111-8111-111111111111' })
+    expect(JSON.parse(retrieval.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+      error: 'not_found',
+    })
   })
 })

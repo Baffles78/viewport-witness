@@ -88,13 +88,16 @@ network/payTo choice.
 GET https://qa.honeygate.app/v1/checks/<id>
 ```
 
-Poll until `status` is `complete`, `failed`, or `retryable`. Typical check time: 15–90 seconds.
-Recommended interval: 5–10 seconds.
+While `nextAction` is `poll_same_job`, poll this job ID at a bounded interval (the response suggests
+`retryAfterSeconds: 5`). This includes `retryable`, which means internal worker recovery, not a
+new paid submission. A stored report has `jobStatus: complete` and `nextAction: inspect_report`;
+a permanent failure has `nextAction: stop`. If polling is interrupted or reaches its limit,
+retain the ID and resume free retrieval later. Typical check time: 15–90 seconds.
 
 While running:
 
 ```json
-{ "id": "...", "status": "queued|running", "createdAt": "...", "pollUrl": "/v1/checks/..." }
+{ "id": "...", "status": "queued", "jobStatus": "queued", "nextAction": "poll_same_job", "retryAfterSeconds": 5, "pollUrl": "/v1/checks/..." }
 ```
 
 When complete, the full QAReport is returned. The top-level `status` field becomes

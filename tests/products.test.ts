@@ -65,6 +65,27 @@ describe('agent QA products', () => {
     expect(enqueue).toHaveBeenCalledWith(created.id)
   })
 
+  it('preserves a paid queued job if admission closes before enqueue', async () => {
+    let healthy = true
+    const created = await createProductJob({
+      store,
+      runner: {
+        isHealthy: () => healthy,
+        enqueue: async () => {
+          healthy = false
+          throw new Error('Worker is shutting down')
+        },
+      },
+      cfg,
+      kind: 'extract',
+      url: 'https://example.com',
+      paymentId: 'settled-before-quarantine',
+    })
+    expect(created.status).toBe('queued')
+    expect(store.getJob(created.id)?.status).toBe('queued')
+    expect(store.getJobByPaymentId('settled-before-quarantine')?.id).toBe(created.id)
+  })
+
   it('keeps MCP work inactive until settlement activates it', async () => {
     const updateSpy = vi.spyOn(store, 'updateJobStatus')
     const created = await createProductJob({

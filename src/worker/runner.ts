@@ -155,8 +155,10 @@ export class WorkerRunner {
     const controller = new AbortController()
     this.currentAbortController = controller
     let timeoutHandle: NodeJS.Timeout | undefined
+    let timedOut = false
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
+        timedOut = true
         controller.abort()
         reject(new Error('job_timeout'))
       }, this.timeoutMs)
@@ -182,20 +184,41 @@ export class WorkerRunner {
         })
       }
     } catch (err: unknown) {
-      const msg = (err as Error).message ?? 'unknown'
+      const msg = timedOut ? 'job_timeout' : (err as Error).message ?? 'unknown'
       if (msg === 'job_timeout' || msg === 'job_aborted') {
-        await workPromise.catch(() => undefined)
+        // A browser or third-party call may ignore AbortSignal. Bound cleanup so this
+        // worker does not remain stuck forever, and avoid overlapping a retry with
+        // work that might still be active.
+        const settled = await Promise.race([
+          workPromise.then(() => true, () => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000)),
+        ])
+        if (!settled && !this.shuttingDown) {
+          // Returning from the timeout does not terminate non-cooperative work.
+          // Quarantine this worker so no other job starts beside the orphaned work;
+          // queued rows remain in the database for recovery after process restart.
+          this.shuttingDown = true
+          this.queue = []
+          console.error('[worker] abort did not settle; restart required for safe recovery')
+          this.store.updateJobStatus(item.jobId, 'failed', {
+            completedAt: Date.now(),
+            error: 'job_abort_unresponsive',
+          })
+          return
+        }
         if (this.store.getJob(item.jobId)?.status === 'running') {
           this.store.markJobRetryable(item.jobId)
         }
         const retryable = this.store.getJob(item.jobId)
-        if (
-          msg === 'job_timeout' &&
-          !this.shuttingDown &&
-          retryable?.status === 'retryable' &&
-          retryable.retryCount <= 1
-        ) {
-          this.queue.push(item)
+        if (msg === 'job_timeout' && !this.shuttingDown && retryable?.status === 'retryable') {
+          if (retryable.retryCount <= 1) {
+            this.queue.push(item)
+          } else {
+            this.store.updateJobStatus(item.jobId, 'failed', {
+              completedAt: Date.now(),
+              error: 'job_timeout',
+            })
+          }
         }
       } else {
         this.store.updateJobStatus(item.jobId, 'failed', {

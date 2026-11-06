@@ -11,7 +11,8 @@ import type { Config } from '../../config.js'
 import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
-import { challengeIfUnsigned } from './products.js'
+import { reconcileJobStatus } from '../../job-reconciliation.js'
+import { challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -97,6 +98,7 @@ export function createChecksRouter(
       res.status(202).json({
         id: existing.id,
         status: existing.status,
+        ...reconcileJobStatus(existing.status),
         pollUrl: `/v1/checks/${existing.id}`,
         paymentMode: cfg.PAYMENT_MODE,
         idempotent: true,
@@ -125,6 +127,7 @@ export function createChecksRouter(
 
   router.post(
     '/v1/checks',
+    requireWorkerAvailable(runner),
     challengeIfUnsigned(paymentMiddleware, cfg),
     validationPreflight,
     idempotencyPreflight,
@@ -172,6 +175,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existingPaymentJob.id,
             status: existingPaymentJob.status,
+        ...reconcileJobStatus(existingPaymentJob.status),
             pollUrl: `/v1/checks/${existingPaymentJob.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             paymentReplay: true,
@@ -188,6 +192,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existing.id,
             status: existing.status,
+        ...reconcileJobStatus(existing.status),
             pollUrl: `/v1/checks/${existing.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             idempotent: true,
@@ -218,6 +223,7 @@ export function createChecksRouter(
           res.status(202).json({
             id: existing.id,
             status: existing.status,
+        ...reconcileJobStatus(existing.status),
             pollUrl: `/v1/checks/${existing.id}`,
             paymentMode: cfg.PAYMENT_MODE,
             idempotent: true,
@@ -235,6 +241,18 @@ export function createChecksRouter(
       try {
         await runner.enqueue(jobId)
       } catch (err: unknown) {
+        if (!runner.isHealthy()) {
+          // Admission may close after payment settles. Keep the paid queued row
+          // durable so the restarted worker can recover this exact job.
+          res.status(202).json({
+            id: jobId,
+            status: 'queued',
+            ...reconcileJobStatus('queued'),
+            pollUrl: `/v1/checks/${jobId}`,
+            paymentMode: cfg.PAYMENT_MODE,
+          })
+          return
+        }
         store.updateJobStatus(jobId, 'failed', {
           completedAt: Date.now(),
           error: (err as Error).message,
@@ -250,6 +268,7 @@ export function createChecksRouter(
       res.status(202).json({
         id: jobId,
         status: 'queued',
+        ...reconcileJobStatus('queued'),
         pollUrl: `/v1/checks/${jobId}`,
         paymentMode: cfg.PAYMENT_MODE,
       })
@@ -267,7 +286,7 @@ export function createChecksRouter(
 
       const job = store.getJob(id)
       if (!job) {
-        res.status(404).json({ error: 'not_found', detail: 'Job not found', code: 'not_found' })
+        res.status(404).json({ error: 'not_found', detail: 'Job not found or expired', code: 'not_found', nextAction: 'stop' })
         return
       }
 
@@ -278,7 +297,7 @@ export function createChecksRouter(
           const reportJson = await fs.readFile(job.reportPath, 'utf8')
           const report = JSON.parse(reportJson) as StoredReport
           if (report.kind === 'extract' || report.kind === 'security') {
-            res.json({ ...report, feedbackUrl: FEEDBACK_URL, jobStatus: 'complete' })
+            res.json({ ...report, feedbackUrl: FEEDBACK_URL, ...reconcileJobStatus('complete') })
             return
           }
           res.json({
@@ -300,7 +319,7 @@ export function createChecksRouter(
             ...(report.assertions ? { assertions: report.assertions } : {}),
             ...(report.comparison ? { comparison: report.comparison } : {}),
             feedbackUrl: FEEDBACK_URL,
-            jobStatus: 'complete',
+            ...reconcileJobStatus('complete'),
           })
           return
         } catch {
@@ -308,9 +327,19 @@ export function createChecksRouter(
             error: 'report_unavailable',
             detail: 'Report file could not be read.',
             code: 'report_unavailable',
+            nextAction: 'stop',
           })
           return
         }
+      }
+
+      if (job.status === 'complete') {
+        res.status(500).json({
+          error: 'report_unavailable',
+          code: 'report_unavailable',
+          nextAction: 'stop',
+        })
+        return
       }
 
       if (job.status === 'failed') {
@@ -319,6 +348,7 @@ export function createChecksRouter(
           status: 'failed',
           createdAt: new Date(job.createdAt).toISOString(),
           error: 'check_failed',
+          ...reconcileJobStatus('failed'),
         })
         return
       }
@@ -328,6 +358,7 @@ export function createChecksRouter(
         status: job.status,
         createdAt: new Date(job.createdAt).toISOString(),
         pollUrl: `/v1/checks/${job.id}`,
+        ...reconcileJobStatus(job.status),
       })
     }),
   )
