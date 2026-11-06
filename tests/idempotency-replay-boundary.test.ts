@@ -154,6 +154,16 @@ describe('paid idempotency replay boundary', () => {
     })
   }
 
+  it('accepts a valid verify replay through a case and trailing-slash route variant', async () => {
+    const { port, payment } = await serve('verify')
+    const result = await post(port, '/v1/VERIFY/', {
+      url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
+    }, originalHeader)
+    expect(result.status).toBe(202)
+    expect(result.body).toMatchObject({ id, idempotent: true })
+    expect(payment).not.toHaveBeenCalled()
+  })
+
   it('rejects a cross-product key replay with the original payment payload', async () => {
     const { port, payment } = await serve('check')
     const result = await post(port, '/v1/verify', {
