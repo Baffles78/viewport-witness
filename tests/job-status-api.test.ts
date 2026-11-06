@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import express from 'express'
 import http from 'node:http'
 import os from 'node:os'
@@ -98,5 +98,30 @@ describe('HTTP same-job reconciliation', () => {
     const response = await getJobStatus(null)
     expect(response.code).toBe(404)
     expect(response.body).toMatchObject({ error: 'not_found', nextAction: 'stop' })
+  })
+})
+
+describe('production unsigned creation recovery', () => {
+  it('returns the payment challenge before idempotency lookup', async () => {
+    const lookup = vi.fn()
+    const store = { getJobByIdempotencyKey: lookup } as unknown as JobStore
+    const cfg = { PAYMENT_MODE: 'production' } as Config
+    const paymentChallenge = (_req: express.Request, res: express.Response) => {
+      res.status(402).json({ error: 'payment_required' })
+    }
+    const app = express()
+    app.use(express.json())
+    app.use(createChecksRouter(store, {} as WorkerRunner, cfg, paymentChallenge))
+    const server = http.createServer(app)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'uncertain-payment' },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    })
+    expect(response.status).toBe(402)
+    expect(lookup).not.toHaveBeenCalled()
   })
 })
