@@ -113,7 +113,7 @@ describe('production unsigned creation recovery', () => {
     }
     const app = express()
     app.use(express.json())
-    app.use(createChecksRouter(store, {} as WorkerRunner, cfg, paymentChallenge))
+    app.use(createChecksRouter(store, { isHealthy: () => true } as WorkerRunner, cfg, paymentChallenge))
     const server = http.createServer(app)
     servers.push(server)
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
