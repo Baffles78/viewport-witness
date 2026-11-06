@@ -200,8 +200,10 @@ export function createProductsRouter(
         productInput?: { url: string; assertions?: PageAssertion[]; baselineJobId?: string }
       }).productInput
       const intent = req.path === '/v1/verify'
-        ? { kind: 'verify' as const, url: input?.url ?? '', assertions: input?.assertions }
-        : { kind: 'compare' as const, url: input?.url ?? '', baselineJobId: input?.baselineJobId }
+        ? { kind: 'verify' as const, url: input?.url ?? '',
+            ...(input?.assertions ? { assertions: input.assertions } : {}) }
+        : { kind: 'compare' as const, url: input?.url ?? '',
+            ...(input?.baselineJobId ? { baselineJobId: input.baselineJobId } : {}) }
       if (!canReplayJob(existing, req, cfg, intent)) {
         res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
         return
