@@ -135,6 +135,47 @@ describe('anonymous unique job lifecycle', () => {
       expect(rows(store).filter(r => r.event === 'accepted_paid_job')[0]?.source).toBe('mcp')
     } finally { store.close() }
   })
+  it('counts a retried job once when the same durable job eventually completes', () => {
+    const store = memoryStore()
+    try {
+      create(store, 'retried')
+      store.updateJobStatus('retried', 'running')
+      store.markJobRetryable('retried')
+      expect(store.getJob('retried')?.status).toBe('retryable')
+      store.updateJobStatus('retried', 'running')
+      store.updateJobStatus('retried', 'complete')
+      store.updateJobStatus('retried', 'complete')
+      expect(count(store, 'job_created')).toBe(1)
+      expect(count(store, 'accepted_paid_job')).toBe(1)
+      expect(count(store, 'job_complete')).toBe(1)
+      expect(count(store, 'job_failed')).toBe(0)
+    } finally { store.close() }
+  })
+  it('separates exhausted timeout failure from queued settlement recovery', () => {
+    const store = memoryStore()
+    try {
+      create(store, 'exhausted')
+      store.updateJobStatus('exhausted', 'running')
+      store.markJobRetryable('exhausted')
+      store.updateJobStatus('exhausted', 'running')
+      store.markJobRetryable('exhausted')
+      store.updateJobStatus('exhausted', 'failed', { error: 'job_timeout' })
+      store.updateJobStatus('exhausted', 'failed', { error: 'job_timeout' })
+
+      create(store, 'quarantine-race', true, 'mcp')
+      expect(store.activatePaymentPendingJob('quarantine-race')).toBe(true)
+      expect(store.getJob('quarantine-race')?.status).toBe('queued')
+      // Quarantine after settlement leaves the paid row queued for restart.
+      store.updateJobStatus('quarantine-race', 'running')
+      store.updateJobStatus('quarantine-race', 'complete')
+
+      expect(count(store, 'job_created')).toBe(2)
+      expect(count(store, 'accepted_paid_job')).toBe(2)
+      expect(count(store, 'job_failed')).toBe(1)
+      expect(count(store, 'job_complete')).toBe(1)
+      expect(count(store, 'payment_pending_failed')).toBe(0)
+    } finally { store.close() }
+  })
   it('test-mode creation/completion never establishes paid admission', () => {
     const store = memoryStore()
     try {
