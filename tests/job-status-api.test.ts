@@ -4,6 +4,10 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+vi.mock('../src/ssrf.js', () => ({
+  validatePublicHttpsUrl: vi.fn(async () => ({ valid: true })),
+}))
+
 import { createChecksRouter } from '../src/api/routes/checks.js'
 import { createProductsRouter } from '../src/api/routes/products.js'
 import { createWebProductsRouter } from '../src/api/routes/web-products.js'
@@ -155,5 +159,43 @@ describe('quarantined worker admission', () => {
     expect(payment).not.toHaveBeenCalled()
     const retrieval = await fetch(`http://127.0.0.1:${port}/v1/checks/${id}`)
     expect(retrieval.status).toBe(404)
+  })
+})
+
+describe('post-payment admission race', () => {
+  it('returns the durable check job if the worker quarantines during settlement', async () => {
+    let healthy = true
+    const stored = vi.fn()
+    const store = {
+      getJobByPaymentId: () => null,
+      createJob: stored,
+    } as unknown as JobStore
+    const runner = {
+      isHealthy: () => healthy,
+      enqueue: async () => { throw new Error('Worker is shutting down') },
+    } as unknown as WorkerRunner
+    const payment = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      req.paymentResult = { settled: true, mode: 'production', paymentId: 'synthetic-payment' }
+      healthy = false
+      next()
+    }
+    const cfg = { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config
+    const app = express()
+    app.use(express.json())
+    app.use(createChecksRouter(store, runner, cfg, payment))
+    const server = http.createServer(app)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Payment-Signature': 'synthetic' },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    })
+    expect(response.status).toBe(202)
+    const body = await response.json()
+    expect(body).toMatchObject({ status: 'queued', jobStatus: 'queued', nextAction: 'poll_same_job' })
+    expect(stored).toHaveBeenCalledOnce()
+    expect(stored.mock.calls[0]?.[0]).toMatchObject({ paymentId: 'synthetic-payment' })
   })
 })
