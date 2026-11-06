@@ -6,7 +6,7 @@ import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
 import { canReplayJob } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
-import { challengeIfUnsigned, createProductJob, requireWorkerAvailable } from './products.js'
+import { challengeIfUnsigned, createProductJob, requireWorkerAvailable, sendProductJob } from './products.js'
 
 const extractSchema = z
   .object({
@@ -127,7 +127,7 @@ export function createWebProductsRouter(
           return
         }
         const key = idempotencyKey(req)
-        const result = await createProductJob({
+        await sendProductJob(res, createProductJob({
           store,
           runner,
           cfg,
@@ -137,8 +137,7 @@ export function createWebProductsRouter(
           ...(key ? { idempotencyKey: key } : {}),
           ...(settled?.settled && settled.paymentId ? { paymentId: settled.paymentId } : {}),
           ...(settled?.settled && settled.customerId ? { customerId: settled.customerId } : {}),
-        })
-        res.status(202).json(result)
+        }))
       }),
     )
   }
