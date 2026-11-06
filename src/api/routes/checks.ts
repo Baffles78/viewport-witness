@@ -136,8 +136,8 @@ export function createChecksRouter(
     '/v1/checks',
     requireWorkerAvailable(runner),
     challengeIfUnsigned(paymentMiddleware, cfg),
-    requirePaymentEnvelope,
     validationPreflight,
+    requirePaymentEnvelope,
     idempotencyPreflight,
     paymentMiddleware,
     asyncHandler(async (req: Request, res: Response) => {
