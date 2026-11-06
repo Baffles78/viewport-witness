@@ -38,7 +38,6 @@ export function canReplayJob(
 export function claimPaidAdmission(
   store: JobStore,
   key: string,
-  req: Request,
   res: Response,
   cfg: Config,
 ): boolean {
