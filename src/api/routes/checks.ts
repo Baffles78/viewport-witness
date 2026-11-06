@@ -12,7 +12,7 @@ import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
-import { challengeIfUnsigned } from './products.js'
+import { challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -127,6 +127,7 @@ export function createChecksRouter(
 
   router.post(
     '/v1/checks',
+    requireWorkerAvailable(runner),
     challengeIfUnsigned(paymentMiddleware, cfg),
     validationPreflight,
     idempotencyPreflight,
@@ -240,6 +241,18 @@ export function createChecksRouter(
       try {
         await runner.enqueue(jobId)
       } catch (err: unknown) {
+        if (!runner.isHealthy()) {
+          // Admission may close after payment settles. Keep the paid queued row
+          // durable so the restarted worker can recover this exact job.
+          res.status(202).json({
+            id: jobId,
+            status: 'queued',
+            ...reconcileJobStatus('queued'),
+            pollUrl: `/v1/checks/${jobId}`,
+            paymentMode: cfg.PAYMENT_MODE,
+          })
+          return
+        }
         store.updateJobStatus(jobId, 'failed', {
           completedAt: Date.now(),
           error: (err as Error).message,
