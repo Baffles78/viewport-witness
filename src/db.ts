@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
+import { createHash } from 'node:crypto'
 import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
 import {
   growthContext,
@@ -80,6 +81,14 @@ export class JobStore {
       CREATE TABLE IF NOT EXISTS idempotency_keys (
         key TEXT PRIMARY KEY,
         job_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      -- A paid request claims its key before x402 can settle. Unresolved
+      -- admissions are intentionally not expired automatically: payment may
+      -- have settled just before a process crash or disconnected response.
+      CREATE TABLE IF NOT EXISTS payment_admissions (
+        key_hash TEXT PRIMARY KEY,
         created_at INTEGER NOT NULL
       );
 
@@ -175,6 +184,19 @@ export class JobStore {
       this.growthWriteFailures++
     }
     return this.getJob(params.id) as JobRecord
+  }
+
+  claimPaymentAdmission(key: string): boolean {
+    const hash = createHash('sha256').update(key).digest('hex')
+    const inserted = this.conn.prepare(`INSERT OR IGNORE INTO payment_admissions(key_hash,created_at)
+      SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM idempotency_keys WHERE key=?)`)
+      .run(hash, Date.now(), key)
+    return Number(inserted.changes) === 1
+  }
+
+  releasePaymentAdmission(key: string): void {
+    const hash = createHash('sha256').update(key).digest('hex')
+    this.conn.prepare('DELETE FROM payment_admissions WHERE key_hash=?').run(hash)
   }
 
   recordGrowth(
