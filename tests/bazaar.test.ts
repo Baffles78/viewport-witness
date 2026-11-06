@@ -245,7 +245,11 @@ describe('Bazaar accepted-job response contract', () => {
     for (const field of required) expect(response).toHaveProperty(field)
     for (const [field, value] of Object.entries(response)) {
       expect(properties, `undeclared field ${field}`).toHaveProperty(field)
-      expect(typeof value).toBe(properties[field]?.type)
+      if (properties[field]?.type === 'integer') {
+        expect(Number.isInteger(value)).toBe(true)
+      } else {
+        expect(typeof value).toBe(properties[field]?.type)
+      }
       if (properties[field]?.enum) expect(properties[field]?.enum).toContain(value)
     }
   }
