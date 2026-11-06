@@ -47,7 +47,6 @@ export function createWebProductsRouter(
       path,
       requireWorkerAvailable(runner),
       challengeIfUnsigned(payment, cfg),
-      requirePaymentEnvelope,
       asyncHandler(async (req, res, next) => {
         const parsed = schema.safeParse(req.body)
         if (!parsed.success) {
@@ -70,6 +69,7 @@ export function createWebProductsRouter(
         ;(req as Request & { webProductInput?: unknown }).webProductInput = parsed.data
         next()
       }),
+      requirePaymentEnvelope,
       (req, res, next) => {
         const key = idempotencyKey(req)
         if (!key) {
