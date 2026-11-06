@@ -21,6 +21,7 @@ import { validatePublicHttpsUrl } from './ssrf.js'
 import type { PageAssertion, StoredReport } from './types.js'
 import type { WorkerRunner } from './worker/runner.js'
 import { createProductJob } from './api/routes/products.js'
+import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean }
 
@@ -222,6 +223,19 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   async function buildServer(): Promise<McpServer> {
     const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' })
     const context = await getPaymentContext()
+    const intentForTool = (
+      tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
+      args: Record<string, unknown>,
+    ): JobIntent => ({
+      kind: tier,
+      url: typeof args['url'] === 'string' ? args['url'] : '',
+      ...(tier === 'verify' && Array.isArray(args['assertions'])
+        ? { assertions: args['assertions'] as PageAssertion[] } : {}),
+      ...(tier === 'compare' && typeof args['baselineJobId'] === 'string'
+        ? { baselineJobId: args['baselineJobId'] } : {}),
+      ...(tier === 'extract' && typeof args['maxOutputTokens'] === 'number'
+        ? { maxOutputTokens: args['maxOutputTokens'] } : {}),
+    })
     const wrap = <T extends Record<string, unknown>>(
       tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
       handler: (args: T, context: MCPToolContext) => Promise<ToolResult>,
@@ -278,6 +292,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         if (paymentId) {
           const existing = store.getJobByPaymentId(paymentId)
           if (existing) {
+            if (!sameJobIntent(existing, intentForTool(tier, args))) {
+              return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
+            }
             return jsonResult({
               id: existing.id,
               status: existing.status,
@@ -291,6 +308,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             await inFlight
             const completedRace = store.getJobByPaymentId(paymentId)
             if (completedRace) {
+              if (!sameJobIntent(completedRace, intentForTool(tier, args))) {
+                return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
+              }
               return jsonResult({
                 id: completedRace.id,
                 status: completedRace.status,
