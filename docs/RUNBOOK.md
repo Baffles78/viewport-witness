@@ -198,6 +198,19 @@ docker exec viewport-witness du -sh /data/archive
 
 ---
 
+## Uncertain paid idempotency keys
+
+A signed creation request reserves its idempotency key in the local database before x402
+settlement. If the response disconnects or settlement becomes uncertain before a job is
+recorded, the reservation remains after restart and further requests with that key receive
+`idempotency_outcome_unknown` without invoking payment. There is no automatic expiry or
+public clear operation. Check the external settlement record and the local jobs table before
+an operator resolves the reservation; do not tell an agent to buy the same work with a new
+key while the outcome is uncertain. This fail-closed state can accumulate for interrupted
+or invalid signed attempts and requires operational reconciliation.
+
+---
+
 ## Unresponsive job cancellation
 
 A timed-out job normally aborts and settles before the same job is retried. If its work ignores
