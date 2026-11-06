@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
+import { canReplayJob } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { challengeIfUnsigned, createProductJob, requireWorkerAvailable } from './products.js'
 
@@ -80,6 +81,15 @@ export function createWebProductsRouter(
         }
         const existing = store.getJobByIdempotencyKey(key)
         if (existing) {
+          const input = (req as Request & {
+            webProductInput?: { url: string; maxOutputTokens?: number }
+          }).webProductInput
+          if (!canReplayJob(existing, req, cfg, {
+            kind, url: input?.url ?? '', maxOutputTokens: input?.maxOutputTokens,
+          })) {
+            res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+            return
+          }
           res
             .status(202)
             .json({
