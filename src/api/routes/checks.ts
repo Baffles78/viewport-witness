@@ -12,7 +12,7 @@ import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
-import { canReplayJob } from '../../idempotency-replay.js'
+import { canReplayJob, claimPaidAdmission } from '../../idempotency-replay.js'
 import { challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
@@ -110,6 +110,8 @@ export function createChecksRouter(
       })
       return
     }
+
+    if (!claimPaidAdmission(store, key, res, cfg)) return
 
     if (inFlightIdempotencyKeys.has(key)) {
       res.setHeader('Retry-After', '1')
