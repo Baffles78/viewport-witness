@@ -14,6 +14,8 @@ import type {
   StoredReport,
 } from '../types.js'
 import { runViewportCheck } from './browser.js'
+import { summarizeAssertions } from './assertions.js'
+import type { ArchiveManager } from '../archive.js'
 import { buildDiagnosis } from '../report-guidance.js'
 import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
 import { runBoundedWebAnalysis } from '../web-analysis-runner.js'
@@ -40,6 +42,7 @@ export class WorkerRunner {
     private readonly screenshotsDir: string,
     private readonly timeoutMs: number,
     private readonly paymentMode: string,
+    private readonly archive: ArchiveManager | null = null,
   ) {}
 
   async start(): Promise<void> {
@@ -152,8 +155,10 @@ export class WorkerRunner {
     const controller = new AbortController()
     this.currentAbortController = controller
     let timeoutHandle: NodeJS.Timeout | undefined
+    let timedOut = false
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
+        timedOut = true
         controller.abort()
         reject(new Error('job_timeout'))
       }, this.timeoutMs)
@@ -172,21 +177,48 @@ export class WorkerRunner {
         completedAt: Date.now(),
         reportPath,
       })
+      if (this.archive && report.kind !== 'extract' && report.kind !== 'security') {
+        // The archive is a secondary copy: a failure here never changes the job result.
+        await this.archive.capture(job, report as QAReport).catch((err: unknown) => {
+          console.warn('[archive] capture skipped:', (err as Error).message?.slice(0, 200))
+        })
+      }
     } catch (err: unknown) {
-      const msg = (err as Error).message ?? 'unknown'
+      const msg = timedOut ? 'job_timeout' : (err as Error).message ?? 'unknown'
       if (msg === 'job_timeout' || msg === 'job_aborted') {
-        await workPromise.catch(() => undefined)
+        // A browser or third-party call may ignore AbortSignal. Bound cleanup so this
+        // worker does not remain stuck forever, and avoid overlapping a retry with
+        // work that might still be active.
+        const settled = await Promise.race([
+          workPromise.then(() => true, () => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000)),
+        ])
+        if (!settled && !this.shuttingDown) {
+          // Returning from the timeout does not terminate non-cooperative work.
+          // Quarantine this worker so no other job starts beside the orphaned work;
+          // queued rows remain in the database for recovery after process restart.
+          this.shuttingDown = true
+          this.queue = []
+          console.error('[worker] abort did not settle; restart required for safe recovery')
+          this.store.updateJobStatus(item.jobId, 'failed', {
+            completedAt: Date.now(),
+            error: 'job_abort_unresponsive',
+          })
+          return
+        }
         if (this.store.getJob(item.jobId)?.status === 'running') {
           this.store.markJobRetryable(item.jobId)
         }
         const retryable = this.store.getJob(item.jobId)
-        if (
-          msg === 'job_timeout' &&
-          !this.shuttingDown &&
-          retryable?.status === 'retryable' &&
-          retryable.retryCount <= 1
-        ) {
-          this.queue.push(item)
+        if (msg === 'job_timeout' && !this.shuttingDown && retryable?.status === 'retryable') {
+          if (retryable.retryCount <= 1) {
+            this.queue.push(item)
+          } else {
+            this.store.updateJobStatus(item.jobId, 'failed', {
+              completedAt: Date.now(),
+              error: 'job_timeout',
+            })
+          }
         }
       } else {
         this.store.updateJobStatus(item.jobId, 'failed', {
@@ -225,7 +257,9 @@ export class WorkerRunner {
     if (!this.browser) throw new Error('Browser not initialized')
 
     const viewportResults: Partial<Record<Viewport, InternalViewportResult>> = {}
-    const limitations: string[] = []
+    const limitations: string[] = [
+      'Keyboard observations measure potential focusability only; Tab traversal and keyboard activation were not tested.',
+    ]
 
     for (const viewport of VIEWPORTS_ORDER) {
       if (signal.aborted) throw new Error('job_aborted')
@@ -240,6 +274,9 @@ export class WorkerRunner {
           job.request.assertions ?? [],
         )
         viewportResults[viewport] = result
+        if (result.layoutObservation !== 'measured') {
+          limitations.push(`viewport:${viewport} layout observation unavailable.`)
+        }
         if (result.screenshotBytes > 0) {
           this.store.recordScreenshot(
             item.jobId,
@@ -327,18 +364,9 @@ export class WorkerRunner {
     }
 
     if (job.kind === 'verify') {
-      const results: NonNullable<QAReport['assertions']>['results'] = {}
-      let passed = 0
-      let failed = 0
-      for (const [viewport, result] of Object.entries(publicViewportResults) as Array<
-        [Viewport, ViewportResult]
-      >) {
-        const viewportAssertions = result.assertions ?? []
-        results[viewport] = viewportAssertions
-        passed += viewportAssertions.filter((assertion) => assertion.passed).length
-        failed += viewportAssertions.filter((assertion) => !assertion.passed).length
-      }
-      reportObj.assertions = { passed, failed, results }
+      const summary = summarizeAssertions(publicViewportResults)
+      reportObj.assertions = summary
+      const { failed } = summary
       if (failed > 0) {
         reportObj.status = 'FAIL'
         reportObj.verdict = this.buildVerdict('FAIL', publicViewportResults)
@@ -593,7 +621,7 @@ export class WorkerRunner {
     if (!allViewportsCovered) return 'INCONCLUSIVE'
 
     const evidenceComplete = results.every(
-      (r) => r.screenshotBytes > 0 && r.accessibility.completed,
+      (r) => r.screenshotBytes > 0 && r.accessibility.completed && r.layoutObservation === 'measured',
     )
     if (!evidenceComplete) return 'INCONCLUSIVE'
 

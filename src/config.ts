@@ -1,3 +1,4 @@
+import path from 'path'
 import { z } from 'zod'
 import type { PaymentMode } from './types.js'
 
@@ -66,6 +67,33 @@ const configSchema = z.object({
     .transform((v) => parseInt(v ?? '120000', 10))
     .pipe(z.number().int().min(1000)),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  ARCHIVE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true')
+    .pipe(z.boolean()),
+  ARCHIVE_DIR: z.string().default('./data/archive'),
+  ARCHIVE_RETENTION_DAYS: z
+    .string()
+    .optional()
+    .transform((v) => parseInt(v ?? '90', 10))
+    .pipe(z.number().int().min(1).max(3650)),
+  ARCHIVE_MAX_STORAGE_GB: z
+    .string()
+    .optional()
+    .transform((v) => parseFloat(v ?? '5'))
+    .pipe(z.number().positive()),
+  ARCHIVE_MAX_SNAPSHOTS_PER_URL: z
+    .string()
+    .optional()
+    .transform((v) => parseInt(v ?? '30', 10))
+    .pipe(z.number().int().min(1).max(1000)),
+  HISTORY_MAX_RESULTS: z
+    .string()
+    .optional()
+    .transform((v) => parseInt(v ?? '10', 10))
+    .pipe(z.number().int().min(1).max(100)),
+  HISTORY_PRICE_USDC: usdcPriceSchema.default('0.02'),
 })
 
 export type Config = {
@@ -93,6 +121,13 @@ export type Config = {
   MAX_STORAGE_GB: number
   WORKER_TIMEOUT_MS: number
   LOG_LEVEL: 'debug' | 'info' | 'warn' | 'error'
+  ARCHIVE_ENABLED: boolean
+  ARCHIVE_DIR: string
+  ARCHIVE_RETENTION_DAYS: number
+  ARCHIVE_MAX_STORAGE_GB: number
+  ARCHIVE_MAX_SNAPSHOTS_PER_URL: number
+  HISTORY_MAX_RESULTS: number
+  HISTORY_PRICE_USDC: string
 }
 
 function loadConfig(): Config {
@@ -104,6 +139,16 @@ function loadConfig(): Config {
 }
 
 export function validateConfig(cfg: Config): void {
+  if (cfg.ARCHIVE_ENABLED) {
+    const archiveRoot = path.resolve(cfg.ARCHIVE_DIR)
+    const jobRoot = path.resolve(cfg.SCREENSHOTS_DIR)
+    const overlaps = (a: string, b: string): boolean => a === b || a.startsWith(b + path.sep)
+    if (overlaps(archiveRoot, jobRoot) || overlaps(jobRoot, archiveRoot)) {
+      throw new Error(
+        'ARCHIVE_DIR must be separate from SCREENSHOTS_DIR so seven-day job cleanup cannot delete archived snapshots.',
+      )
+    }
+  }
   if (cfg.PAYMENT_MODE !== 'test' && cfg.PRICE_USDC !== '0.08') {
     throw new Error('Paid modes require PRICE_USDC=0.08 for the reviewed V1 price.')
   }

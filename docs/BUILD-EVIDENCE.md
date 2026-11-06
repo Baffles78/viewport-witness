@@ -138,6 +138,14 @@ docker compose config --quiet
 docker build -t viewport-witness:local .
 ```
 
+## Page history archive candidate (prepared, off by default, not deployed)
+
+- Completed check, verify and compare reports are copied into a separate `ARCHIVE_DIR` with their screenshots; extract and security reports are not archived. The copy drops the job ID, payment identity, caller assertions and baseline references, and rewrites screenshot links to archive URLs.
+- New routes: free `GET /v1/history/availability`, x402-paid `POST /v1/history` (default 0.02 USDC via `HISTORY_PRICE_USDC`), and `GET /v1/history/snapshots/:id` plus its screenshots. All return `404 archive_disabled` and issue no payment challenge while `ARCHIVE_ENABLED=false`. Signed requests for an empty archive are refused before settlement.
+- Archive retention (90 days), storage ceiling (5 GB), per-URL cap (30) and per-request result cap (10) are configurable in `.env`. Configuration refuses an archive directory that overlaps `SCREENSHOTS_DIR`.
+- `npm run typecheck`, `npm run lint` and `npm test` (27 files, 417 tests, 14 new in `tests/archive.test.ts`) passed. `npm run test:e2e` could not launch Chromium in this build container (Playwright browser version not installed); the same failure occurs on `main`.
+- Not yet listed in OpenAPI, `/.well-known/x402`, MCP or `llms.txt`, so the live service does not advertise a product it has switched off.
+
 ## Parser and passive security gate candidate (prepared, not deployed)
 
 - Added queued `extract` and `security` job kinds without increasing worker concurrency.

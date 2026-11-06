@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Launchpad — deployment demonstration</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font: 18px/1.6 system-ui;
+        margin: 0;
+        color: #142b3b;
+        background: #f1f6fa;
+      }
+      main {
+        max-width: 960px;
+        margin: auto;
+        padding: 24px;
+      }
+      h1 {
+        font-size: clamp(32px, 6vw, 44px);
+        line-height: 1.1;
+      }
+      .hero {
+        background: #fff;
+        padding: 24px;
+        border-radius: 16px;
+      }
+      .plans {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+      }
+      .plan {
+        background: #fff;
+        border: 1px solid #aac2d2;
+        border-radius: 12px;
+        padding: 24px;
+        flex: 1 1 260px;
+        min-width: 0;
+      }
+      button {
+        background: #174d75;
+        color: white;
+        min-width: 44px;
+        min-height: 44px;
+        border: 0;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font: inherit;
+      }
+      input {
+        font: inherit;
+        max-width: 100%;
+        width: 100%;
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+      }
+      .tag {
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        color: #244c64;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="tag">LOCAL SYNTHETIC DEPLOYMENT DEMONSTRATION</p>
+      <h1>Launchpad</h1>
+      <p>Publish your next idea with a reliable release check.</p>
+      <section class="hero">
+        <h2>Launch with confidence</h2>
+        <p>
+          This version wraps its layout, labels its controls, and initializes without a browser
+          error.
+        </p>
+      </section>
+      <section>
+        <h2>Choose your plan</h2>
+        <div class="plans">
+          <article class="plan">
+            <h3>Starter</h3>
+            <p>$12 per month</p>
+            <button>Choose Starter</button>
+          </article>
+          <article class="plan">
+            <h3>Studio</h3>
+            <p>$29 per month</p>
+            <label for="email">Email for product updates</label
+            ><input id="email" type="email" placeholder="you@example.com" /><button>
+              Join waitlist
+            </button>
+          </article>
+        </div>
+      </section>
+      <footer>
+        <p>Fictional product. These controls never submit data or purchase anything.</p>
+      </footer>
+    </main>
+  </body>
+</html>

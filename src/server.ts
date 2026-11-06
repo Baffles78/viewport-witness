@@ -5,6 +5,7 @@ import { JobStore } from './db.js'
 import { RetentionManager } from './retention.js'
 import { WorkerRunner } from './worker/runner.js'
 import { createApp } from './api/index.js'
+import { ArchiveManager } from './archive.js'
 
 async function main(): Promise<void> {
   // Validate config (throws on invalid payment mode configuration)
@@ -27,17 +28,33 @@ async function main(): Promise<void> {
   await retention.runCleanup()
   retention.startAutoCleanup(60 * 60 * 1000)
 
+  // Page history archive: a separate, longer-lived copy of completed browser reports.
+  let archive: ArchiveManager | null = null
+  if (config.ARCHIVE_ENABLED) {
+    await fs.mkdir(config.ARCHIVE_DIR, { recursive: true })
+    archive = new ArchiveManager(store, {
+      archiveDir: config.ARCHIVE_DIR,
+      screenshotsDir: config.SCREENSHOTS_DIR,
+      retentionDays: config.ARCHIVE_RETENTION_DAYS,
+      maxStorageBytes: config.ARCHIVE_MAX_STORAGE_GB * 1024 * 1024 * 1024,
+      maxSnapshotsPerUrl: config.ARCHIVE_MAX_SNAPSHOTS_PER_URL,
+    })
+    await archive.runCleanup()
+    archive.startAutoCleanup(60 * 60 * 1000)
+  }
+
   // Initialize worker
   const runner = new WorkerRunner(
     store,
     config.SCREENSHOTS_DIR,
     config.WORKER_TIMEOUT_MS,
     config.PAYMENT_MODE,
+    archive,
   )
   await runner.start()
 
   // Create Express app
-  const app = createApp(store, runner, config)
+  const app = createApp(store, runner, config, archive)
   const server = http.createServer(app)
 
   // Graceful shutdown handler
@@ -62,6 +79,7 @@ async function main(): Promise<void> {
 
     // Stop retention
     retention.stop()
+    archive?.stop()
 
     // Close database
     store.close()

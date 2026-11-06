@@ -35,3 +35,29 @@ The wallet module is trusted customer code. Keep it outside the repository and r
 Programmatic callers can compose `createX402PaymentAdapter` from `dist/x402-adapter.js` with `runReleaseCheck` from `dist/release-check.js`. Persist the runner's checkpoint before any signature and enforce exclusive ownership of that checkpoint. The adapter's in-memory budget is an additional guard, not durable state across restarts. Standard MCP hosts still need an x402-capable wallet runtime; installing a tool alone does not authorize spending.
 
 Use [AGENT-WORKFLOW.md](AGENT-WORKFLOW.md) to select products, interpret actionable results, save a seven-day baseline and plan a bounded fix/recheck. No agent-result field grants authority to edit or deploy the customer's website.
+
+## Supplied connector for an existing CDP Base account
+
+The repository includes `examples/wallets/existing-cdp-base.mjs`. Configure these in your local
+secret manager or environment, never in a committed file or command-line arguments:
+
+- `CDP_API_KEY_ID`
+- `CDP_API_KEY_SECRET`
+- `CDP_WALLET_SECRET`
+- `VW_PAYER_ADDRESS`: your existing account's public address
+
+The helper looks up that exact existing account. It does not create or fund an account, grant
+token approvals, or send transfers directly. Only explicit `--execute` loads it. Its provider
+lookup is covered by isolated tests; a funded real-account payment has not been validated in
+this buyer-readiness pass. If you use another wallet provider, use its existing signing connector.
+For Solana, the customer still supplies a signing-only connector and approves the facilitator
+fee payer; the supplied CDP helper is Base-only.
+
+```sh
+npm run check:page -- --url https://your-public-deployment.example --run-id release-123 --output out/release-123
+```
+
+After separately approving the recipient and spending budget, repeat the same arguments with
+`--execute --network base --recipient <approved-address> --wallet-module ./examples/wallets/existing-cdp-base.mjs`.
+Keep the generated manifest and checkpoint together. A changed target or payment policy must
+use a new output directory and a genuinely new deployment ID, never bypass an uncertain payment.

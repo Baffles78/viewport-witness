@@ -1,0 +1,49 @@
+{
+  "schema": "viewport-witness-isolated-buyer-proof/v1",
+  "at": "2026-10-14T05:13:30.293Z",
+  "simulation": true,
+  "onChainPayments": 0,
+  "productionCalls": 0,
+  "sdkAuthorizationsCryptographicallyVerified": 2,
+  "browserEvidence": "Real Chromium captures of local synthetic HTML; example.com response was intercepted after normal public-target validation.",
+  "receipts": [
+    {
+      "version": "broken",
+      "decision": "FAIL",
+      "elapsedMs": 2953,
+      "warnings": 0,
+      "blockingIssues": 8,
+      "overflowViewports": [
+        "phonePortrait",
+        "phoneLandscape"
+      ],
+      "findings": [
+        {
+          "code": "accessibility:button-name",
+          "fix": "Give each button a short visible label or an aria-label that describes its action."
+        },
+        {
+          "code": "console-errors",
+          "fix": "Start with the first console error, correct its script or data dependency, and rerun the check."
+        },
+        {
+          "code": "responsive-layout",
+          "fix": "Inspect the hinted elements and their parents for fixed widths, large margins, nowrap, or absolute positioning; prefer max-width: 100% and wrapping layouts."
+        }
+      ],
+      "previewDidNotSign": true,
+      "resumeDidNotSign": true
+    },
+    {
+      "version": "fixed",
+      "decision": "PASS",
+      "elapsedMs": 2839,
+      "warnings": 0,
+      "blockingIssues": 0,
+      "overflowViewports": [],
+      "findings": [],
+      "previewDidNotSign": true,
+      "resumeDidNotSign": true
+    }
+  ]
+}

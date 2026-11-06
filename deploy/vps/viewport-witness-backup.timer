@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily ViewportWitness recovery backup
+
+[Timer]
+OnCalendar=*-*-* 03:25:00 UTC
+Persistent=true
+Unit=viewport-witness-backup.service
+
+[Install]
+WantedBy=timers.target

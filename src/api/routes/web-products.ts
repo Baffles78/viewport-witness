@@ -5,7 +5,7 @@ import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
 import type { WorkerRunner } from '../../worker/runner.js'
-import { challengeIfUnsigned, createProductJob } from './products.js'
+import { challengeIfUnsigned, createProductJob, requireWorkerAvailable } from './products.js'
 
 const extractSchema = z
   .object({
@@ -44,6 +44,7 @@ export function createWebProductsRouter(
   ): void => {
     router.post(
       path,
+      requireWorkerAvailable(runner),
       challengeIfUnsigned(payment, cfg),
       asyncHandler(async (req, res, next) => {
         const parsed = schema.safeParse(req.body)

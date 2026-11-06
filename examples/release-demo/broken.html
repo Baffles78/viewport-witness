@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Launchpad — deployment demonstration</title>
+    <style>
+      body {
+        font: 18px/1.6 system-ui;
+        margin: 0;
+        color: #142b3b;
+        background: #f1f6fa;
+      }
+      main {
+        max-width: 960px;
+        margin: auto;
+        padding: 32px;
+      }
+      h1 {
+        font-size: 44px;
+        line-height: 1.1;
+      }
+      .hero {
+        min-width: 760px;
+        background: #fff;
+        padding: 24px;
+        border-radius: 16px;
+      }
+      .plans {
+        display: flex;
+        gap: 24px;
+      }
+      .plan {
+        background: #fff;
+        border: 1px solid #aac2d2;
+        border-radius: 12px;
+        padding: 24px;
+        width: 320px;
+      }
+      button {
+        background: #174d75;
+        color: white;
+        min-width: 44px;
+        min-height: 44px;
+        border: 0;
+        border-radius: 6px;
+      }
+      input {
+        font: inherit;
+        max-width: 240px;
+      }
+      .tag {
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        color: #244c64;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="tag">LOCAL SYNTHETIC DEPLOYMENT DEMONSTRATION</p>
+      <h1>Launchpad</h1>
+      <p>Publish your next idea with a reliable release check.</p>
+      <section class="hero">
+        <h2>Launch with confidence</h2>
+        <p>
+          A responsive product page should work on every screen. This version intentionally breaks
+          that promise.
+        </p>
+      </section>
+      <section>
+        <h2>Choose your plan</h2>
+        <div class="plans">
+          <article class="plan">
+            <h3>Starter</h3>
+            <p>$12 per month</p>
+            <button></button>
+          </article>
+          <article class="plan">
+            <h3>Studio</h3>
+            <p>$29 per month</p>
+            <input id="email" type="email" placeholder="Your email" /><button>Join waitlist</button>
+          </article>
+        </div>
+      </section>
+      <footer>
+        <p>Fictional product. These controls never submit data or purchase anything.</p>
+      </footer>
+    </main>
+    <script>
+      console.error('Demonstration: pricing module failed to initialize')
+    </script>
+  </body>
+</html>

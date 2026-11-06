@@ -31,7 +31,7 @@ describe('compare discovery challenge ordering', () => {
     app.use(
       createProductsRouter(
         { getJob: baselineLookup } as unknown as JobStore,
-        {} as WorkerRunner,
+        { isHealthy: () => true } as WorkerRunner,
         {
           PAYMENT_MODE: 'production',
           RETENTION_DAYS: 7,

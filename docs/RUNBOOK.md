@@ -176,6 +176,41 @@ To check current storage:
 docker exec viewport-witness du -sh /data
 ```
 
+### Page history archive
+
+Off by default. When `ARCHIVE_ENABLED=true`, completed browser reports are copied to `ARCHIVE_DIR`
+(default `./data/archive`, `/data/archive` in containers) and sold through `POST /v1/history`.
+
+- The archive must not sit inside `SCREENSHOTS_DIR`; the service refuses to start if it does.
+- Snapshots expire after `ARCHIVE_RETENTION_DAYS` (default 90).
+- `ARCHIVE_MAX_SNAPSHOTS_PER_URL` (default 30) keeps only the newest snapshots of each URL.
+- `ARCHIVE_MAX_STORAGE_GB` (default 5) caps the archive; oldest snapshots go first.
+- Cleanup runs at start-up and hourly, next to job retention.
+- Anyone who knows an exact URL can see how many snapshots exist and buy them. Update
+  `docs/PRIVACY.md` and `docs/TERMS.md` before turning it on for the live service.
+
+To switch it off again, set `ARCHIVE_ENABLED=false` and restart. Existing archive files stay on
+disk until you delete `/data/archive` yourself:
+
+```bash
+docker exec viewport-witness du -sh /data/archive
+```
+
+---
+
+## Unresponsive job cancellation
+
+A timed-out job normally aborts and settles before the same job is retried. If its work ignores
+cancellation for one second, the worker records `job_abort_unresponsive`, stops accepting and
+starting jobs, and logs that a restart is required. This bound returns control to the queue;
+it **does not terminate** the underlying non-cooperative operation. The current process must
+be restarted to clear that work. Other queued jobs remain in the database and are recovered
+on startup. New worker-backed HTTP and MCP purchases are rejected before payment while the
+worker is quarantined. A payment already settling when quarantine begins may leave its job
+queued for restart; retain its ID and poll it. External settlement and the local database are
+not one atomic transaction, so a crash between them does not carry an exactly-once guarantee.
+Reconcile any uncertain payment before authorizing a new paid submission.
+
 ---
 
 ## Logs

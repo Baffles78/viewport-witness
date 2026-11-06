@@ -1,5 +1,12 @@
 # ViewportWitness by Apex Labs
 
+**Check a deployed website before sign-off.** Get screenshots, accessibility and layout
+evidence across three screen sizes without setting up a browser. Public HTTPS pages only.
+
+[Free sample report](https://qa.honeygate.app/samples/example/) · [Start with a no-payment budget preview](docs/QUICKSTART.md)
+
+The sample is a static local-test demonstration. Its public URL becomes available when this change is deployed.
+
 Two low-resource paid agent tools complement browser QA: `extract_page` converts one public HTML page to deterministic Markdown for $0.005 USDC, and `web_release_gate` passively checks one public page's release security controls for $0.05 USDC. Both share the Base/Solana x402 rails, idempotency protection, single-worker queue, and seven-day report lifecycle. They do not accept caller-supplied HTML, credentials, cookies, custom headers, uploads, or private-network targets.
 
 Remote MCP server and x402 API for AI-agent browser QA. Submit a public HTTPS URL and receive
@@ -56,8 +63,10 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/checks', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://example.com' }),
-}).then(r => r.json())
-// Poll GET pollUrl until { status: 'complete' }
+}).then((r) => r.json())
+// Poll GET pollUrl until jobStatus === 'complete'.
+// The completed report's status is PASS, FAIL, or INCONCLUSIVE.
+// A job status of 'failed' is terminal; 'retryable' means the worker will retry.
 ```
 
 ### POST /v1/verify — 0.10 USDC
@@ -76,7 +85,7 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/verify', {
       { type: 'titleIncludes', value: 'Example Domain' },
     ],
   }),
-}).then(r => r.json())
+}).then((r) => r.json())
 ```
 
 ### POST /v1/compare — 0.12 USDC
@@ -94,7 +103,7 @@ const { id, pollUrl } = await fetch402('https://qa.honeygate.app/v1/compare', {
     url: 'https://example.com',
     baselineJobId: 'JOB_ID_FROM_PREVIOUS_CHECKS',
   }),
-}).then(r => r.json())
+}).then((r) => r.json())
 ```
 
 > **Safety**: Only public HTTPS URLs are accepted. Loopback, private, link-local, and metadata
@@ -119,7 +128,7 @@ curl -s -X POST http://localhost:3000/v1/checks \
   -d '{"url": "https://example.com"}' | jq .
 
 # Poll result
-curl -s http://localhost:3000/v1/checks/JOB_ID | jq .status
+curl -s http://localhost:3000/v1/checks/JOB_ID | jq '{jobStatus, status}'
 
 # Get screenshot
 curl -o desktop.png http://localhost:3000/v1/checks/JOB_ID/screenshots/desktop
@@ -132,25 +141,45 @@ Local defaults to `PAYMENT_MODE=test`. No CDP keys needed for test mode. Results
 
 ## API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Service info |
-| GET | `/health` | Liveness probe |
-| GET | `/ready` | Readiness probe (DB + worker) |
-| GET | `/openapi.json` | OpenAPI 3.1 spec |
-| GET | `/llms.txt` | Agent usage guide |
-| GET | `/skill.md` | Concise agent skill manifest |
-| GET | `/privacy` | Privacy policy |
-| GET | `/terms` | Terms of service |
-| GET | `/logo.png` | Directory and integration logo |
-| GET | `/.well-known/x402` | Payment discovery |
-| POST | `/v1/checks` | Create a QA check job |
-| POST | `/v1/verify` | Check explicit read-only assertions |
-| POST | `/v1/compare` | Compare against an unexpired baseline job |
-| POST | `/mcp` | Remote MCP interface with x402-paid tools |
-| GET | `/v1/checks/:id` | Poll job status / get report |
-| GET | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG |
-| GET | `/v1/checks/:id/diffs/:viewport` | Download comparison diff PNG |
+| Method | Path                                   | Description                               |
+| ------ | -------------------------------------- | ----------------------------------------- |
+| GET    | `/`                                    | Service info                              |
+| GET    | `/health`                              | Liveness probe                            |
+| GET    | `/ready`                               | Readiness probe (DB + worker)             |
+| GET    | `/openapi.json`                        | OpenAPI 3.1 spec                          |
+| GET    | `/llms.txt`                            | Agent usage guide                         |
+| GET    | `/skill.md`                            | Concise agent skill manifest              |
+| GET    | `/privacy`                             | Privacy policy                            |
+| GET    | `/terms`                               | Terms of service                          |
+| GET    | `/logo.png`                            | Directory and integration logo            |
+| GET    | `/.well-known/x402`                    | Payment discovery                         |
+| POST   | `/v1/checks`                           | Create a QA check job                     |
+| POST   | `/v1/verify`                           | Check explicit read-only assertions       |
+| POST   | `/v1/compare`                          | Compare against an unexpired baseline job |
+| POST   | `/mcp`                                 | Remote MCP interface with x402-paid tools |
+| GET    | `/v1/checks/:id`                       | Poll job status / get report              |
+| GET    | `/v1/checks/:id/screenshots/:viewport` | Download screenshot PNG                   |
+| GET    | `/v1/checks/:id/diffs/:viewport`       | Download comparison diff PNG              |
+
+### Page history archive (off by default)
+
+With `ARCHIVE_ENABLED=true`, every completed check, verify and compare report is also copied into a
+separate archive (`ARCHIVE_DIR`) that outlives the seven-day job retention. Agents can then ask for
+past snapshots of one exact public URL. The archived copy holds only public page evidence (screenshots,
+findings, verdict); it drops the job ID, payment data, caller assertions and baseline references.
+
+| Method | Path                                              | Description                                       |
+| ------ | ------------------------------------------------- | ------------------------------------------------- |
+| GET    | `/v1/history/availability?url=`                   | Free: how many snapshots exist and their range    |
+| POST   | `/v1/history`                                     | Paid (`HISTORY_PRICE_USDC`, default 0.02): list   |
+| GET    | `/v1/history/snapshots/:id`                       | Full archived snapshot (ID from the paid listing) |
+| GET    | `/v1/history/snapshots/:id/screenshots/:viewport` | Archived screenshot PNG                           |
+
+`POST /v1/history` takes `{ "url": "https://example.com", "limit": 5, "before": "<ISO time>" }`
+and returns snapshots newest first with a `nextBefore` cursor. A signed request for a URL with no
+snapshots gets `404 no_snapshots` before any payment settles. Limits are set in `.env`:
+`ARCHIVE_RETENTION_DAYS` (90), `ARCHIVE_MAX_STORAGE_GB` (5), `ARCHIVE_MAX_SNAPSHOTS_PER_URL` (30),
+`HISTORY_MAX_RESULTS` (10).
 
 Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1440×900)
 
@@ -158,10 +187,10 @@ Viewports: `phonePortrait` (375×812), `phoneLandscape` (812×375), `desktop` (1
 
 ## Payment modes
 
-| Mode | Payment required | Network |
-|------|-----------------|---------|
-| `test` | No | — (local dev only) |
-| `testnet` | Yes (x402) | Base Sepolia; optional Solana Devnet |
+| Mode         | Payment required       | Network                               |
+| ------------ | ---------------------- | ------------------------------------- |
+| `test`       | No                     | — (local dev only)                    |
+| `testnet`    | Yes (x402)             | Base Sepolia; optional Solana Devnet  |
 | `production` | Yes (x402, $0.08 USDC) | Base mainnet; optional Solana mainnet |
 
 Production mode requires `ENABLE_MAINNET_PAYMENTS=true` and a reviewed release.

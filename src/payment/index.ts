@@ -60,6 +60,7 @@ export interface PaymentMiddlewareOptions {
     | 'POST /v1/compare'
     | 'POST /v1/extract'
     | 'POST /v1/security-gate'
+    | 'POST /v1/history'
   description?: string
 }
 
@@ -157,13 +158,15 @@ export function customerFingerprint(
 
 // Bazaar discovery extension: describes the request/response schema for marketplace indexing.
 // Request: strict {url:string} only. Response: the accepted 202 job object, not the eventual report.
-function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
+export function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
   const input =
     route === 'POST /v1/verify'
       ? { url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }] }
       : route === 'POST /v1/compare'
         ? { url: 'https://example.com', baselineJobId: '550e8400-e29b-41d4-a716-446655440000' }
-        : { url: 'https://example.com' }
+        : route === 'POST /v1/history'
+          ? { url: 'https://example.com', limit: 5 }
+          : { url: 'https://example.com' }
   const properties: Record<string, unknown> = {
     url: {
       type: 'string',
@@ -203,6 +206,48 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       description: 'Optional approximate Markdown output budget.',
     }
   }
+  if (route === 'POST /v1/history') {
+    properties['limit'] = {
+      type: 'integer',
+      minimum: 1,
+      description: 'Maximum archived snapshots to return, newest first.',
+    }
+    properties['before'] = {
+      type: 'string',
+      format: 'date-time',
+      description: 'Only return snapshots captured before this time, for paging.',
+    }
+    return declareDiscoveryExtension({
+      bodyType: 'json',
+      input,
+      inputSchema: { type: 'object', required, additionalProperties: false, properties },
+      output: {
+        example: {
+          url: 'https://example.com/',
+          snapshots: [
+            {
+              snapshotId: '550e8400-e29b-41d4-a716-446655440000',
+              capturedAt: '2026-10-01T12:00:00.000Z',
+              status: 'PASS',
+              snapshotUrl: '/v1/history/snapshots/550e8400-e29b-41d4-a716-446655440000',
+            },
+          ],
+          nextBefore: null,
+        },
+        schema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+            snapshots: { type: 'array', items: { type: 'object' } },
+            nextBefore: { type: ['string', 'null'] },
+          },
+          required: ['url', 'snapshots', 'nextBefore'],
+        },
+      },
+    })
+  }
+  const isCheck = route === 'POST /v1/checks'
+  const jobStatuses = ['payment_pending', 'queued', 'running', 'retryable', 'complete', 'failed']
   return declareDiscoveryExtension({
     bodyType: 'json',
     input,
@@ -216,6 +261,11 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       example: {
         id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'queued',
+        ...(isCheck ? {
+          jobStatus: 'queued',
+          nextAction: 'poll_same_job',
+          retryAfterSeconds: 5,
+        } : {}),
         pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
         paymentMode: 'production',
       },
@@ -223,7 +273,14 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Job UUID' },
-          status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
+          status: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
+          ...(isCheck ? {
+            jobStatus: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
+            nextAction: { type: 'string', enum: ['poll_same_job', 'inspect_report', 'stop'], description: 'Next reconciliation action' },
+            retryAfterSeconds: { type: 'integer', minimum: 1, description: 'Suggested poll delay' },
+            paymentReplay: { type: 'boolean', description: 'Existing job returned for this payment' },
+          } : {}),
+          idempotent: { type: 'boolean', description: 'Existing job returned for this key' },
           pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
           paymentMode: {
             type: 'string',
@@ -231,7 +288,10 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
             description: 'Payment mode used for this job',
           },
         },
-        required: ['id', 'status', 'pollUrl', 'paymentMode'],
+        required: [
+          'id', 'status', 'pollUrl', 'paymentMode',
+          ...(isCheck ? ['jobStatus', 'nextAction'] : []),
+        ],
         additionalProperties: false,
       },
     },
@@ -252,6 +312,8 @@ function bazaarTags(route: PaymentMiddlewareOptions['route']): string[] {
         'web-content',
         'markdown',
       ]
+    case 'POST /v1/history':
+      return ['page-history', 'website-snapshots', 'screenshot-archive', 'browser-qa', 'qa']
     case 'POST /v1/security-gate':
       return [
         'website-security',

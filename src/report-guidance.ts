@@ -116,7 +116,9 @@ export function buildDiagnosis(
 
   if (evidence.assertions && evidence.assertions.failed > 0) {
     const failedViewports = VIEWPORTS.filter((viewport) =>
-      (evidence.assertions?.results[viewport] ?? []).some((assertion) => !assertion.passed),
+      (evidence.assertions?.results[viewport] ?? []).some(
+        (assertion) => !assertion.passed && assertion.measured !== false,
+      ),
     )
     addFinding(findings, {
       code: 'failed-assertions',
