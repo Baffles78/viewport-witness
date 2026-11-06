@@ -18,9 +18,10 @@ const servers: http.Server[] = []
 const stores: JobStore[] = []
 const dirs: string[] = []
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) =>
-    new Promise<void>((resolve) => server.close(() => resolve())),
-  ))
+  await Promise.all(servers.splice(0).map((server) => {
+    server.closeAllConnections()
+    return new Promise<void>((resolve) => server.close(() => resolve()))
+  }))
   for (const store of stores.splice(0)) store.close()
   await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
@@ -79,7 +80,10 @@ describe('durable paid admission', () => {
         'Payment-Signature': 'synthetic-first' },
       body: JSON.stringify({ url: 'https://example.com' }),
     }).catch(() => undefined)
-    await paymentStarted
+    await Promise.race([
+      paymentStarted,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('payment_not_started')), 2_000)),
+    ])
     controller.abort()
     await first
     const second = await fetch(`http://127.0.0.1:${port}/v1/verify`, {
