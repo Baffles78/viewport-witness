@@ -54,7 +54,14 @@ export function claimPaidAdmission(
   // after a delivered accepted response; unresolved admissions survive restart
   // and require payment reconciliation before the key can be reused.
   res.once('finish', () => {
-    if (res.statusCode === 202) store.releasePaymentAdmission(key)
+    if (res.statusCode !== 202) return
+    try {
+      store.releasePaymentAdmission(key)
+    } catch (error) {
+      // The job was accepted. Retain the durable claim for reconciliation if
+      // cleanup fails instead of crashing after the response was sent.
+      console.error('Failed to release paid idempotency admission', error)
+    }
   })
   return true
 }
