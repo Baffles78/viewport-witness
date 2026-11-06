@@ -64,7 +64,7 @@ describe('POST /v1/checks middleware order', () => {
     )
     const app = express()
     app.use(express.json())
-    app.use(createChecksRouter({} as JobStore, {} as WorkerRunner, TEST_CFG, paymentMiddleware))
+    app.use(createChecksRouter({} as JobStore, { isHealthy: () => true } as WorkerRunner, TEST_CFG, paymentMiddleware))
     const { port } = await startServer(app)
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
@@ -83,7 +83,7 @@ describe('POST /v1/checks middleware order', () => {
     })
     const app = express()
     app.use(express.json())
-    app.use(createChecksRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, paymentMiddleware))
+    app.use(createChecksRouter({} as JobStore, { isHealthy: () => true } as WorkerRunner, PAID_CFG, paymentMiddleware))
     const { port } = await startServer(app)
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
@@ -102,7 +102,7 @@ describe('POST /v1/checks middleware order', () => {
     )
     const app = express()
     app.use(express.json())
-    app.use(createChecksRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, paymentMiddleware))
+    app.use(createChecksRouter({} as JobStore, { isHealthy: () => true } as WorkerRunner, PAID_CFG, paymentMiddleware))
     const { port } = await startServer(app)
 
     const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
@@ -123,7 +123,7 @@ describe('POST /v1/verify middleware order', () => {
     app.use(
       createProductsRouter(
         {} as JobStore,
-        {} as WorkerRunner,
+        { isHealthy: () => true } as WorkerRunner,
         cfg,
         verifyPayment,
         (_req, _res, next) => next(),
@@ -170,7 +170,7 @@ describe('POST /v1/compare middleware order', () => {
     app.use(
       createProductsRouter(
         { getJob: () => null } as unknown as JobStore,
-        {} as WorkerRunner,
+        { isHealthy: () => true } as WorkerRunner,
         cfg,
         (_req, _res, next) => next(),
         comparePayment,
@@ -219,7 +219,7 @@ describe.each(['/v1/extract', '/v1/security-gate'])('%s middleware order', (rout
     })
     const app = express()
     app.use(express.json())
-    app.use(createWebProductsRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, payment, payment))
+    app.use(createWebProductsRouter({} as JobStore, { isHealthy: () => true } as WorkerRunner, PAID_CFG, payment, payment))
     const { port } = await startServer(app)
     const response = await fetch(`http://127.0.0.1:${port}${route}`, {
       method: 'POST',
@@ -234,7 +234,7 @@ describe.each(['/v1/extract', '/v1/security-gate'])('%s middleware order', (rout
     const payment = vi.fn((_req: Request, _res: Response, next: NextFunction): void => next())
     const app = express()
     app.use(express.json())
-    app.use(createWebProductsRouter({} as JobStore, {} as WorkerRunner, PAID_CFG, payment, payment))
+    app.use(createWebProductsRouter({} as JobStore, { isHealthy: () => true } as WorkerRunner, PAID_CFG, payment, payment))
     const { port } = await startServer(app)
     const response = await fetch(`http://127.0.0.1:${port}${route}`, {
       method: 'POST',
