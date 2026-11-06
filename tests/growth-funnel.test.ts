@@ -249,7 +249,7 @@ describe('real parsed request attribution', () => {
       PAY_TO: 'fixture', PRICE_USDC: '0.08', VERIFY_PRICE_USDC: '0.10', COMPARE_PRICE_USDC: '0.12', RETENTION_DAYS: 7 } as Config
     const enqueue = vi.fn(async () => {})
     const validator = vi.spyOn(ssrf, 'validatePublicHttpsUrl').mockResolvedValue({ valid: true })
-    const server = http.createServer(createApp(store, { enqueue } as unknown as WorkerRunner, cfg))
+    const server = http.createServer(createApp(store, { enqueue, isHealthy: () => true } as unknown as WorkerRunner, cfg))
     try {
       await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
       const port = (server.address() as AddressInfo).port
