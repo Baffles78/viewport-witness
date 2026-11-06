@@ -25,6 +25,22 @@ export function challengeIfUnsigned(pm: RequestHandler, cfg: Config): RequestHan
   }
 }
 
+// Gate every worker-backed purchase before x402 can settle a payment. Read-only
+// retrieval and archive history do not use the worker and stay available.
+export function requireWorkerAvailable(runner: WorkerRunner): RequestHandler {
+  return (_req, res, next) => {
+    if (!runner.isHealthy()) {
+      res.status(503).json({
+        error: 'worker_unavailable',
+        code: 'worker_unavailable',
+        detail: 'Worker is not accepting new jobs.',
+      })
+      return
+    }
+    next()
+  }
+}
+
 interface ProductRunner {
   enqueue(jobId: string): Promise<void>
 }
@@ -142,6 +158,11 @@ export async function createProductJob(params: {
     try {
       await params.runner.enqueue(id)
     } catch (error) {
+      if (!params.runner.isHealthy()) {
+        // Admission can close while x402 is settling. The paid job is already
+        // durable; leave it queued for recovery after the worker restarts.
+        return { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: params.cfg.PAYMENT_MODE }
+      }
       params.store.updateJobStatus(id, 'failed', {
         completedAt: Date.now(),
         error: error instanceof Error ? error.message.slice(0, 1000) : 'worker_unavailable',
@@ -198,6 +219,7 @@ export function createProductsRouter(
 
   router.post(
     '/v1/verify',
+    requireWorkerAvailable(runner),
     challengeIfUnsigned(verifyPayment, cfg),
     asyncHandler(async (req, res, next) => {
       const parsed = verifySchema.safeParse(req.body)
@@ -245,6 +267,7 @@ export function createProductsRouter(
 
   router.post(
     '/v1/compare',
+    requireWorkerAvailable(runner),
     challengeIfUnsigned(comparePayment, cfg),
     asyncHandler(async (req, res, next) => {
       const parsed = compareSchema.safeParse(req.body)
