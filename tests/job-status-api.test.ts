@@ -165,7 +165,7 @@ describe('quarantined worker admission', () => {
 describe('post-payment admission race', () => {
   it('returns the durable check job if the worker quarantines during settlement', async () => {
     let healthy = true
-    const stored = vi.fn()
+    const stored = vi.fn((_input: unknown) => undefined)
     const store = {
       getJobByPaymentId: () => null,
       createJob: stored,
