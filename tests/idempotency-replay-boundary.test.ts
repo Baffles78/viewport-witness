@@ -77,7 +77,7 @@ const cases = [
     url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
   } },
   { kind: 'compare', route: '/v1/compare', body: {
-    url: 'https://example.com', baselineJobId,
+    url: 'https://example.com', baselineJobId: baselineId,
   } },
   { kind: 'extract', route: '/v1/extract', body: {
     url: 'https://example.com', maxOutputTokens: 500,
