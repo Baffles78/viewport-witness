@@ -150,7 +150,7 @@ describe('quarantined worker admission', () => {
     for (const route of ['/v1/checks', '/v1/verify', '/v1/compare', '/v1/extract', '/v1/security-gate']) {
       const response = await fetch(`http://127.0.0.1:${port}${route}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Payment-Signature': 'synthetic' },
+        headers: { 'Content-Type': 'application/json', 'Payment-Signature': Buffer.from(JSON.stringify({ x402Version: 2, accepted: { scheme: 'exact', network: 'eip155:8453' }, payload: { nonce: 'synthetic' } })).toString('base64') },
         body: JSON.stringify({ url: 'https://example.com' }),
       })
       expect(response.status, route).toBe(503)
@@ -189,7 +189,7 @@ describe('post-payment admission race', () => {
     const port = (server.address() as { port: number }).port
     const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Payment-Signature': 'synthetic' },
+      headers: { 'Content-Type': 'application/json', 'Payment-Signature': Buffer.from(JSON.stringify({ x402Version: 2, accepted: { scheme: 'exact', network: 'eip155:8453' }, payload: { nonce: 'synthetic' } })).toString('base64') },
       body: JSON.stringify({ url: 'https://example.com' }),
     })
     expect(response.status).toBe(202)
