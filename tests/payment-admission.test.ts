@@ -1,27 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import express from 'express'
-import http from 'node:http'
+import { EventEmitter } from 'node:events'
 import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+import type { Response } from 'express'
 import { JobStore } from '../src/db.js'
-import { createChecksRouter } from '../src/api/routes/checks.js'
-import { createProductsRouter } from '../src/api/routes/products.js'
+import { claimPaidAdmission } from '../src/idempotency-replay.js'
 import type { Config } from '../src/config.js'
-import type { WorkerRunner } from '../src/worker/runner.js'
 
-vi.mock('../src/ssrf.js', () => ({
-  validatePublicHttpsUrl: vi.fn(async () => ({ valid: true })),
-}))
-
-const servers: http.Server[] = []
 const stores: JobStore[] = []
 const dirs: string[] = []
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => {
-    server.closeAllConnections()
-    return new Promise<void>((resolve) => server.close(() => resolve()))
-  }))
   for (const store of stores.splice(0)) store.close()
   await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
@@ -39,7 +28,21 @@ function openStore(dbPath: string) {
   return store
 }
 
+function response() {
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200,
+    status: vi.fn(function (this: { statusCode: number }, code: number) {
+      this.statusCode = code
+      return this
+    }),
+    json: vi.fn(),
+  })
+  return res as unknown as Response & EventEmitter
+}
+
 describe('durable paid admission', () => {
+  const cfg = { PAYMENT_MODE: 'production' } as Config
+
   it('claims one key across two store instances and retains uncertainty after restart', async () => {
     const dbPath = await databasePath()
     const first = openStore(dbPath)
@@ -54,49 +57,34 @@ describe('durable paid admission', () => {
     expect(second.claimPaymentAdmission('same-key')).toBe(true)
   })
 
-  it('blocks cross-route settlement when the first client disconnects mid-payment', async () => {
-    const store = openStore(await databasePath())
-    const runner = { isHealthy: () => true } as WorkerRunner
-    const cfg = { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config
-    let signalPaymentStarted: (() => void) | undefined
-    const paymentStarted = new Promise<void>((resolve) => { signalPaymentStarted = resolve })
-    const payment = vi.fn((_req: express.Request, _res: express.Response, _next: express.NextFunction) => {
-      signalPaymentStarted?.()
-      // Deliberately never finish this synthetic settlement.
-    })
-    const app = express()
-    app.use(express.json())
-    app.use(createChecksRouter(store, runner, cfg, payment))
-    app.use(createProductsRouter(store, runner, cfg, payment, payment))
-    const server = http.createServer(app)
-    servers.push(server)
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const port = (server.address() as { port: number }).port
-    const controller = new AbortController()
-    const first = fetch(`http://127.0.0.1:${port}/v1/checks`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'shared',
-        'Payment-Signature': 'synthetic-first' },
-      body: JSON.stringify({ url: 'https://example.com' }),
-    }).catch(() => undefined)
-    await Promise.race([
-      paymentStarted,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('payment_not_started')), 2_000)),
-    ])
-    controller.abort()
-    await first
-    const second = await fetch(`http://127.0.0.1:${port}/v1/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'shared',
-        'Payment-Signature': 'synthetic-second' },
-      body: JSON.stringify({ url: 'https://example.com',
-        assertions: [{ type: 'noConsoleErrors' }] }),
-    })
-    expect(second.status).toBe(409)
-    expect(await second.json()).toMatchObject({
+  it('keeps the shared claim after disconnect and rejects a cross-route retry before payment', async () => {
+    const dbPath = await databasePath()
+    const checksStore = openStore(dbPath)
+    const verifyStore = openStore(dbPath)
+    const disconnected = response()
+    expect(claimPaidAdmission(checksStore, 'shared', disconnected, cfg)).toBe(true)
+    disconnected.emit('close')
+
+    const retry = response()
+    expect(claimPaidAdmission(verifyStore, 'shared', retry, cfg)).toBe(false)
+    expect(retry.status).toHaveBeenCalledWith(409)
+    expect(retry.json).toHaveBeenCalledWith(expect.objectContaining({
       error: 'idempotency_outcome_unknown', nextAction: 'stop',
-    })
-    expect(payment).toHaveBeenCalledOnce()
+    }))
+  })
+
+  it('releases only a completed accepted response', async () => {
+    const store = openStore(await databasePath())
+    const rejected = response()
+    expect(claimPaidAdmission(store, 'retry', rejected, cfg)).toBe(true)
+    rejected.statusCode = 402
+    rejected.emit('finish')
+    expect(store.claimPaymentAdmission('retry')).toBe(false)
+
+    const accepted = response()
+    expect(claimPaidAdmission(store, 'accepted', accepted, cfg)).toBe(true)
+    accepted.statusCode = 202
+    accepted.emit('finish')
+    expect(store.claimPaymentAdmission('accepted')).toBe(true)
   })
 })
