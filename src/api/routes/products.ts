@@ -283,7 +283,7 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
-    idempotencyPreflight('compare'),
+    idempotencyPreflight('verify'),
     verifyPayment,
     asyncHandler(async (req, res) => {
       const input = (req as Request & { productInput: z.infer<typeof verifySchema> }).productInput
@@ -345,7 +345,7 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
-    idempotencyPreflight,
+    idempotencyPreflight('compare'),
     comparePayment,
     asyncHandler(async (req, res) => {
       const input = (req as Request & { productInput: z.infer<typeof compareSchema> }).productInput
