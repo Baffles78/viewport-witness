@@ -155,8 +155,10 @@ export class WorkerRunner {
     const controller = new AbortController()
     this.currentAbortController = controller
     let timeoutHandle: NodeJS.Timeout | undefined
+    let timedOut = false
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
+        timedOut = true
         controller.abort()
         reject(new Error('job_timeout'))
       }, this.timeoutMs)
@@ -182,7 +184,7 @@ export class WorkerRunner {
         })
       }
     } catch (err: unknown) {
-      const msg = (err as Error).message ?? 'unknown'
+      const msg = timedOut ? 'job_timeout' : (err as Error).message ?? 'unknown'
       if (msg === 'job_timeout' || msg === 'job_aborted') {
         await workPromise.catch(() => undefined)
         if (this.store.getJob(item.jobId)?.status === 'running') {
