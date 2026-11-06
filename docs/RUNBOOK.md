@@ -198,6 +198,18 @@ docker exec viewport-witness du -sh /data/archive
 
 ---
 
+## Unresponsive job cancellation
+
+A timed-out job normally aborts and settles before the same job is retried. If its work ignores
+cancellation for one second, the worker records `job_abort_unresponsive`, stops accepting and
+starting jobs, and logs that a restart is required. This bound returns control to the queue;
+it **does not terminate** the underlying non-cooperative operation. The current process must
+be restarted to clear that work. Other queued jobs remain in the database and are recovered
+on startup. Inspect the failed job and any payment reconciliation before authorizing a new
+paid submission.
+
+---
+
 ## Logs
 
 ```bash
