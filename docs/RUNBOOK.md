@@ -209,7 +209,7 @@ an operator resolves the reservation; do not tell an agent to buy the same work 
 key while the outcome is uncertain. Malformed v2 envelopes are rejected before reservation. Up to 10,000 unresolved
 admissions can remain; once full, new keyed paid requests fail closed before the
 payment middleware. Syntactically plausible but invalid signatures can still
-consume this capacity and poison guessed keys. A 402 response alone does not
+consume this capacity and poison guessed keys. At capacity, legitimate keyed purchases are denied until an operator reconciles and clears entries. This is a residual unauthenticated denial-of-service risk, not a complete abuse prevention control. A 402 response alone does not
 prove the facilitator never settled, so do not release its reservation based
 only on HTTP status.
 
