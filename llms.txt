@@ -210,11 +210,11 @@ Returns PNG image (Content-Type: image/png). Available once the check is complet
 report, and `stop` for permanent failure. Pending responses suggest `retryAfterSeconds: 5`.
 A completed report has `jobStatus: complete` while its `status` is PASS, FAIL, or INCONCLUSIVE.
 Unknown or expired job IDs return `not_found`; stop and do not infer that a new paid submission
-is safe. If polling is interrupted, keep the job ID and resume free retrieval. If creation was
-interrupted before an ID was received, retry only an unpaid lookup with the identical
-Idempotency-Key: 202 means reuse that job, 409 means wait and retry lookup, and 402 means no
-recorded job was found. A 402 after an uncertain payment is not permission to sign again.
-Without a durable key or job ID, stop and reconcile outside this API before paying again.
+is safe. If polling is interrupted, keep the job ID and resume free retrieval. If creation was interrupted before an ID was received, retain the Idempotency-Key and
+payment reference, then stop and reconcile outside this API before paying again. An unsigned
+POST in paid mode receives an x402 challenge before idempotency lookup; its 402 response says
+nothing about whether a job already exists. Do not sign or settle a second payment while the
+first outcome is uncertain.
 
 ## Report status values
 
@@ -239,7 +239,8 @@ See GET https://qa.honeygate.app/.well-known/x402 for payment requirements.
 Include an Idempotency-Key header to avoid creating duplicate jobs on retries:
 Idempotency-Key: my-client-generated-key-123
 
-Same key returns the same job ID. Max length 128 characters.
+An authorized retry with the same key can return an existing job ID after the payment gate.
+The key alone is not an unpaid lookup or proof that another payment is safe. Max length 128 characters.
 
 ## Error codes
 
