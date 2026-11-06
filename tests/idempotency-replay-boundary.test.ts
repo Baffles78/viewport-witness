@@ -134,6 +134,36 @@ describe('paid idempotency replay boundary', () => {
     })).rejects.toBeInstanceOf(JobReplayConflictError)
   })
 
+  for (const changed of [
+    { kind: 'verify' as const, route: '/v1/verify', body: {
+      url: 'https://example.com', assertions: [{ type: 'textVisible', value: 'changed' }],
+    } },
+    { kind: 'compare' as const, route: '/v1/compare', body: {
+      url: 'https://example.com', baselineJobId: '33333333-3333-4333-8333-333333333333',
+    } },
+    { kind: 'extract' as const, route: '/v1/extract', body: {
+      url: 'https://example.com', maxOutputTokens: 600,
+    } },
+  ]) {
+    it(`rejects changed ${changed.kind} work with the original payment payload`, async () => {
+      const { port, payment } = await serve(changed.kind)
+      const result = await post(port, changed.route, changed.body, originalHeader)
+      expect(result.status).toBe(409)
+      expect(result.body).not.toHaveProperty('id')
+      expect(payment).not.toHaveBeenCalled()
+    })
+  }
+
+  it('rejects a cross-product key replay with the original payment payload', async () => {
+    const { port, payment } = await serve('check')
+    const result = await post(port, '/v1/verify', {
+      url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
+    }, originalHeader)
+    expect(result.status).toBe(409)
+    expect(result.body).not.toHaveProperty('id')
+    expect(payment).not.toHaveBeenCalled()
+  })
+
   it('rejects changed work even with the original payment payload', async () => {
     const { port, payment } = await serve('check')
     const result = await post(port, '/v1/checks', { url: 'https://another.example.com' }, originalHeader)
