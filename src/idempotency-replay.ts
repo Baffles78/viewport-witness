@@ -1,4 +1,5 @@
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
+import type { JobStore } from './db.js'
 import type { Config } from './config.js'
 import type { JobKind, JobRecord, PageAssertion } from './types.js'
 import { paymentFingerprint } from './payment/index.js'
@@ -32,4 +33,29 @@ export function canReplayJob(
   if (cfg.PAYMENT_MODE === 'test') return true
   const fingerprint = paymentFingerprint(req)
   return Boolean(fingerprint && existing.paymentId && fingerprint === existing.paymentId)
+}
+
+export function claimPaidAdmission(
+  store: JobStore,
+  key: string,
+  req: Request,
+  res: Response,
+  cfg: Config,
+): boolean {
+  if (cfg.PAYMENT_MODE === 'test') return true
+  if (!store.claimPaymentAdmission(key)) {
+    res.status(409).json({
+      error: 'idempotency_outcome_unknown',
+      code: 'idempotency_outcome_unknown',
+      nextAction: 'stop',
+    })
+    return false
+  }
+  // A disconnected client may still have a settlement in flight. Release only
+  // after a delivered accepted response; unresolved admissions survive restart
+  // and require payment reconciliation before the key can be reused.
+  res.once('finish', () => {
+    if (res.statusCode === 202) store.releasePaymentAdmission(key)
+  })
+  return true
 }
