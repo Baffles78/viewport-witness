@@ -228,6 +228,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
     ) => {
       if (!context) {
         return (args: T, extra: unknown): Promise<ToolResult> => {
+          if (!runner.isHealthy()) {
+            return Promise.resolve(jsonResult({ error: 'worker_unavailable', code: 'worker_unavailable' }, true))
+          }
           const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
           return handler(args, {
             toolName:
@@ -255,6 +258,11 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             try {
               await runner.enqueue(job.id)
             } catch (error) {
+              if (!runner.isHealthy()) {
+                // Settlement already activated a durable queued row. A restarted
+                // worker will recover this same paid job.
+                return
+              }
               store.updateJobStatus(job.id, 'failed', {
                 completedAt: Date.now(),
                 error: error instanceof Error ? error.message.slice(0, 1000) : 'worker_unavailable',
@@ -293,6 +301,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             }
             inFlight = inFlightPayments.get(paymentId)
           }
+        }
+        if (!runner.isHealthy()) {
+          return jsonResult({ error: 'worker_unavailable', code: 'worker_unavailable' }, true)
         }
         let releasePayment: (() => void) | undefined
         if (paymentId) {
