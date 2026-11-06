@@ -164,6 +164,34 @@ describe('paid idempotency replay boundary', () => {
     expect(payment).not.toHaveBeenCalled()
   })
 
+  it('returns a disclosed-ID-free conflict if another payment wins after preflight', async () => {
+    const existing = job('verify')
+    let lookups = 0
+    const store = {
+      getJobByIdempotencyKey: () => ++lookups === 1 ? null : existing,
+      getJobByPaymentId: () => null,
+    } as unknown as JobStore
+    const payment = vi.fn((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      req.paymentResult = { settled: true, mode: 'production', paymentId: 'different-payment' }
+      next()
+    })
+    const app = express()
+    app.use(express.json())
+    app.use(createProductsRouter(store, { isHealthy: () => true } as WorkerRunner,
+      { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config, payment, payment))
+    const server = http.createServer(app)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    const result = await post(port, '/v1/verify', {
+      url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
+    }, 'different-payment-header')
+    expect(payment).toHaveBeenCalledOnce()
+    expect(result.status).toBe(409)
+    expect(result.body).toMatchObject({ error: 'job_replay_conflict' })
+    expect(result.body).not.toHaveProperty('id')
+  })
+
   it('rejects changed work even with the original payment payload', async () => {
     const { port, payment } = await serve('check')
     const result = await post(port, '/v1/checks', { url: 'https://another.example.com' }, originalHeader)
