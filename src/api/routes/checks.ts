@@ -12,6 +12,7 @@ import type { StoredReport, Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
+import { canReplayJob } from '../../idempotency-replay.js'
 import { challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
@@ -95,6 +96,10 @@ export function createChecksRouter(
     }
     const existing = store.getJobByIdempotencyKey(key)
     if (existing) {
+      if (!canReplayJob(existing, req, cfg, { kind: 'check', url: req.validatedCheckUrl ?? '' })) {
+        res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+        return
+      }
       res.status(202).json({
         id: existing.id,
         status: existing.status,
@@ -172,6 +177,10 @@ export function createChecksRouter(
       if (paymentId) {
         const existingPaymentJob = store.getJobByPaymentId(paymentId)
         if (existingPaymentJob) {
+          if (!canReplayJob(existingPaymentJob, req, cfg, { kind: 'check', url })) {
+            res.status(409).json({ error: 'payment_replay_conflict', code: 'payment_replay_conflict' })
+            return
+          }
           res.status(202).json({
             id: existingPaymentJob.id,
             status: existingPaymentJob.status,
@@ -189,6 +198,10 @@ export function createChecksRouter(
       if (idempotencyKey) {
         const existing = store.getJobByIdempotencyKey(idempotencyKey)
         if (existing) {
+          if (!canReplayJob(existing, req, cfg, { kind: 'check', url })) {
+            res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+            return
+          }
           res.status(202).json({
             id: existing.id,
             status: existing.status,
@@ -220,6 +233,10 @@ export function createChecksRouter(
             ? store.getJobByPaymentId(paymentId)
             : null
         if (existing) {
+          if (!canReplayJob(existing, req, cfg, { kind: 'check', url })) {
+            res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+            return
+          }
           res.status(202).json({
             id: existing.id,
             status: existing.status,
