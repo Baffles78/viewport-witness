@@ -210,7 +210,8 @@ export function createProductsRouter(
 ): Router {
   const router = createRouter()
   const inFlightIdempotencyKeys = new Set<string>()
-  const idempotencyPreflight = (req: Request, res: Response, next: NextFunction): void => {
+  const idempotencyPreflight = (kind: 'verify' | 'compare') =>
+    (req: Request, res: Response, next: NextFunction): void => {
     const key = readIdempotencyKey(req)
     if (!key) {
       next()
@@ -225,7 +226,7 @@ export function createProductsRouter(
       const input = (req as Request & {
         productInput?: { url: string; assertions?: PageAssertion[]; baselineJobId?: string }
       }).productInput
-      const intent = req.path === '/v1/verify'
+      const intent = kind === 'verify'
         ? { kind: 'verify' as const, url: input?.url ?? '',
             ...(input?.assertions ? { assertions: input.assertions } : {}) }
         : { kind: 'compare' as const, url: input?.url ?? '',
@@ -282,7 +283,7 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
-    idempotencyPreflight,
+    idempotencyPreflight('compare'),
     verifyPayment,
     asyncHandler(async (req, res) => {
       const input = (req as Request & { productInput: z.infer<typeof verifySchema> }).productInput
