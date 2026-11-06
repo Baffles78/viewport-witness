@@ -4,8 +4,9 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
+import { canReplayJob } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
-import { challengeIfUnsigned, createProductJob, requireWorkerAvailable } from './products.js'
+import { challengeIfUnsigned, createProductJob, requireWorkerAvailable, sendProductJob } from './products.js'
 
 const extractSchema = z
   .object({
@@ -68,7 +69,7 @@ export function createWebProductsRouter(
         ;(req as Request & { webProductInput?: unknown }).webProductInput = parsed.data
         next()
       }),
-      (req, res, next) => {
+        (req, res, next) => {
         const key = idempotencyKey(req)
         if (!key) {
           next()
@@ -80,6 +81,16 @@ export function createWebProductsRouter(
         }
         const existing = store.getJobByIdempotencyKey(key)
         if (existing) {
+          const input = (req as Request & {
+            webProductInput?: { url: string; maxOutputTokens?: number }
+          }).webProductInput
+          if (!canReplayJob(existing, req, cfg, {
+            kind, url: input?.url ?? '',
+            ...(input?.maxOutputTokens ? { maxOutputTokens: input.maxOutputTokens } : {}),
+          })) {
+            res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+            return
+          }
           res
             .status(202)
             .json({
@@ -91,7 +102,7 @@ export function createWebProductsRouter(
             })
           return
         }
-        if (inFlight.has(key)) {
+            if (inFlight.has(key)) {
           res
             .status(409)
             .json({ error: 'idempotency_in_progress', code: 'idempotency_in_progress' })
@@ -116,7 +127,7 @@ export function createWebProductsRouter(
           return
         }
         const key = idempotencyKey(req)
-        const result = await createProductJob({
+        await sendProductJob(res, createProductJob({
           store,
           runner,
           cfg,
@@ -126,8 +137,7 @@ export function createWebProductsRouter(
           ...(key ? { idempotencyKey: key } : {}),
           ...(settled?.settled && settled.paymentId ? { paymentId: settled.paymentId } : {}),
           ...(settled?.settled && settled.customerId ? { customerId: settled.customerId } : {}),
-        })
-        res.status(202).json(result)
+        }))
       }),
     )
   }
