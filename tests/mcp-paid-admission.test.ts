@@ -165,6 +165,33 @@ describe('MCP paid admission with mocked settlement', () => {
     expect(createJob).not.toHaveBeenCalled()
   })
 
+  it('rejects changed MCP arguments and tool for the same payment without another settlement', async () => {
+    const { store, createJob, current } = makeStore()
+    const runner = {
+      isHealthy: () => true,
+      enqueue: vi.fn(async () => undefined),
+    } as unknown as WorkerRunner
+    const port = await makeServer(store, runner)
+    const original = await callCheck(port)
+    expect(original.isError).toBeUndefined()
+    expect(current()?.kind).toBe('check')
+    expect(paymentMock.calls).toBe(1)
+
+    const changedUrl = await callTool(port, 'check_page', { url: 'https://changed.example.com' })
+    expect(changedUrl.isError).toBe(true)
+    expect(changedUrl.body).toMatchObject({ error: 'payment_replay_conflict' })
+    expect(changedUrl.body).not.toHaveProperty('id')
+
+    const changedTool = await callTool(port, 'verify_page', {
+      url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
+    })
+    expect(changedTool.isError).toBe(true)
+    expect(changedTool.body).toMatchObject({ error: 'payment_replay_conflict' })
+    expect(changedTool.body).not.toHaveProperty('id')
+    expect(paymentMock.calls).toBe(1)
+    expect(createJob).toHaveBeenCalledOnce()
+  })
+
   it('keeps exactly the same queued job if quarantine begins after mocked settlement', async () => {
     const { store, createJob, updateJobStatus, current } = makeStore()
     let healthy = true
