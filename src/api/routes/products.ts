@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
+import { canReplayJob, claimPaidAdmission, requirePaymentEnvelope, sameJobIntent } from '../../idempotency-replay.js'
 import type { JobKind, PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 
@@ -98,6 +99,10 @@ function paymentIdentity(
   }
 }
 
+export class JobReplayConflictError extends Error {
+  constructor() { super('job_replay_conflict') }
+}
+
 export async function createProductJob(params: {
   store: JobStore
   runner: ProductRunner
@@ -112,10 +117,19 @@ export async function createProductJob(params: {
   customerId?: string
   deferEnqueue?: boolean
 }): Promise<{ id: string; status: string; pollUrl: string; paymentMode: string }> {
+  const matchesExisting = (job: import('../../types.js').JobRecord): boolean =>
+    sameJobIntent(job, {
+      kind: params.kind,
+      url: params.url,
+      ...(params.assertions ? { assertions: params.assertions } : {}),
+      ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
+      ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
+    }) && (!params.paymentId || job.paymentId === params.paymentId)
   const existing =
     (params.idempotencyKey ? params.store.getJobByIdempotencyKey(params.idempotencyKey) : null) ??
     (params.paymentId ? params.store.getJobByPaymentId(params.paymentId) : null)
   if (existing) {
+    if (!matchesExisting(existing)) throw new JobReplayConflictError()
     return {
       id: existing.id,
       status: existing.status,
@@ -145,6 +159,7 @@ export async function createProductJob(params: {
       (params.idempotencyKey ? params.store.getJobByIdempotencyKey(params.idempotencyKey) : null) ??
       (params.paymentId ? params.store.getJobByPaymentId(params.paymentId) : null)
     if (!raced) throw error
+    if (!matchesExisting(raced)) throw new JobReplayConflictError()
     return {
       id: raced.id,
       status: raced.status,
@@ -174,6 +189,18 @@ export async function createProductJob(params: {
   return { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: params.cfg.PAYMENT_MODE }
 }
 
+export async function sendProductJob(
+  res: Response,
+  pending: ReturnType<typeof createProductJob>,
+): Promise<void> {
+  try {
+    res.status(202).json(await pending)
+  } catch (error) {
+    if (!(error instanceof JobReplayConflictError)) throw error
+    res.status(409).json({ error: 'job_replay_conflict', code: 'job_replay_conflict' })
+  }
+}
+
 export function createProductsRouter(
   store: JobStore,
   runner: WorkerRunner,
@@ -183,7 +210,8 @@ export function createProductsRouter(
 ): Router {
   const router = createRouter()
   const inFlightIdempotencyKeys = new Set<string>()
-  const idempotencyPreflight = (req: Request, res: Response, next: NextFunction): void => {
+  const idempotencyPreflight = (kind: 'verify' | 'compare') =>
+    (req: Request, res: Response, next: NextFunction): void => {
     const key = readIdempotencyKey(req)
     if (!key) {
       next()
@@ -195,6 +223,18 @@ export function createProductsRouter(
     }
     const existing = store.getJobByIdempotencyKey(key)
     if (existing) {
+      const input = (req as Request & {
+        productInput?: { url: string; assertions?: PageAssertion[]; baselineJobId?: string }
+      }).productInput
+      const intent = kind === 'verify'
+        ? { kind: 'verify' as const, url: input?.url ?? '',
+            ...(input?.assertions ? { assertions: input.assertions } : {}) }
+        : { kind: 'compare' as const, url: input?.url ?? '',
+            ...(input?.baselineJobId ? { baselineJobId: input.baselineJobId } : {}) }
+      if (!canReplayJob(existing, req, cfg, intent)) {
+        res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+        return
+      }
       res.status(202).json({
         id: existing.id,
         status: existing.status,
@@ -204,6 +244,7 @@ export function createProductsRouter(
       })
       return
     }
+    if (!claimPaidAdmission(store, key, res, cfg)) return
     if (inFlightIdempotencyKeys.has(key)) {
       res.setHeader('Retry-After', '1')
       res.status(409).json({ error: 'idempotency_in_progress', code: 'idempotency_in_progress' })
@@ -242,7 +283,8 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
-    idempotencyPreflight,
+    requirePaymentEnvelope,
+    idempotencyPreflight('verify'),
     verifyPayment,
     asyncHandler(async (req, res) => {
       const input = (req as Request & { productInput: z.infer<typeof verifySchema> }).productInput
@@ -252,7 +294,7 @@ export function createProductsRouter(
         return
       }
       const key = readIdempotencyKey(req)
-      const result = await createProductJob({
+      await sendProductJob(res, createProductJob({
         store,
         runner,
         cfg,
@@ -261,8 +303,7 @@ export function createProductsRouter(
         assertions: input.assertions,
         ...(key ? { idempotencyKey: key } : {}),
         ...identity,
-      })
-      res.status(202).json(result)
+      }))
     }),
   )
 
@@ -305,7 +346,8 @@ export function createProductsRouter(
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
       next()
     }),
-    idempotencyPreflight,
+    requirePaymentEnvelope,
+    idempotencyPreflight('compare'),
     comparePayment,
     asyncHandler(async (req, res) => {
       const input = (req as Request & { productInput: z.infer<typeof compareSchema> }).productInput
@@ -315,7 +357,7 @@ export function createProductsRouter(
         return
       }
       const key = readIdempotencyKey(req)
-      const result = await createProductJob({
+      await sendProductJob(res, createProductJob({
         store,
         runner,
         cfg,
@@ -324,8 +366,7 @@ export function createProductsRouter(
         baselineJobId: input.baselineJobId,
         ...(key ? { idempotencyKey: key } : {}),
         ...identity,
-      })
-      res.status(202).json(result)
+      }))
     }),
   )
 

@@ -239,8 +239,13 @@ See GET https://qa.honeygate.app/.well-known/x402 for payment requirements.
 Include an Idempotency-Key header to avoid creating duplicate jobs on retries:
 Idempotency-Key: my-client-generated-key-123
 
-A retry carrying a payment header can return an existing job ID after the unsigned challenge gate.
-The key alone is not an unpaid lookup or proof that another payment is safe. Max length 128 characters.
+A replay returns an existing job only for the same validated work and the exact payment payload
+already recorded for that job. A conflicting key or payment returns 409 without a job ID. A paid
+key is reserved durably before settlement; if a request disconnects or its payment outcome is
+uncertain, 409 idempotency_outcome_unknown means stop and reconcile outside this API. That
+reservation survives restart and does not expire automatically. Do not use another key to retry
+an uncertain payment. The key alone is not an unpaid lookup or proof that another payment is
+safe. Max length 128 characters.
 
 ## Error codes
 
@@ -249,6 +254,8 @@ The key alone is not an unpaid lookup or proof that another payment is safe. Max
 - validation_error — request body failed validation
 - worker_unavailable — worker is not accepting jobs
 - payment_required — x402 payment required (production/testnet mode)
+- idempotency_outcome_unknown — a prior signed request may have settled; stop and reconcile before paying again
+- idempotency_key_conflict / job_replay_conflict — key or payment does not match the recorded job
 - not_found — job or screenshot not found
 - invalid_viewport — viewport name not recognized
 
