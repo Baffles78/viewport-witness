@@ -189,6 +189,18 @@ export async function createProductJob(params: {
   return { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: params.cfg.PAYMENT_MODE }
 }
 
+export async function sendProductJob(
+  res: Response,
+  pending: ReturnType<typeof createProductJob>,
+): Promise<void> {
+  try {
+    res.status(202).json(await pending)
+  } catch (error) {
+    if (!(error instanceof JobReplayConflictError)) throw error
+    res.status(409).json({ error: 'job_replay_conflict', code: 'job_replay_conflict' })
+  }
+}
+
 export function createProductsRouter(
   store: JobStore,
   runner: WorkerRunner,
@@ -279,7 +291,7 @@ export function createProductsRouter(
         return
       }
       const key = readIdempotencyKey(req)
-      const result = await createProductJob({
+      await sendProductJob(res, createProductJob({
         store,
         runner,
         cfg,
@@ -288,8 +300,7 @@ export function createProductsRouter(
         assertions: input.assertions,
         ...(key ? { idempotencyKey: key } : {}),
         ...identity,
-      })
-      res.status(202).json(result)
+      }))
     }),
   )
 
@@ -342,7 +353,7 @@ export function createProductsRouter(
         return
       }
       const key = readIdempotencyKey(req)
-      const result = await createProductJob({
+      await sendProductJob(res, createProductJob({
         store,
         runner,
         cfg,
@@ -351,8 +362,7 @@ export function createProductsRouter(
         baselineJobId: input.baselineJobId,
         ...(key ? { idempotencyKey: key } : {}),
         ...identity,
-      })
-      res.status(202).json(result)
+      }))
     }),
   )
 
