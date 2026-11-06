@@ -239,7 +239,7 @@ See GET https://qa.honeygate.app/.well-known/x402 for payment requirements.
 Include an Idempotency-Key header to avoid creating duplicate jobs on retries:
 Idempotency-Key: my-client-generated-key-123
 
-An authorized retry with the same key can return an existing job ID after the payment gate.
+A retry carrying a payment header can return an existing job ID after the unsigned challenge gate.
 The key alone is not an unpaid lookup or proof that another payment is safe. Max length 128 characters.
 
 ## Error codes
