@@ -88,9 +88,19 @@ afterEach(async () => {
 })
 
 function makeStore() {
-  let job: { id: string; status: string; paymentId: string } | null = null
-  const createJob = vi.fn((input: { id: string; initialStatus: string; paymentId: string }) => {
-    job = { id: input.id, status: input.initialStatus, paymentId: input.paymentId }
+  let job: {
+    id: string; status: string; paymentId: string; kind: string; url: string;
+    request: { assertions?: unknown[]; maxOutputTokens?: number }; baselineJobId: string | null
+  } | null = null
+  const createJob = vi.fn((input: {
+    id: string; initialStatus: string; paymentId: string; kind: string; url: string;
+    request: { assertions?: unknown[]; maxOutputTokens?: number }; baselineJobId?: string
+  }) => {
+    job = {
+      id: input.id, status: input.initialStatus, paymentId: input.paymentId,
+      kind: input.kind, url: input.url, request: input.request,
+      baselineJobId: input.baselineJobId ?? null,
+    }
   })
   const updateJobStatus = vi.fn()
   const store = {
@@ -118,7 +128,7 @@ async function makeServer(store: JobStore, runner: WorkerRunner) {
   return (server.address() as { port: number }).port
 }
 
-async function callCheck(port: number) {
+async function callTool(port: number, name: string, args: Record<string, unknown>) {
   const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
     method: 'POST',
     headers: {
@@ -128,7 +138,7 @@ async function callCheck(port: number) {
     },
     body: JSON.stringify({
       jsonrpc: '2.0', id: 1, method: 'tools/call',
-      params: { name: 'check_page', arguments: { url: 'https://example.com' },
+      params: { name, arguments: args,
         _meta: { 'mock-payment': paymentPayload } },
     }),
   })
@@ -141,6 +151,8 @@ async function callCheck(port: number) {
   }
 }
 
+const callCheck = (port: number) => callTool(port, 'check_page', { url: 'https://example.com' })
+
 describe('MCP paid admission with mocked settlement', () => {
   it('never enters the paid wrapper while worker is quarantined', async () => {
     const { store, createJob } = makeStore()
@@ -151,6 +163,33 @@ describe('MCP paid admission with mocked settlement', () => {
     expect(result.body).toMatchObject({ error: 'worker_unavailable' })
     expect(paymentMock.calls).toBe(0)
     expect(createJob).not.toHaveBeenCalled()
+  })
+
+  it('rejects changed MCP arguments and tool for the same payment without another settlement', async () => {
+    const { store, createJob, current } = makeStore()
+    const runner = {
+      isHealthy: () => true,
+      enqueue: vi.fn(async () => undefined),
+    } as unknown as WorkerRunner
+    const port = await makeServer(store, runner)
+    const original = await callCheck(port)
+    expect(original.isError).toBeUndefined()
+    expect(current()?.kind).toBe('check')
+    expect(paymentMock.calls).toBe(1)
+
+    const changedUrl = await callTool(port, 'check_page', { url: 'https://changed.example.com' })
+    expect(changedUrl.isError).toBe(true)
+    expect(changedUrl.body).toMatchObject({ error: 'payment_replay_conflict' })
+    expect(changedUrl.body).not.toHaveProperty('id')
+
+    const changedTool = await callTool(port, 'verify_page', {
+      url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }],
+    })
+    expect(changedTool.isError).toBe(true)
+    expect(changedTool.body).toMatchObject({ error: 'payment_replay_conflict' })
+    expect(changedTool.body).not.toHaveProperty('id')
+    expect(paymentMock.calls).toBe(1)
+    expect(createJob).toHaveBeenCalledOnce()
   })
 
   it('keeps exactly the same queued job if quarantine begins after mocked settlement', async () => {

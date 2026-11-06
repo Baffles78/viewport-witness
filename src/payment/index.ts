@@ -94,7 +94,7 @@ function unavailable(error: string, detail: string): RequestHandler {
   }
 }
 
-function paymentFingerprint(req: Request): string | undefined {
+export function paymentFingerprint(req: Request): string | undefined {
   const signature = req.header('payment-signature') ?? req.header('x-payment')
   if (!signature) return undefined
   return createHash('sha256').update(signature).digest('hex')
