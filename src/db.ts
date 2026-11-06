@@ -189,7 +189,7 @@ export class JobStore {
   claimPaymentAdmission(key: string): boolean {
     const hash = createHash('sha256').update(key).digest('hex')
     const inserted = this.conn.prepare(`INSERT OR IGNORE INTO payment_admissions(key_hash,created_at)
-      SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM idempotency_keys WHERE key=?)`)
+      SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE idempotency_key=?)`)
       .run(hash, Date.now(), key)
     return Number(inserted.changes) === 1
   }
