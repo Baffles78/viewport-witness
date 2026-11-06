@@ -105,6 +105,19 @@ async function post(port: number, route: string, body: unknown, header: string) 
 
 describe('paid idempotency replay boundary', () => {
   for (const { kind, route, body } of cases) {
+    it(`${kind} rejects a malformed signed header before admission or payment`, async () => {
+      const { port, payment, lookup } = await serve(kind)
+      const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'same-key',
+          'Payment-Signature': 'garbage' },
+        body: JSON.stringify(body),
+      })
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ error: 'invalid_payment_envelope' })
+      expect(payment).not.toHaveBeenCalled()
+      expect(lookup).not.toHaveBeenCalled()
+    })
     it(`${kind} rejects a different payment header before settlement or job disclosure`, async () => {
       const { port, payment, lookup } = await serve(kind)
       const result = await post(port, route, body, 'unsettled-or-other-payment')
