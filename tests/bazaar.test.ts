@@ -30,7 +30,7 @@ vi.mock('@coinbase/cdp-sdk/x402', () => ({
 
 import express from 'express'
 import http from 'http'
-import { createPaymentMiddleware } from '../src/payment/index.js'
+import { createBazaarDiscovery, createPaymentMiddleware } from '../src/payment/index.js'
 
 const servers: http.Server[] = []
 
@@ -213,5 +213,36 @@ describe('Bazaar discovery — request/output schema compliance', () => {
 
     // 402 because no payment — the input was accepted by the middleware schema
     expect(res.status).toBe(402)
+  })
+})
+
+describe('Bazaar accepted-job response contract', () => {
+  it('allows the reconciliation fields in accepted and duplicate responses', () => {
+    const discovery: unknown = createBazaarDiscovery('POST /v1/checks')
+    const findOutputSchema = (value: unknown): Record<string, unknown> | null => {
+      if (!value || typeof value !== 'object') return null
+      const record = value as Record<string, unknown>
+      if (record.additionalProperties === false && Array.isArray(record.required) &&
+          record.required.includes('pollUrl')) return record
+      for (const nested of Object.values(record)) {
+        const found = findOutputSchema(nested)
+        if (found) return found
+      }
+      return null
+    }
+    const schema = findOutputSchema(discovery)
+    expect(schema).not.toBeNull()
+    const properties = schema?.properties as Record<string, unknown>
+    const required = schema?.required as string[]
+    for (const field of ['id', 'status', 'jobStatus', 'nextAction', 'pollUrl', 'paymentMode']) {
+      expect(properties).toHaveProperty(field)
+      expect(required).toContain(field)
+    }
+    expect(properties).toHaveProperty('retryAfterSeconds')
+    expect(properties).toHaveProperty('idempotent')
+    expect(required).not.toContain('retryAfterSeconds')
+    expect(required).not.toContain('idempotent')
+    expect((properties.status as { enum: string[] }).enum).toContain('retryable')
+    expect((properties.nextAction as { enum: string[] }).enum).toContain('inspect_report')
   })
 })
