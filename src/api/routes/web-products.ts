@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
-import { canReplayJob } from '../../idempotency-replay.js'
+import { canReplayJob, claimPaidAdmission } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { challengeIfUnsigned, createProductJob, requireWorkerAvailable, sendProductJob } from './products.js'
 
@@ -102,6 +102,7 @@ export function createWebProductsRouter(
             })
           return
         }
+        if (!claimPaidAdmission(store, key, res, cfg)) return
         if (inFlight.has(key)) {
           res
             .status(409)
