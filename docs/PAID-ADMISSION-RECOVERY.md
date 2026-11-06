@@ -38,6 +38,15 @@ and denial of a subsequent keyed purchase. The cap bounds rows, not access.
    threshold. Reconcile entries; never silently expire uncertain claims merely
    to regain capacity.
 
+A separate read-only facilitator `/verify` call could filter some invalid payloads
+before admission, but the configured upfront flow does not call it. Such a
+change must use the exact route's negotiated requirements, preserve the
+provider's response codes, and be tested against both EVM and Solana rails.
+Verification is time-sensitive and does not prove later settlement will
+succeed; it cannot replace a durable pre-settle attempt or resolve a crash
+after settle. Do not insert an ad hoc verify call into the current wrapper
+without a reviewed contract and mocked facilitator tests.
+
 ## Durable recovery design
 
 Create a transactionally inserted `payment_attempts` record before calling
