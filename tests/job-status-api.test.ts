@@ -5,6 +5,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { createChecksRouter } from '../src/api/routes/checks.js'
+import { createProductsRouter } from '../src/api/routes/products.js'
+import { createWebProductsRouter } from '../src/api/routes/web-products.js'
 import type { Config } from '../src/config.js'
 import type { JobStore } from '../src/db.js'
 import type { WorkerRunner } from '../src/worker/runner.js'
@@ -123,5 +125,35 @@ describe('production unsigned creation recovery', () => {
     })
     expect(response.status).toBe(402)
     expect(lookup).not.toHaveBeenCalled()
+  })
+})
+
+describe('quarantined worker admission', () => {
+  it('blocks every worker-backed POST before payment and keeps retrieval available', async () => {
+    const payment = vi.fn((_req: express.Request, _res: express.Response, next: express.NextFunction) => next())
+    const worker = { isHealthy: () => false } as WorkerRunner
+    const store = { getJob: () => null } as unknown as JobStore
+    const cfg = { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config
+    const app = express()
+    app.use(express.json())
+    app.use(createChecksRouter(store, worker, cfg, payment))
+    app.use(createProductsRouter(store, worker, cfg, payment, payment))
+    app.use(createWebProductsRouter(store, worker, cfg, payment, payment))
+    const server = http.createServer(app)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    for (const route of ['/v1/checks', '/v1/verify', '/v1/compare', '/v1/extract', '/v1/security-gate']) {
+      const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Payment-Signature': 'synthetic' },
+        body: JSON.stringify({ url: 'https://example.com' }),
+      })
+      expect(response.status, route).toBe(503)
+      expect(await response.json()).toMatchObject({ error: 'worker_unavailable' })
+    }
+    expect(payment).not.toHaveBeenCalled()
+    const retrieval = await fetch(`http://127.0.0.1:${port}/v1/checks/${id}`)
+    expect(retrieval.status).toBe(404)
   })
 })
