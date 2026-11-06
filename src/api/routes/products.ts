@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
-import { canReplayJob, sameJobIntent } from '../../idempotency-replay.js'
+import { canReplayJob, claimPaidAdmission, sameJobIntent } from '../../idempotency-replay.js'
 import type { JobKind, PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 
@@ -243,6 +243,7 @@ export function createProductsRouter(
       })
       return
     }
+    if (!claimPaidAdmission(store, key, res, cfg)) return
     if (inFlightIdempotencyKeys.has(key)) {
       res.setHeader('Retry-After', '1')
       res.status(409).json({ error: 'idempotency_in_progress', code: 'idempotency_in_progress' })
