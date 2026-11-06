@@ -1,5 +1,4 @@
 import type { Request } from 'express'
-import type { JobStore } from './db.js'
 import type { Config } from './config.js'
 import type { JobKind, JobRecord, PageAssertion } from './types.js'
 import { paymentFingerprint } from './payment/index.js'
