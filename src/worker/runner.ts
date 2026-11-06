@@ -186,7 +186,20 @@ export class WorkerRunner {
     } catch (err: unknown) {
       const msg = timedOut ? 'job_timeout' : (err as Error).message ?? 'unknown'
       if (msg === 'job_timeout' || msg === 'job_aborted') {
-        await workPromise.catch(() => undefined)
+        // A browser or third-party call may ignore AbortSignal. Bound cleanup so this
+        // worker does not remain stuck forever, and avoid overlapping a retry with
+        // work that might still be active.
+        const settled = await Promise.race([
+          workPromise.then(() => true, () => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000)),
+        ])
+        if (!settled && !this.shuttingDown) {
+          this.store.updateJobStatus(item.jobId, 'failed', {
+            completedAt: Date.now(),
+            error: 'job_abort_unresponsive',
+          })
+          return
+        }
         if (this.store.getJob(item.jobId)?.status === 'running') {
           this.store.markJobRetryable(item.jobId)
         }
