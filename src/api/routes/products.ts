@@ -43,7 +43,7 @@ export function requireWorkerAvailable(runner: WorkerRunner): RequestHandler {
 
 interface ProductRunner {
   enqueue(jobId: string): Promise<void>
-  isHealthy(): boolean
+  isHealthy?(): boolean
 }
 
 const assertionSchema = z.discriminatedUnion('type', [
@@ -159,7 +159,7 @@ export async function createProductJob(params: {
     try {
       await params.runner.enqueue(id)
     } catch (error) {
-      if (!params.runner.isHealthy()) {
+      if (params.runner.isHealthy?.() === false) {
         // Admission can close while x402 is settling. The paid job is already
         // durable; leave it queued for recovery after the worker restarts.
         return { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: params.cfg.PAYMENT_MODE }
