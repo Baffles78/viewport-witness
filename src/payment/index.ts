@@ -158,7 +158,7 @@ export function customerFingerprint(
 
 // Bazaar discovery extension: describes the request/response schema for marketplace indexing.
 // Request: strict {url:string} only. Response: the accepted 202 job object, not the eventual report.
-function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
+export function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
   const input =
     route === 'POST /v1/verify'
       ? { url: 'https://example.com', assertions: [{ type: 'noConsoleErrors' }] }
