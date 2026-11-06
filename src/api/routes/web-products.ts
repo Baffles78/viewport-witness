@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
-import { canReplayJob, claimPaidAdmission } from '../../idempotency-replay.js'
+import { canReplayJob, claimPaidAdmission, requirePaymentEnvelope } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { challengeIfUnsigned, createProductJob, requireWorkerAvailable, sendProductJob } from './products.js'
 
@@ -47,6 +47,7 @@ export function createWebProductsRouter(
       path,
       requireWorkerAvailable(runner),
       challengeIfUnsigned(payment, cfg),
+      requirePaymentEnvelope,
       asyncHandler(async (req, res, next) => {
         const parsed = schema.safeParse(req.body)
         if (!parsed.success) {
