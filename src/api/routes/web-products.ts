@@ -85,7 +85,8 @@ export function createWebProductsRouter(
             webProductInput?: { url: string; maxOutputTokens?: number }
           }).webProductInput
           if (!canReplayJob(existing, req, cfg, {
-            kind, url: input?.url ?? '', maxOutputTokens: input?.maxOutputTokens,
+            kind, url: input?.url ?? '',
+            ...(input?.maxOutputTokens ? { maxOutputTokens: input.maxOutputTokens } : {}),
           })) {
             res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
             return
