@@ -194,6 +194,12 @@ export class WorkerRunner {
           new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000)),
         ])
         if (!settled && !this.shuttingDown) {
+          // Returning from the timeout does not terminate non-cooperative work.
+          // Quarantine this worker so no other job starts beside the orphaned work;
+          // queued rows remain in the database for recovery after process restart.
+          this.shuttingDown = true
+          this.queue = []
+          console.error('[worker] abort did not settle; restart required for safe recovery')
           this.store.updateJobStatus(item.jobId, 'failed', {
             completedAt: Date.now(),
             error: 'job_abort_unresponsive',
