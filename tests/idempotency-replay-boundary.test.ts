@@ -225,6 +225,42 @@ describe('paid idempotency replay boundary', () => {
     expect(result.body).not.toHaveProperty('id')
   })
 
+  it('shows plausible invalid payments can exhaust the admission cap', async () => {
+    const claims = new Set<string>()
+    const store = {
+      getJobByIdempotencyKey: () => null,
+      claimPaymentAdmission: (key: string) => {
+        if (claims.has(key) || claims.size >= 2) return false
+        claims.add(key)
+        return true
+      },
+      releasePaymentAdmission: (key: string) => { claims.delete(key) },
+    } as unknown as JobStore
+    const payment = vi.fn((_req: express.Request, res: express.Response) => {
+      res.status(402).json({ error: 'invalid_payment' })
+    })
+    const app = express()
+    app.use(express.json())
+    app.use(createChecksRouter(store, { isHealthy: () => true } as WorkerRunner,
+      { PAYMENT_MODE: 'production', RETENTION_DAYS: 7 } as Config, payment))
+    const server = http.createServer(app)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as { port: number }).port
+    for (const key of ['bad-one', 'bad-two', 'legitimate-key']) {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/checks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key,
+          'Payment-Signature': paymentHeader(key) },
+        body: JSON.stringify({ url: 'https://example.com' }),
+      })
+      expect(response.status).toBe(key === 'legitimate-key' ? 409 : 402)
+      await response.json()
+    }
+    expect(payment).toHaveBeenCalledTimes(2)
+    expect(claims.size).toBe(2)
+  })
+
   it('rejects changed work even with the original payment payload', async () => {
     const { port, payment } = await serve('check')
     const result = await post(port, '/v1/checks', { url: 'https://another.example.com' }, originalHeader)
