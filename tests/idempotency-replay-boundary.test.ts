@@ -170,6 +170,8 @@ describe('paid idempotency replay boundary', () => {
     const store = {
       getJobByIdempotencyKey: () => ++lookups === 1 ? null : existing,
       getJobByPaymentId: () => null,
+      claimPaymentAdmission: () => true,
+      releasePaymentAdmission: () => undefined,
     } as unknown as JobStore
     const payment = vi.fn((req: express.Request, _res: express.Response, next: express.NextFunction) => {
       req.paymentResult = { settled: true, mode: 'production', paymentId: 'different-payment' }
