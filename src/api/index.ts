@@ -9,7 +9,7 @@ import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
 import type { Config } from '../config.js'
 import { createPaymentMiddleware } from '../payment/index.js'
-import { growthMiddleware } from '../growth.js'
+import { growthMiddleware, growthErrorObserver } from '../growth.js'
 import { createHistoryRouter } from './routes/history.js'
 import type { ArchiveManager } from '../archive.js'
 
@@ -27,12 +27,13 @@ export function createApp(
   // headers from the worker or other networks.
   app.set('trust proxy', ['loopback', '172.31.250.1/32'])
 
+  // Attach anonymous observation before parsing so rejected bodies are observable.
+  app.use(growthMiddleware(store, cfg.PAYMENT_MODE))
   // Body parsing - strict 10KB limit
   app.use(express.json({ limit: '10kb' }))
 
   // Disable x-powered-by header
   app.disable('x-powered-by')
-  app.use(growthMiddleware(store, cfg.PAYMENT_MODE))
 
   // Request ID injection
   app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -177,6 +178,8 @@ export function createApp(
     res.status(404).json({ error: 'not_found', detail: 'Route not found', code: 'not_found' })
   })
 
+  // Observe normalized parser failure categories without changing error responses.
+  app.use(growthErrorObserver())
   // Error handler
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error('[api] unhandled error:', err instanceof Error ? err.message : String(err))
@@ -187,3 +190,4 @@ export function createApp(
 
   return app
 }
+
