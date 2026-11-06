@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
-import { canReplayJob, claimPaidAdmission, sameJobIntent } from '../../idempotency-replay.js'
+import { canReplayJob, claimPaidAdmission, requirePaymentEnvelope, sameJobIntent } from '../../idempotency-replay.js'
 import type { JobKind, PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 
@@ -263,6 +263,7 @@ export function createProductsRouter(
     '/v1/verify',
     requireWorkerAvailable(runner),
     challengeIfUnsigned(verifyPayment, cfg),
+    requirePaymentEnvelope,
     asyncHandler(async (req, res, next) => {
       const parsed = verifySchema.safeParse(req.body)
       if (!parsed.success) {
@@ -310,6 +311,7 @@ export function createProductsRouter(
     '/v1/compare',
     requireWorkerAvailable(runner),
     challengeIfUnsigned(comparePayment, cfg),
+    requirePaymentEnvelope,
     asyncHandler(async (req, res, next) => {
       const parsed = compareSchema.safeParse(req.body)
       if (!parsed.success) {
