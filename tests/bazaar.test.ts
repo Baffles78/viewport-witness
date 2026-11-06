@@ -217,32 +217,68 @@ describe('Bazaar discovery — request/output schema compliance', () => {
 })
 
 describe('Bazaar accepted-job response contract', () => {
-  it('allows the reconciliation fields in accepted and duplicate responses', () => {
-    const discovery: unknown = createBazaarDiscovery('POST /v1/checks')
-    const findOutputSchema = (value: unknown): Record<string, unknown> | null => {
+  const id = '550e8400-e29b-41d4-a716-446655440000'
+  const common = { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: 'production' }
+
+  function outputSchema(route: Parameters<typeof createBazaarDiscovery>[0]) {
+    const discovery: unknown = createBazaarDiscovery(route)
+    const find = (value: unknown): Record<string, unknown> | null => {
       if (!value || typeof value !== 'object') return null
       const record = value as Record<string, unknown>
       if (record.additionalProperties === false && Array.isArray(record.required) &&
           record.required.includes('pollUrl')) return record
       for (const nested of Object.values(record)) {
-        const found = findOutputSchema(nested)
+        const found = find(nested)
         if (found) return found
       }
       return null
     }
-    const schema = findOutputSchema(discovery)
+    const schema = find(discovery)
     expect(schema).not.toBeNull()
-    const properties = schema?.properties as Record<string, unknown>
-    const required = schema?.required as string[]
-    for (const field of ['id', 'status', 'jobStatus', 'nextAction', 'pollUrl', 'paymentMode']) {
-      expect(properties).toHaveProperty(field)
-      expect(required).toContain(field)
+    return schema as Record<string, unknown>
+  }
+
+  function accepts(schema: Record<string, unknown>, response: Record<string, unknown>) {
+    const properties = schema.properties as Record<string, { type: string; enum?: string[] }>
+    const required = schema.required as string[]
+    expect(schema.additionalProperties).toBe(false)
+    for (const field of required) expect(response).toHaveProperty(field)
+    for (const [field, value] of Object.entries(response)) {
+      expect(properties, `undeclared field ${field}`).toHaveProperty(field)
+      expect(typeof value).toBe(properties[field]?.type)
+      if (properties[field]?.enum) expect(properties[field]?.enum).toContain(value)
     }
-    expect(properties).toHaveProperty('retryAfterSeconds')
-    expect(properties).toHaveProperty('idempotent')
-    expect(required).not.toContain('retryAfterSeconds')
-    expect(required).not.toContain('idempotent')
-    expect((properties.status as { enum: string[] }).enum).toContain('retryable')
-    expect((properties.nextAction as { enum: string[] }).enum).toContain('inspect_report')
+  }
+
+  it('matches check creation, idempotent duplicate and payment replay', () => {
+    const schema = outputSchema('POST /v1/checks')
+    accepts(schema, {
+      ...common, jobStatus: 'queued', nextAction: 'poll_same_job', retryAfterSeconds: 5,
+    })
+    accepts(schema, {
+      ...common, status: 'complete', jobStatus: 'complete', nextAction: 'inspect_report',
+      idempotent: true,
+    })
+    accepts(schema, {
+      ...common, status: 'retryable', jobStatus: 'retryable', nextAction: 'poll_same_job',
+      retryAfterSeconds: 5, paymentReplay: true,
+    })
+    expect(schema.required).toEqual(expect.arrayContaining(['jobStatus', 'nextAction']))
+    expect(schema.required).not.toContain('retryAfterSeconds')
+    expect(schema.required).not.toContain('paymentReplay')
   })
+
+  for (const route of [
+    'POST /v1/verify', 'POST /v1/compare', 'POST /v1/extract', 'POST /v1/security-gate',
+  ] as const) {
+    it(`matches ${route} creation and idempotent duplicate`, () => {
+      const schema = outputSchema(route)
+      accepts(schema, common)
+      accepts(schema, { ...common, status: 'complete', idempotent: true })
+      const properties = schema.properties as Record<string, unknown>
+      expect(properties).not.toHaveProperty('jobStatus')
+      expect(properties).not.toHaveProperty('nextAction')
+      expect(properties).not.toHaveProperty('paymentReplay')
+    })
+  }
 })
