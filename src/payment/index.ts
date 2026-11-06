@@ -259,6 +259,9 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
       example: {
         id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'queued',
+        jobStatus: 'queued',
+        nextAction: 'poll_same_job',
+        retryAfterSeconds: 5,
         pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
         paymentMode: 'production',
       },
@@ -267,6 +270,10 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
         properties: {
           id: { type: 'string', description: 'Job UUID' },
           status: { type: 'string', enum: ['queued'], description: 'Initial job status' },
+          jobStatus: { type: 'string', enum: ['queued'], description: 'Job lifecycle status' },
+          nextAction: { type: 'string', enum: ['poll_same_job'], description: 'Poll this job ID' },
+          retryAfterSeconds: { type: 'integer', minimum: 1, description: 'Suggested poll delay' },
+          idempotent: { type: 'boolean', description: 'Existing job returned for this key' },
           pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
           paymentMode: {
             type: 'string',
@@ -274,7 +281,7 @@ function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) {
             description: 'Payment mode used for this job',
           },
         },
-        required: ['id', 'status', 'pollUrl', 'paymentMode'],
+        required: ['id', 'status', 'jobStatus', 'nextAction', 'retryAfterSeconds', 'pollUrl', 'paymentMode'],
         additionalProperties: false,
       },
     },
