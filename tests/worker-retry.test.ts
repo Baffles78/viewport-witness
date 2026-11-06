@@ -62,5 +62,6 @@ describe('non-cooperative abort', () => {
     expect(job.status).toBe('failed')
     expect(job.error).toBe('job_abort_unresponsive')
     expect(internal.queue).toHaveLength(0)
+    await expect(runner.enqueue('another-job')).rejects.toThrow('Worker is shutting down')
   })
 })
