@@ -25,7 +25,7 @@ Operate within the caller's approved network, recipient, operation and spending 
 
 ### 3. Submit the check
 
-Send the target URL. Use an idempotency key so that a retry for the same intent does not create a duplicate job and does not trigger a second charge.
+Send the target URL. Use an idempotency key for the same intent and persist it with the payment reference. Authorized retries can reuse an accepted job, but the key alone does not provide an unpaid lookup or guarantee against a second charge after uncertain settlement. If creation is interrupted before an ID arrives, stop and reconcile the payment outside this API before signing again.
 
 ```
 POST /v1/checks
