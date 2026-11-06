@@ -205,8 +205,11 @@ cancellation for one second, the worker records `job_abort_unresponsive`, stops 
 starting jobs, and logs that a restart is required. This bound returns control to the queue;
 it **does not terminate** the underlying non-cooperative operation. The current process must
 be restarted to clear that work. Other queued jobs remain in the database and are recovered
-on startup. Inspect the failed job and any payment reconciliation before authorizing a new
-paid submission.
+on startup. New worker-backed HTTP and MCP purchases are rejected before payment while the
+worker is quarantined. A payment already settling when quarantine begins may leave its job
+queued for restart; retain its ID and poll it. External settlement and the local database are
+not one atomic transaction, so a crash between them does not carry an exactly-once guarantee.
+Reconcile any uncertain payment before authorizing a new paid submission.
 
 ---
 
