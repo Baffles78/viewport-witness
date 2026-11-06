@@ -43,6 +43,7 @@ export function requireWorkerAvailable(runner: WorkerRunner): RequestHandler {
 
 interface ProductRunner {
   enqueue(jobId: string): Promise<void>
+  isHealthy(): boolean
 }
 
 const assertionSchema = z.discriminatedUnion('type', [
