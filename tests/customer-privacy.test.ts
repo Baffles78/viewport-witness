@@ -63,7 +63,7 @@ async function listen(
   app.use(
     createChecksRouter(
       store,
-      { enqueue: vi.fn(async () => undefined) } as unknown as WorkerRunner,
+      { enqueue: vi.fn(async () => undefined), isHealthy: () => true } as unknown as WorkerRunner,
       cfg,
       paymentMiddleware,
     ),
