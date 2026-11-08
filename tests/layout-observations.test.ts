@@ -1,6 +1,28 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Page } from 'playwright'
 import { observeLayout, evaluateNoHorizontalOverflow } from '../src/worker/layout.js'
+
+describe('layout document extent', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each([
+    [375, 435, true],
+    [435, 375, true],
+    [375, 375, false],
+  ])('measures body %i and root %i widths', async (bodyWidth, rootWidth, overflow) => {
+    vi.stubGlobal('window', { innerWidth: 375 })
+    vi.stubGlobal('document', {
+      body: { scrollWidth: bodyWidth },
+      documentElement: { scrollWidth: rootWidth },
+      querySelectorAll: () => [],
+    })
+    const page = { evaluate: async (callback: () => unknown) => callback() } as unknown as Page
+    const result = await observeLayout(page)
+    expect(result.layoutObservation).toBe('measured')
+    expect(result.overflowDetected).toBe(overflow)
+    expect(evaluateNoHorizontalOverflow(result).passed).toBe(!overflow)
+  })
+})
 
 describe('layout observation failures', () => {
   it('labels evaluation exceptions unavailable', async () => {
