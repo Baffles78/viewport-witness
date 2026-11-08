@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import { unresolvedReplayBody } from '../../payment/admission.js'
 import { Router as createRouter } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
@@ -90,12 +91,13 @@ function readIdempotencyKey(req: Request): string | undefined {
 function paymentIdentity(
   req: Request,
   cfg: Config,
-): { paymentId?: string; customerId?: string } | null {
+): { paymentId?: string; customerId?: string; admittedJobId?: string } | null {
   const result = req.paymentResult
   if (cfg.PAYMENT_MODE !== 'test' && (!result?.settled || !result.paymentId)) return null
   return {
     ...(result?.settled && result.paymentId ? { paymentId: result.paymentId } : {}),
     ...(result?.settled && result.customerId ? { customerId: result.customerId } : {}),
+    ...(result?.settled && result.admittedJobId ? { admittedJobId: result.admittedJobId } : {}),
   }
 }
 
@@ -116,7 +118,11 @@ export async function createProductJob(params: {
   paymentId?: string
   customerId?: string
   deferEnqueue?: boolean
+  admittedJobId?: string
 }): Promise<{ id: string; status: string; pollUrl: string; paymentMode: string }> {
+  if (params.admittedJobId) {
+    return activateAdmittedJob(params.store, params.runner, params.cfg, params.admittedJobId)
+  }
   const matchesExisting = (job: import('../../types.js').JobRecord): boolean =>
     sameJobIntent(job, {
       kind: params.kind,
@@ -189,6 +195,27 @@ export async function createProductJob(params: {
   return { id, status: 'queued', pollUrl: `/v1/checks/${id}`, paymentMode: params.cfg.PAYMENT_MODE }
 }
 
+// The paid middleware admitted this exact job before settlement and moved it to
+// `queued` when settlement was confirmed. Hand that same job to the worker.
+export async function activateAdmittedJob(
+  store: JobStore,
+  runner: ProductRunner,
+  cfg: Config,
+  id: string,
+): Promise<{ id: string; status: string; pollUrl: string; paymentMode: string }> {
+  const job = store.getJob(id)
+  if (!job) throw new Error('admitted_job_missing')
+  if (job.status === 'queued') {
+    try {
+      await runner.enqueue(id)
+    } catch {
+      // Settlement is already recorded and the row is durable and queued. A
+      // restarted or recovered worker picks up this same job; never fail it.
+    }
+  }
+  return { id, status: job.status, pollUrl: `/v1/checks/${id}`, paymentMode: cfg.PAYMENT_MODE }
+}
+
 export async function sendProductJob(
   res: Response,
   pending: ReturnType<typeof createProductJob>,
@@ -233,6 +260,11 @@ export function createProductsRouter(
             ...(input?.baselineJobId ? { baselineJobId: input.baselineJobId } : {}) }
       if (!canReplayJob(existing, req, cfg, intent)) {
         res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+        return
+      }
+      const unresolved = unresolvedReplayBody(existing, cfg.PAYMENT_MODE)
+      if (unresolved) {
+        res.status(202).json(unresolved)
         return
       }
       res.status(202).json({
@@ -280,6 +312,7 @@ export function createProductsRouter(
         return
       }
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
+      req.jobIntent = { kind: 'verify', url: parsed.data.url, assertions: parsed.data.assertions }
       next()
     }),
     idempotencyPreflight('verify'),
@@ -342,6 +375,7 @@ export function createProductsRouter(
         return
       }
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
+      req.jobIntent = { kind: 'compare', url: parsed.data.url, baselineJobId: parsed.data.baselineJobId }
       next()
     }),
     idempotencyPreflight('compare'),

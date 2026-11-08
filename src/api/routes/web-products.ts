@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import { unresolvedReplayBody } from '../../payment/admission.js'
 import { Router as createRouter } from 'express'
 import { z } from 'zod'
 import type { Config } from '../../config.js'
@@ -67,6 +68,12 @@ export function createWebProductsRouter(
           return
         }
         ;(req as Request & { webProductInput?: unknown }).webProductInput = parsed.data
+        const maxOutputTokens = (parsed.data as { maxOutputTokens?: number }).maxOutputTokens
+        req.jobIntent = {
+          kind,
+          url: parsed.data.url,
+          ...(maxOutputTokens ? { maxOutputTokens } : {}),
+        }
         next()
       }),
         (req, res, next) => {
@@ -89,6 +96,11 @@ export function createWebProductsRouter(
             ...(input?.maxOutputTokens ? { maxOutputTokens: input.maxOutputTokens } : {}),
           })) {
             res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+            return
+          }
+          const unresolved = unresolvedReplayBody(existing, cfg.PAYMENT_MODE)
+          if (unresolved) {
+            res.status(202).json(unresolved)
             return
           }
           res
@@ -137,6 +149,7 @@ export function createWebProductsRouter(
           ...(key ? { idempotencyKey: key } : {}),
           ...(settled?.settled && settled.paymentId ? { paymentId: settled.paymentId } : {}),
           ...(settled?.settled && settled.customerId ? { customerId: settled.customerId } : {}),
+          ...(settled?.settled && settled.admittedJobId ? { admittedJobId: settled.admittedJobId } : {}),
         }))
       }),
     )

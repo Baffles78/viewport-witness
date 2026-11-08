@@ -105,6 +105,8 @@ export class WorkerRunner {
     if (this.shuttingDown) {
       throw new Error('Worker is shutting down')
     }
+    // One job id is never queued twice or queued beside itself while running.
+    if (this.currentJobId === jobId || this.queue.some((item) => item.jobId === jobId)) return
     this.queue.push({ jobId, paymentMode: this.paymentMode })
     if (!this.processing) {
       void this.processNext()
@@ -146,9 +148,28 @@ export class WorkerRunner {
     }
   }
 
+  /**
+   * Pick up durable queued work that is not in memory, for example a payment an
+   * operator reconciled as settled while the service was running.
+   */
+  recoverQueuedJobs(): number {
+    if (!this.isHealthy()) return 0
+    let added = 0
+    for (const job of this.store.listJobsByStatuses(['queued'])) {
+      if (this.currentJobId === job.id || this.queue.some((item) => item.jobId === job.id)) continue
+      this.queue.push({ jobId: job.id, paymentMode: this.paymentMode })
+      added++
+    }
+    if (added > 0 && !this.processing) void this.processNext()
+    return added
+  }
+
   private async runJobWithTimeout(item: QueueItem): Promise<void> {
     const job = this.store.getJob(item.jobId)
     if (!job) return
+    // Only queued or retryable work may start. This prevents a duplicate queue
+    // entry from rerunning finished work or starting an unpaid attempt.
+    if (job.status !== 'queued' && job.status !== 'retryable') return
 
     this.store.updateJobStatus(item.jobId, 'running', { startedAt: Date.now() })
 

@@ -94,6 +94,16 @@ const configSchema = z.object({
     .transform((v) => parseInt(v ?? '10', 10))
     .pipe(z.number().int().min(1).max(100)),
   HISTORY_PRICE_USDC: usdcPriceSchema.default('0.02'),
+  PAYMENT_UNRESOLVED_LIMIT: z
+    .string()
+    .optional()
+    .transform((v) => parseInt(v ?? '20', 10))
+    .pipe(z.number().int().min(1).max(1000)),
+  PAYMENT_UNRESOLVED_PER_PAYER: z
+    .string()
+    .optional()
+    .transform((v) => parseInt(v ?? '3', 10))
+    .pipe(z.number().int().min(1).max(100)),
 })
 
 export type Config = {
@@ -128,7 +138,14 @@ export type Config = {
   ARCHIVE_MAX_SNAPSHOTS_PER_URL: number
   HISTORY_MAX_RESULTS: number
   HISTORY_PRICE_USDC: string
+  /** Paid attempts whose settlement is unproven; new paid work pauses at this count. */
+  PAYMENT_UNRESOLVED_LIMIT?: number
+  /** In-flight or unproven paid attempts one payer may hold before its new payments wait. */
+  PAYMENT_UNRESOLVED_PER_PAYER?: number
 }
+
+export const DEFAULT_PAYMENT_UNRESOLVED_LIMIT = 20
+export const DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER = 3
 
 function loadConfig(): Config {
   const result = configSchema.safeParse(process.env)

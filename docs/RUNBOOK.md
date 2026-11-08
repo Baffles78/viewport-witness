@@ -236,19 +236,37 @@ Log level can be set via `LOG_LEVEL=debug|info|warn|error` in `.env`.
 
 ## Upgrades
 
-```bash
-git pull
-docker compose build --no-cache
-docker compose up -d --force-recreate
-docker compose logs -f viewport-witness
-```
-
-Test after upgrade:
+Production (VPS) runs `docker compose -f deploy/docker-compose.vps.yml up -d --no-build`
+from systemd, so pulling source deploys nothing. A release needs an exact-commit owner
+approval and the release gate in `AGENTS.md`. Procedure:
 
 ```bash
-curl http://localhost:3000/health
-npm test  # run from project dir
+cd /opt/viewport-witness
+docker image inspect viewport-witness-viewport-witness:latest --format '{{.Id}}'   # record
+docker tag viewport-witness-viewport-witness:latest viewport-witness:rollback-$(date -u +%Y%m%d)-<oldsha>
+systemctl start viewport-witness-backup.service    # fresh encrypted data copy; check its receipt
+git fetch origin && git checkout --detach <newsha>  # checkout is detached; do not `git pull`
+docker build --label org.opencontainers.image.revision=<newsha> \
+  -t viewport-witness:release-<newsha> -t viewport-witness-viewport-witness:latest .
+systemctl restart viewport-witness
 ```
+
+Verify through the public hostname, not localhost. Nginx and Cloudflare sit in front of the
+container and nginx's default 4 KiB proxy header buffer rejects oversized 402 challenge headers
+with a 502 that localhost checks cannot see (this happened on 2026-11-08):
+
+```bash
+curl -s https://qa.honeygate.app/health
+for r in checks verify compare extract security-gate; do
+  curl -s -o /dev/null -w "$r %{http_code}\n" -X POST https://qa.honeygate.app/v1/$r \
+    -H 'content-type: application/json' -d '{"url":"https://example.com"}'
+done   # every line must be 402
+docker image inspect viewport-witness-viewport-witness:latest \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+Roll back on any failure (see below). `tests/payment-header-size.test.ts` guards the header
+budget in CI.
 
 ---
 
@@ -267,6 +285,33 @@ docker compose down
 docker tag viewport-witness-viewport-witness:backup-YYYYMMDD viewport-witness-viewport-witness:latest
 docker compose up -d
 ```
+
+On the VPS: `docker tag viewport-witness:rollback-<date>-<sha> viewport-witness-viewport-witness:latest`,
+`git checkout --detach <sha>`, `systemctl restart viewport-witness`, then repeat the public checks.
+
+---
+
+## Unresolved payments
+
+A paid attempt whose settlement outcome is not proven stays `payment_pending` with
+settlement state `unknown`. It keeps its idempotency key, never expires, and tells the buyer
+not to pay again. Startup logs the count (`[payment] N unresolved payment(s)`). When the count reaches
+`PAYMENT_UNRESOLVED_LIMIT` (default 20) new paid requests get 503 before any charge.
+One payer may hold at most `PAYMENT_UNRESOLVED_PER_PAYER` (default 3) settling or unknown
+attempts; its further payments get 429 with nothing charged. Rows still `settling` cannot be
+reconciled; wait until `list` shows them as `unknown`.
+
+```bash
+docker exec viewport-witness node dist/payment-reconcile-cli.js list
+docker exec viewport-witness node dist/payment-reconcile-cli.js settled <jobId> --tx <hash> --network <caip2>
+docker exec viewport-witness node dist/payment-reconcile-cli.js unpaid <jobId> --evidence "<proof>"
+```
+
+Find the transfer of the exact price to the revenue address on the listed network near
+`createdAt`. `settled` queues the original job once. Use `unpaid` only with proof the payment
+can no longer settle (unused EVM authorization past `validBefore`, expired Solana blockhash
+with no matching signature). A timeout or failed lookup is not proof. Details:
+`docs/PAID-ADMISSION-RECOVERY.md`.
 
 ---
 

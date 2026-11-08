@@ -216,6 +216,11 @@ POST in paid mode receives an x402 challenge before idempotency lookup; its 402 
 nothing about whether a job already exists. Do not sign or settle a second payment while the
 first outcome is uncertain.
 
+If a paid POST or MCP call returns `status: payment_pending` with `paymentOutcome: unresolved`,
+the payment outcome is still being confirmed. Do not send another payment. Poll `pollUrl`
+(suggested every 60 seconds), or repeat the original request with the same payment to see the
+same job. The job is never expired automatically while its payment is unresolved.
+
 ## Report status values
 
 - PASS — complete evidence with no load, browser, network, layout, or serious accessibility failure

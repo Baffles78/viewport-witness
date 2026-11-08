@@ -7,8 +7,12 @@ import { createWebProductsRouter } from './routes/web-products.js'
 import { createMcpRouter } from '../mcp.js'
 import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
-import type { Config } from '../config.js'
-import { createPaymentMiddleware } from '../payment/index.js'
+import {
+  DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
+  DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER,
+  type Config,
+} from '../config.js'
+import { createPaymentMiddleware, PAID_ROUTE_DESCRIPTIONS } from '../payment/index.js'
 import { growthMiddleware, growthErrorObserver } from '../growth.js'
 import { createHistoryRouter } from './routes/history.js'
 import type { ArchiveManager } from '../archive.js'
@@ -54,6 +58,14 @@ export function createApp(
     next()
   })
 
+  // Durable verify-then-admit-then-settle handling for every job-creating route.
+  const admission = {
+    store,
+    unresolvedLimit: cfg.PAYMENT_UNRESOLVED_LIMIT ?? DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
+    payerUnresolvedLimit: cfg.PAYMENT_UNRESOLVED_PER_PAYER ?? DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER,
+    retentionDays: cfg.RETENTION_DAYS,
+  }
+
   // Payment middleware (applied to POST /v1/checks in the checks router)
   const paymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
@@ -61,14 +73,14 @@ export function createApp(
       cfg.PAYMENT_MODE === 'production' ? cfg.SOLANA_REVENUE_PAY_TO : cfg.SOLANA_TEST_PAY_TO,
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.PRICE_USDC,
-    description:
-      'Check a public website before deploy: test mobile website layout, accessibility, browser errors and screenshots across three viewports',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/checks'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+    admission,
   })
   const verifyPaymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
@@ -77,14 +89,14 @@ export function createApp(
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.VERIFY_PRICE_USDC,
     route: 'POST /v1/verify',
-    description:
-      'Verify visible text, elements and layout on a public website before deploy, across phone and desktop sizes',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/verify'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+    admission,
   })
   const comparePaymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
@@ -93,13 +105,14 @@ export function createApp(
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.COMPARE_PRICE_USDC,
     route: 'POST /v1/compare',
-    description: 'Visual and QA comparison against a completed baseline job',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/compare'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+    admission,
   })
   const extractPaymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
@@ -108,13 +121,14 @@ export function createApp(
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.EXTRACT_PRICE_USDC,
     route: 'POST /v1/extract',
-    description: 'DOM to Markdown: extract readable content from a public HTML webpage',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/extract'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+    admission,
   })
   const securityPaymentMiddleware = createPaymentMiddleware({
     payTo: cfg.PAY_TO,
@@ -123,13 +137,14 @@ export function createApp(
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.SECURITY_PRICE_USDC,
     route: 'POST /v1/security-gate',
-    description: 'Passive public web release security gate',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/security-gate'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
     cdpApiKeyId: cfg.CDP_API_KEY_ID,
     cdpApiKeySecret: cfg.CDP_API_KEY_SECRET,
     customerHashSecret: cfg.CUSTOMER_HASH_SECRET,
+    admission,
   })
 
   const historyPaymentMiddleware = createPaymentMiddleware({
@@ -139,8 +154,7 @@ export function createApp(
     enableSolana: cfg.ENABLE_SOLANA_PAYMENTS,
     priceUsdc: cfg.HISTORY_PRICE_USDC ?? '0.02',
     route: 'POST /v1/history',
-    description:
-      'Page history archive: past ViewportWitness screenshots and QA findings for one public URL',
+    description: PAID_ROUTE_DESCRIPTIONS['POST /v1/history'],
     mode: cfg.PAYMENT_MODE,
     enableMainnet: cfg.ENABLE_MAINNET_PAYMENTS,
     facilitatorUrl: cfg.FACILITATOR_URL,
