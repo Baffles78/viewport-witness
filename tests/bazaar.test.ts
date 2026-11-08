@@ -225,8 +225,7 @@ describe('Bazaar accepted-job response contract', () => {
     const find = (value: unknown): Record<string, unknown> | null => {
       if (!value || typeof value !== 'object') return null
       const record = value as Record<string, unknown>
-      if (record.additionalProperties === false && Array.isArray(record.required) &&
-          record.required.includes('pollUrl')) return record
+      if (Array.isArray(record.required) && record.required.includes('pollUrl')) return record
       for (const nested of Object.values(record)) {
         const found = find(nested)
         if (found) return found
@@ -241,10 +240,12 @@ describe('Bazaar accepted-job response contract', () => {
   function accepts(schema: Record<string, unknown>, response: Record<string, unknown>) {
     const properties = schema.properties as Record<string, { type: string; enum?: string[] }>
     const required = schema.required as string[]
-    expect(schema.additionalProperties).toBe(false)
+    // The schema travels in the 402 header (4 KiB proxy budget), so optional
+    // replay/reconciliation fields are allowed but documented in OpenAPI.
+    expect(schema.additionalProperties).toBeUndefined()
     for (const field of required) expect(response).toHaveProperty(field)
     for (const [field, value] of Object.entries(response)) {
-      expect(properties, `undeclared field ${field}`).toHaveProperty(field)
+      if (!properties[field]) continue
       if (properties[field]?.type === 'integer') {
         expect(Number.isInteger(value)).toBe(true)
       } else {

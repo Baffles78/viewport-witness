@@ -117,6 +117,23 @@ export class JobStore {
     if (!columns.some((column) => column.name === 'baseline_job_id')) {
       this.conn.exec('ALTER TABLE jobs ADD COLUMN baseline_job_id TEXT')
     }
+    // Paid admission record. NULL for test-mode and legacy rows. Values:
+    // settling (settle may be in flight), settled (authoritative success),
+    // unknown (outcome not proven), rejected (proven unpaid by operator evidence).
+    for (const [name, type] of [
+      ['settlement_state', 'TEXT'],
+      ['settlement_network', 'TEXT'],
+      ['settlement_tx', 'TEXT'],
+      ['settlement_note', 'TEXT'],
+      ['settlement_updated_at', 'INTEGER'],
+    ] as const) {
+      if (!columns.some((column) => column.name === name)) {
+        this.conn.exec(`ALTER TABLE jobs ADD COLUMN ${name} ${type}`)
+      }
+    }
+    this.conn.exec(
+      'CREATE INDEX IF NOT EXISTS idx_jobs_settlement_state ON jobs(settlement_state) WHERE settlement_state IS NOT NULL',
+    )
     this.conn.exec(
       'CREATE INDEX IF NOT EXISTS idx_jobs_customer_id ON jobs(customer_id) WHERE customer_id IS NOT NULL',
     )
@@ -518,9 +535,180 @@ export class JobStore {
     return Number(result.changes) === 1
   }
 
-  listExpiredJobs(beforeMs: number): JobRecord[] {
+  // Paid admission ---------------------------------------------------------
+  //
+  // A paid attempt is a jobs row written in one transaction after the
+  // facilitator verified the payment and before settlement is dispatched. Its
+  // id is the job id the buyer will receive, and it carries the exact intent.
+
+  countUnresolvedPayments(): number {
+    const row = this.conn
+      .prepare("SELECT COUNT(*) AS n FROM jobs WHERE settlement_state IN ('settling','unknown')")
+      .get() as { n: number }
+    return Number(row.n)
+  }
+
+  listUnresolvedPayments(): JobRecord[] {
     const rows = this.conn
-      .prepare('SELECT * FROM jobs WHERE expires_at < ?')
+      .prepare(
+        "SELECT * FROM jobs WHERE settlement_state IN ('settling','unknown') ORDER BY created_at ASC",
+      )
+      .all() as unknown as RawJobRow[]
+    return rows.map(rowToRecord)
+  }
+
+  admitPaymentAttempt(params: {
+    id: string
+    url: string
+    kind: JobKind
+    request: { assertions?: PageAssertion[]; maxOutputTokens?: number }
+    baselineJobId?: string
+    idempotencyKey?: string
+    paymentId: string
+    customerId?: string
+    network: string
+    expiresAt: number
+    unresolvedLimit: number
+  }):
+    | { admitted: true }
+    | { admitted: false; reason: 'capacity' | 'payment_exists' | 'key_bound'; existing?: JobRecord } {
+    const now = Date.now()
+    this.conn.exec('BEGIN IMMEDIATE')
+    let result:
+      | { admitted: true }
+      | { admitted: false; reason: 'capacity' | 'payment_exists' | 'key_bound'; existing?: JobRecord }
+    try {
+      const byPayment = this.getJobByPaymentId(params.paymentId)
+      const byKey = params.idempotencyKey ? this.getJobByIdempotencyKey(params.idempotencyKey) : null
+      if (byPayment) {
+        result = { admitted: false, reason: 'payment_exists', existing: byPayment }
+      } else if (byKey) {
+        result = { admitted: false, reason: 'key_bound', existing: byKey }
+      } else if (this.countUnresolvedPayments() >= params.unresolvedLimit) {
+        result = { admitted: false, reason: 'capacity' }
+      } else {
+        this.conn
+          .prepare(
+            `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at,
+               expires_at, kind, request_json, baseline_job_id, settlement_state, settlement_network,
+               settlement_updated_at)
+             VALUES (?, ?, 'payment_pending', ?, ?, ?, ?, ?, ?, ?, ?, 'settling', ?, ?)`,
+          )
+          .run(
+            params.id,
+            params.url,
+            params.idempotencyKey ?? null,
+            params.paymentId,
+            params.customerId ?? null,
+            now,
+            params.expiresAt,
+            params.kind,
+            JSON.stringify(params.request),
+            params.baselineJobId ?? null,
+            params.network.slice(0, 100),
+            now,
+          )
+        if (params.idempotencyKey) {
+          this.conn
+            .prepare('INSERT INTO idempotency_keys (key, job_id, created_at) VALUES (?, ?, ?)')
+            .run(params.idempotencyKey, params.id, now)
+        }
+        result = { admitted: true }
+      }
+      this.conn.exec('COMMIT')
+    } catch (error) {
+      try { this.conn.exec('ROLLBACK') } catch { /* already rolled back */ }
+      throw error
+    }
+    if (result.admitted) {
+      try {
+        const context = growthContext.getStore()
+        this.conn
+          .prepare('INSERT OR IGNORE INTO growth_jobs(job_id,source,mode) VALUES(?,?,?)')
+          .run(params.id, context?.source ?? 'unknown', context?.mode ?? 'unknown')
+        this.recordJobGrowth(params.id, 'job_created')
+      } catch {
+        this.growthWriteFailures++
+      }
+    }
+    return result
+  }
+
+  // Authoritative settlement success: record the receipt and hand the original
+  // job to the worker queue in one statement. Idempotent.
+  recordSettlement(id: string, settlement: { network: string; transaction: string }): boolean {
+    const result = this.conn
+      .prepare(
+        `UPDATE jobs SET settlement_state = 'settled', settlement_network = ?, settlement_tx = ?,
+           settlement_updated_at = ?,
+           status = CASE WHEN status = 'payment_pending' THEN 'queued' ELSE status END
+         WHERE id = ? AND settlement_state IN ('settling', 'unknown')`,
+      )
+      .run(
+        settlement.network.slice(0, 100),
+        settlement.transaction.slice(0, 200),
+        Date.now(),
+        id,
+      )
+    const changed = Number(result.changes) === 1
+    if (changed) this.recordJobGrowth(id, 'accepted_paid_job')
+    return changed || this.getJob(id)?.settlementState === 'settled'
+  }
+
+  markSettlementUnknown(id: string, note: string): boolean {
+    const result = this.conn
+      .prepare(
+        `UPDATE jobs SET settlement_state = 'unknown', settlement_note = ?, settlement_updated_at = ?
+         WHERE id = ? AND settlement_state = 'settling'`,
+      )
+      .run(note.slice(0, 500), Date.now(), id)
+    return Number(result.changes) === 1
+  }
+
+  // Startup recovery: any attempt still settling was interrupted mid-settle.
+  // Its outcome is not proven, so it becomes unknown, never failed or expired.
+  recoverInterruptedSettlements(): number {
+    const result = this.conn
+      .prepare(
+        `UPDATE jobs SET settlement_state = 'unknown',
+           settlement_note = COALESCE(settlement_note, 'interrupted_during_settlement'),
+           settlement_updated_at = ?
+         WHERE settlement_state = 'settling'`,
+      )
+      .run(Date.now())
+    return Number(result.changes)
+  }
+
+  // Operator-only: authoritative evidence proved the payment never settled
+  // and cannot settle later. The key is released so the buyer may retry.
+  markSettlementRejected(id: string, evidence: string): boolean {
+    this.conn.exec('BEGIN IMMEDIATE')
+    try {
+      const result = this.conn
+        .prepare(
+          `UPDATE jobs SET settlement_state = 'rejected', settlement_note = ?, settlement_updated_at = ?,
+             status = 'failed', completed_at = ?, error = 'payment_not_settled', idempotency_key = NULL
+           WHERE id = ? AND settlement_state IN ('settling', 'unknown') AND status = 'payment_pending'`,
+        )
+        .run(evidence.slice(0, 500), Date.now(), Date.now(), id)
+      const changed = Number(result.changes) === 1
+      if (changed) this.conn.prepare('DELETE FROM idempotency_keys WHERE job_id = ?').run(id)
+      this.conn.exec('COMMIT')
+      if (changed) this.recordJobGrowth(id, 'payment_pending_failed')
+      return changed
+    } catch (error) {
+      try { this.conn.exec('ROLLBACK') } catch { /* already rolled back */ }
+      throw error
+    }
+  }
+
+  listExpiredJobs(beforeMs: number): JobRecord[] {
+    // Unresolved paid attempts never expire automatically; they wait for
+    // authoritative reconciliation.
+    const rows = this.conn
+      .prepare(
+        "SELECT * FROM jobs WHERE expires_at < ? AND (settlement_state IS NULL OR settlement_state NOT IN ('settling','unknown'))",
+      )
       .all(beforeMs) as unknown as RawJobRow[]
     return rows.map(rowToRecord)
   }
@@ -746,6 +934,10 @@ interface RawJobRow {
   kind: string
   request_json: string
   baseline_job_id: string | null
+  settlement_state?: string | null
+  settlement_network?: string | null
+  settlement_tx?: string | null
+  settlement_note?: string | null
 }
 
 function rowToRecord(row: RawJobRow): JobRecord {
@@ -772,6 +964,10 @@ function rowToRecord(row: RawJobRow): JobRecord {
     kind: (row.kind ?? 'check') as JobKind,
     request,
     baselineJobId: row.baseline_job_id ?? null,
+    settlementState: (row.settlement_state ?? null) as JobRecord['settlementState'],
+    settlementNetwork: row.settlement_network ?? null,
+    settlementTx: row.settlement_tx ?? null,
+    settlementNote: row.settlement_note ?? null,
   }
 }
 

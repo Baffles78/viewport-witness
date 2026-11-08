@@ -237,4 +237,8 @@ export interface JobRecord {
   kind: JobKind
   request: { assertions?: PageAssertion[]; maxOutputTokens?: number }
   baselineJobId: string | null
+  settlementState?: 'settling' | 'settled' | 'unknown' | 'rejected' | null | undefined
+  settlementNetwork?: string | null | undefined
+  settlementTx?: string | null | undefined
+  settlementNote?: string | null | undefined
 }

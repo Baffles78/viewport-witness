@@ -94,6 +94,10 @@ new paid submission. A stored report has `jobStatus: complete` and `nextAction: 
 a permanent failure has `nextAction: stop`. If polling is interrupted or reaches its limit,
 retain the ID and resume free retrieval later. Typical check time: 15–90 seconds.
 
+If the paid response has `status: payment_pending` and `paymentOutcome: unresolved`, the payment
+is still being confirmed. Do not pay again. Poll the same `pollUrl` (about every 60 seconds) or
+repeat the original request with the same payment; the job stays until the payment is resolved.
+
 While running:
 
 ```json

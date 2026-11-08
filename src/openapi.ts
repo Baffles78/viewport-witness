@@ -730,6 +730,13 @@ export const openApiSpec = {
           paymentReplay: { type: 'boolean' },
           pollUrl: { type: 'string' },
           paymentMode: { type: 'string', enum: ['test', 'testnet', 'production'] },
+          paymentOutcome: {
+            type: 'string',
+            enum: ['unresolved'],
+            description:
+              'Present while settlement is not yet proven. Do not send another payment; poll pollUrl or repeat the request with the same payment.',
+          },
+          detail: { type: 'string' },
         },
       },
       CheckStatusResponse: {
@@ -751,6 +758,8 @@ export const openApiSpec = {
           retryAfterSeconds: { type: 'integer', const: 5 },
           createdAt: { type: 'string', format: 'date-time' },
           pollUrl: { type: 'string' },
+          paymentOutcome: { type: 'string', enum: ['unresolved'] },
+          detail: { type: 'string' },
         },
       },
       JobFailed: {

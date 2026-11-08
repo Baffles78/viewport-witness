@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs'
+import { UNRESOLVED_PAYMENT_DETAIL, unresolvedReplayBody } from '../../payment/admission.js'
 import path from 'path'
 import type { Request, Response, Router, RequestHandler, NextFunction } from 'express'
 import { Router as createRouter } from 'express'
@@ -13,7 +14,7 @@ import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
 import { canReplayJob } from '../../idempotency-replay.js'
-import { challengeIfUnsigned, requireWorkerAvailable } from './products.js'
+import { activateAdmittedJob, challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -77,6 +78,7 @@ export function createChecksRouter(
     }
 
     req.validatedCheckUrl = parsed.data.url
+    req.jobIntent = { kind: 'check', url: parsed.data.url }
     next()
   })
 
@@ -98,6 +100,11 @@ export function createChecksRouter(
     if (existing) {
       if (!canReplayJob(existing, req, cfg, { kind: 'check', url: req.validatedCheckUrl ?? '' })) {
         res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
+        return
+      }
+      const unresolved = unresolvedReplayBody(existing, cfg.PAYMENT_MODE)
+      if (unresolved) {
+        res.status(202).json(unresolved)
         return
       }
       res.status(202).json({
@@ -160,6 +167,16 @@ export function createChecksRouter(
           error: 'payment_required',
           detail: 'A valid x402 payment is required in production mode.',
           code: 'payment_required',
+        })
+        return
+      }
+
+      const admittedJobId = (req.paymentResult?.settled && req.paymentResult.admittedJobId) || undefined
+      if (admittedJobId) {
+        const accepted = await activateAdmittedJob(store, runner, cfg, admittedJobId)
+        res.status(202).json({
+          ...accepted,
+          ...reconcileJobStatus(accepted.status as import('../../types.js').JobStatus),
         })
         return
       }
@@ -376,6 +393,9 @@ export function createChecksRouter(
         createdAt: new Date(job.createdAt).toISOString(),
         pollUrl: `/v1/checks/${job.id}`,
         ...reconcileJobStatus(job.status),
+        ...(job.status === 'payment_pending'
+          ? { paymentOutcome: 'unresolved', detail: UNRESOLVED_PAYMENT_DETAIL }
+          : {}),
       })
     }),
   )

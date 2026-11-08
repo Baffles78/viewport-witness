@@ -25,13 +25,26 @@ import {
   validateSvmAddress,
 } from '@x402/svm'
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
-import type { PaymentMode } from '../types.js'
+import { randomUUID } from 'node:crypto'
+import type { JobRecord, PaymentMode } from '../types.js'
+import type { JobStore } from '../db.js'
+import { sameJobIntent, type JobIntent } from '../idempotency-replay.js'
+import { reconcileJobStatus } from '../job-reconciliation.js'
+import {
+  admissionStorage,
+  finalizeAdmission,
+  installAdmissionHooks,
+  unresolvedPaymentBody,
+  type AdmissionContext,
+} from './admission.js'
 
 export interface PaymentResult {
   settled: boolean
   paymentId?: string
   customerId?: string
   mode: PaymentMode
+  /** Durable job admitted before settlement and queued after it settled. */
+  admittedJobId?: string
 }
 
 declare global {
@@ -39,8 +52,16 @@ declare global {
   namespace Express {
     interface Request {
       paymentResult?: PaymentResult
+      /** Validated work, set by the route before the paid middleware runs. */
+      jobIntent?: JobIntent
     }
   }
+}
+
+export interface PaymentAdmissionOptions {
+  store: JobStore
+  unresolvedLimit: number
+  retentionDays: number
 }
 
 export interface PaymentMiddlewareOptions {
@@ -62,7 +83,22 @@ export interface PaymentMiddlewareOptions {
     | 'POST /v1/security-gate'
     | 'POST /v1/history'
   description?: string
+  /** Durable verify-then-admit-then-settle handling for job-creating routes. */
+  admission?: PaymentAdmissionOptions | undefined
 }
+
+/** Marketplace descriptions for each paid route, shared by the app and tests. */
+export const PAID_ROUTE_DESCRIPTIONS = {
+  'POST /v1/checks':
+    'Check a public website before deploy: test mobile website layout, accessibility, browser errors and screenshots across three viewports',
+  'POST /v1/verify':
+    'Verify text, elements and layout on a public website across phone and desktop sizes',
+  'POST /v1/compare': 'Visual and QA comparison against a completed baseline job',
+  'POST /v1/extract': 'DOM to Markdown: extract readable content from a public HTML webpage',
+  'POST /v1/security-gate': 'Passive public web release security gate',
+  'POST /v1/history':
+    'Page history archive: past ViewportWitness screenshots and QA findings for one public URL',
+} as const
 
 export interface PaymentDiscovery {
   version: string
@@ -181,11 +217,11 @@ export function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) 
       type: 'array',
       minItems: 1,
       maxItems: 20,
-      description: 'Explicit website assertions to evaluate across phone and desktop viewports.',
+      description: 'Pass/fail assertions',
       items: {
         type: 'object',
         description:
-          'One of noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, or selectorVisible.',
+          'noHorizontalOverflow|noConsoleErrors|textVisible|titleIncludes|selectorExists|selectorVisible',
       },
     }
     required.push('assertions')
@@ -261,38 +297,29 @@ export function createBazaarDiscovery(route: PaymentMiddlewareOptions['route']) 
       example: {
         id: '550e8400-e29b-41d4-a716-446655440000',
         status: 'queued',
-        ...(isCheck ? {
-          jobStatus: 'queued',
-          nextAction: 'poll_same_job',
-          retryAfterSeconds: 5,
-        } : {}),
+        ...(isCheck ? { jobStatus: 'queued', nextAction: 'poll_same_job' } : {}),
         pollUrl: '/v1/checks/550e8400-e29b-41d4-a716-446655440000',
         paymentMode: 'production',
       },
+      // Kept compact: this travels in the 402 PAYMENT-REQUIRED header, which
+      // must fit the production proxy's 4 KiB header buffer. Optional replay
+      // and reconciliation fields are documented in OpenAPI instead.
       schema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'Job UUID' },
-          status: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
+          id: { type: 'string' },
+          status: { type: 'string', enum: jobStatuses },
           ...(isCheck ? {
-            jobStatus: { type: 'string', enum: jobStatuses, description: 'Job lifecycle status' },
-            nextAction: { type: 'string', enum: ['poll_same_job', 'inspect_report', 'stop'], description: 'Next reconciliation action' },
-            retryAfterSeconds: { type: 'integer', minimum: 1, description: 'Suggested poll delay' },
-            paymentReplay: { type: 'boolean', description: 'Existing job returned for this payment' },
+            jobStatus: { type: 'string' },
+            nextAction: { type: 'string', enum: ['poll_same_job', 'inspect_report', 'stop'] },
           } : {}),
-          idempotent: { type: 'boolean', description: 'Existing job returned for this key' },
-          pollUrl: { type: 'string', description: 'URL to poll for job status and results' },
-          paymentMode: {
-            type: 'string',
-            enum: ['testnet', 'production'],
-            description: 'Payment mode used for this job',
-          },
+          pollUrl: { type: 'string' },
+          paymentMode: { type: 'string', enum: ['testnet', 'production'] },
         },
         required: [
           'id', 'status', 'pollUrl', 'paymentMode',
           ...(isCheck ? ['jobStatus', 'nextAction'] : []),
         ],
-        additionalProperties: false,
       },
     },
   })
@@ -409,6 +436,9 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         ]
       : []),
   ]
+  if (opts.admission) {
+    installAdmissionHooks(resourceServer, facilitator, opts.admission.store, opts.admission.unresolvedLimit)
+  }
   const x402 = paymentMiddleware(
     {
       [route]: {
@@ -423,7 +453,7 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     resourceServer,
   )
 
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const legacy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       await x402(req, res, (err?: unknown) => {
         if (err) {
@@ -450,6 +480,194 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
       } else {
         next(error)
       }
+    }
+  }
+
+  const admission = opts.admission
+  if (!admission) return legacy
+
+  // Serializes one payment payload within this process. The durable unique
+  // payment_id and BEGIN IMMEDIATE admission protect across processes.
+  const inFlight = new Map<string, Promise<void>>()
+
+  const replayBody = (job: JobRecord): Record<string, unknown> =>
+    job.status === 'payment_pending' && job.settlementState !== 'rejected'
+      ? { ...unresolvedPaymentBody(job.id, mode), paymentReplay: true }
+      : {
+          id: job.id,
+          status: job.status,
+          ...reconcileJobStatus(job.status),
+          pollUrl: `/v1/checks/${job.id}`,
+          paymentMode: mode,
+          paymentReplay: true,
+        }
+
+  // Returns true when a response was sent for an already-recorded payment.
+  const answerExisting = (req: Request, res: Response, paymentId: string): boolean => {
+    const existing = admission.store.getJobByPaymentId(paymentId)
+    if (!existing) return false
+    if (!req.jobIntent || !sameJobIntent(existing, req.jobIntent)) {
+      res.status(409).json({
+        error: 'payment_replay_conflict',
+        code: 'payment_replay_conflict',
+        nextAction: 'stop',
+      })
+      return true
+    }
+    res.status(202).json(replayBody(existing))
+    return true
+  }
+
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const paymentHeader = req.header('payment-signature') ?? req.header('x-payment')
+    if (!paymentHeader) {
+      // Unsigned: x402 returns the challenge. Nothing is stored.
+      await legacy(req, res, next)
+      return
+    }
+    const paymentId = paymentFingerprint(req) as string
+    const intent = req.jobIntent
+    if (!intent) {
+      res.status(500).json({ error: 'validation_state_missing', code: 'internal_error' })
+      return
+    }
+
+    // A retried payment never reaches the facilitator again: it gets its own
+    // job (or its unresolved status) back, and only for the same work.
+    if (answerExisting(req, res, paymentId)) return
+    let waiting = inFlight.get(paymentId)
+    while (waiting) {
+      await waiting
+      if (answerExisting(req, res, paymentId)) return
+      waiting = inFlight.get(paymentId)
+    }
+    if (admission.store.countUnresolvedPayments() >= admission.unresolvedLimit) {
+      res.setHeader('Retry-After', '300')
+      res.status(503).json({
+        error: 'payment_admission_paused',
+        code: 'payment_admission_paused',
+        detail: 'New paid work is paused while earlier payments are reconciled. Nothing was charged.',
+      })
+      return
+    }
+
+    const rawKey = req.headers['idempotency-key']
+    const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey
+    const customerId = customerFingerprint(paymentHeader, customerHashSecret)
+    const ctx: AdmissionContext = {
+      jobId: randomUUID(),
+      paymentId,
+      intent,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(customerId ? { customerId } : {}),
+      expiresAt: Date.now() + admission.retentionDays * 24 * 60 * 60 * 1000,
+      phase: 'start',
+    }
+
+    let release!: () => void
+    inFlight.set(paymentId, new Promise<void>((resolve) => { release = resolve }))
+
+    // x402 writes its own error responses. Replace them when they would be
+    // misleading: after settle was dispatched (outcome not proven) or when the
+    // attempt was not admitted for a reason that is not a payment problem.
+    const originalJson = res.json.bind(res)
+    const originalSend = res.send.bind(res)
+    let overridden = false
+    const override = (): boolean => {
+      if (overridden) return false
+      if (ctx.phase === 'admitted' || ctx.phase === 'settled') {
+        overridden = true
+        const outcome = finalizeAdmission(admission.store, ctx, 'settle_response_not_success')
+        res.removeHeader('PAYMENT-REQUIRED')
+        res.status(202)
+        originalJson(outcome === 'settled'
+          ? {
+              id: ctx.jobId,
+              status: 'queued',
+              ...reconcileJobStatus('queued'),
+              pollUrl: `/v1/checks/${ctx.jobId}`,
+              paymentMode: mode,
+            }
+          : unresolvedPaymentBody(ctx.jobId, mode))
+        return true
+      }
+      if (ctx.phase === 'not_admitted' && ctx.notAdmitted) {
+        overridden = true
+        res.removeHeader('PAYMENT-REQUIRED')
+        res.removeHeader('PAYMENT-RESPONSE')
+        const { reason, existing } = ctx.notAdmitted
+        if (reason === 'payment_exists' && existing && sameJobIntent(existing, intent)) {
+          res.status(202)
+          originalJson(replayBody(existing))
+        } else if (reason === 'key_bound' || reason === 'payment_exists') {
+          const code = reason === 'key_bound' ? 'idempotency_key_conflict' : 'payment_replay_conflict'
+          res.status(409)
+          originalJson({ error: code, code, detail: 'Nothing was charged for this request.' })
+        } else {
+          const code = reason === 'capacity' ? 'payment_admission_paused' : 'payment_admission_unavailable'
+          res.setHeader('Retry-After', reason === 'capacity' ? '300' : '30')
+          res.status(503)
+          originalJson({ error: code, code, detail: 'Nothing was charged for this request. Retry later.' })
+        }
+        return true
+      }
+      return false
+    }
+    res.json = ((body?: unknown) => (override() ? res : originalJson(body))) as Response['json']
+    res.send = ((body?: unknown) => (override() ? res : originalSend(body))) as Response['send']
+    const restore = (): void => {
+      res.json = originalJson
+      res.send = originalSend
+    }
+
+    try {
+      await admissionStorage.run(ctx, () =>
+        x402(req, res, (err?: unknown) => {
+          restore()
+          if (err) {
+            finalizeAdmission(admission.store, ctx, 'handler_error')
+            next(err)
+            return
+          }
+          const outcome = finalizeAdmission(admission.store, ctx, 'settlement_not_confirmed')
+          if (outcome !== 'settled') {
+            res.status(202).json(unresolvedPaymentBody(ctx.jobId, mode))
+            return
+          }
+          req.paymentResult = {
+            settled: true,
+            mode,
+            paymentId,
+            admittedJobId: ctx.jobId,
+            ...(customerId ? { customerId } : {}),
+          }
+          next()
+        }),
+      )
+    } catch (error: unknown) {
+      restore()
+      const outcome = finalizeAdmission(admission.store, ctx, 'settle_exception')
+      if (!res.headersSent) {
+        if (outcome !== 'none') {
+          res.status(202).json(unresolvedPaymentBody(ctx.jobId, mode))
+        } else {
+          res.status(503).json({
+            error: 'payment_infrastructure_unavailable',
+            detail: 'Payment verification is temporarily unavailable. Nothing was charged.',
+          })
+        }
+      } else if (outcome === 'none') {
+        next(error)
+      }
+    } finally {
+      restore()
+      // A disconnect cannot cancel a dispatched settle; the row stays
+      // unresolved until settlement evidence arrives.
+      if (ctx.phase === 'admitted') {
+        finalizeAdmission(admission.store, ctx, 'request_ended_before_settlement')
+      }
+      inFlight.delete(paymentId)
+      release()
     }
   }
 }

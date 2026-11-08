@@ -22,6 +22,15 @@ import type { PageAssertion, StoredReport } from './types.js'
 import type { WorkerRunner } from './worker/runner.js'
 import { createProductJob } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
+import { randomUUID } from 'node:crypto'
+import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT } from './config.js'
+import {
+  admissionStorage,
+  finalizeAdmission,
+  installAdmissionHooks,
+  unresolvedPaymentBody,
+  type AdmissionContext,
+} from './payment/admission.js'
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean }
 
@@ -112,9 +121,6 @@ export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefin
   return `mcp_${createHash('sha256').update(canonical).digest('hex')}`
 }
 
-function paymentIdFromContext(context: MCPToolContext): string | undefined {
-  return mcpPaymentFingerprint(context.meta?.[MCP_PAYMENT_META_KEY])
-}
 
 const assertionItemSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('noHorizontalOverflow') }).strict(),
@@ -158,7 +164,7 @@ const publicPageUrlSchema = z
     'Public HTTPS page URL. Private, loopback, credentialed, and non-HTTPS URLs are rejected.',
   )
 
-async function createMcpPaymentContext(cfg: Config): Promise<{
+async function createMcpPaymentContext(cfg: Config, store: JobStore): Promise<{
   server: x402ResourceServer
   requirements: Record<
     'check' | 'verify' | 'compare' | 'extract' | 'security',
@@ -179,6 +185,15 @@ async function createMcpPaymentContext(cfg: Config): Promise<{
   })
   const server = new x402ResourceServer(facilitator).register(baseNetwork, new ExactEvmScheme())
   if (cfg.ENABLE_SOLANA_PAYMENTS) server.register(solanaNetwork, new ExactSvmScheme())
+  installAdmissionHooks(
+    server,
+    facilitator,
+    store,
+    cfg.PAYMENT_UNRESOLVED_LIMIT ?? DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
+    // MCP keeps its existing authorization flow: x402 calls facilitator
+    // /verify before the handler and settles after it.
+    { preverify: false },
+  )
   await server.initialize()
   const build = async (price: string): Promise<PaymentRequirements[]> => {
     const options = [
@@ -216,7 +231,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   const inFlightPayments = new Map<string, Promise<void>>()
   let paymentContextPromise: ReturnType<typeof createMcpPaymentContext> | undefined
   const getPaymentContext = (): ReturnType<typeof createMcpPaymentContext> => {
-    paymentContextPromise ??= createMcpPaymentContext(cfg)
+    paymentContextPromise ??= createMcpPaymentContext(cfg, store)
     return paymentContextPromise
   }
 
@@ -263,89 +278,154 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         resource: {
           url: `mcp://tool/${tier === 'check' ? 'check_page' : tier === 'security' ? 'web_release_gate' : `${tier}_page`}`,
         },
-        hooks: {
-          onAfterSettlement: async ({ paymentPayload }) => {
-            const paymentId = mcpPaymentFingerprint(paymentPayload)
-            if (!paymentId) return
-            const job = store.getJobByPaymentId(paymentId)
-            if (!job || !store.activatePaymentPendingJob(job.id)) return
-            try {
-              await runner.enqueue(job.id)
-            } catch (error) {
-              if (!runner.isHealthy()) {
-                // Settlement already activated a durable queued row. A restarted
-                // worker will recover this same paid job.
-                return
-              }
-              store.updateJobStatus(job.id, 'failed', {
-                completedAt: Date.now(),
-                error: error instanceof Error ? error.message.slice(0, 1000) : 'worker_unavailable',
-              })
-              throw error
-            }
-          },
-        },
       })(handler)
+      const replayResult = (existing: import('./types.js').JobRecord, args: T): ToolResult => {
+        if (!sameJobIntent(existing, intentForTool(tier, args))) {
+          return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
+        }
+        if (existing.status === 'payment_pending' && existing.settlementState !== 'rejected') {
+          return jsonResult({ ...unresolvedPaymentBody(existing.id, cfg.PAYMENT_MODE), paymentReplay: true })
+        }
+        return jsonResult({
+          id: existing.id,
+          status: existing.status,
+          ...reconcileJobStatus(existing.status),
+          pollUrl: `/v1/checks/${existing.id}`,
+          paymentMode: cfg.PAYMENT_MODE,
+          paymentReplay: true,
+        })
+      }
       return async (args: T, extra: unknown) => {
         const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
         const paymentId = mcpPaymentFingerprint(meta?.[MCP_PAYMENT_META_KEY])
         if (paymentId) {
           const existing = store.getJobByPaymentId(paymentId)
-          if (existing) {
-            if (!sameJobIntent(existing, intentForTool(tier, args))) {
-              return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
-            }
-            return jsonResult({
-              id: existing.id,
-              status: existing.status,
-              pollUrl: `/v1/checks/${existing.id}`,
-              paymentMode: cfg.PAYMENT_MODE,
-              paymentReplay: true,
-            })
-          }
+          if (existing) return replayResult(existing, args)
           let inFlight = inFlightPayments.get(paymentId)
           while (inFlight) {
             await inFlight
             const completedRace = store.getJobByPaymentId(paymentId)
-            if (completedRace) {
-              if (!sameJobIntent(completedRace, intentForTool(tier, args))) {
-                return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
-              }
-              return jsonResult({
-                id: completedRace.id,
-                status: completedRace.status,
-                pollUrl: `/v1/checks/${completedRace.id}`,
-                paymentMode: cfg.PAYMENT_MODE,
-                paymentReplay: true,
-              })
-            }
+            if (completedRace) return replayResult(completedRace, args)
             inFlight = inFlightPayments.get(paymentId)
           }
         }
         if (!runner.isHealthy()) {
           return jsonResult({ error: 'worker_unavailable', code: 'worker_unavailable' }, true)
         }
-        let releasePayment: (() => void) | undefined
-        if (paymentId) {
-          const lock = new Promise<void>((resolve) => {
-            releasePayment = resolve
-          })
-          inFlightPayments.set(paymentId, lock)
+        if (!paymentId) {
+          // No usable payment: x402 returns the payment-required result.
+          return paidHandler(args, extra)
         }
+        // Validate the work before any payment step can settle.
+        const invalid = await preflightTool(tier, args)
+        if (invalid) return invalid
+        if (store.countUnresolvedPayments() >= (cfg.PAYMENT_UNRESOLVED_LIMIT ?? DEFAULT_PAYMENT_UNRESOLVED_LIMIT)) {
+          return jsonResult({
+            error: 'payment_admission_paused',
+            code: 'payment_admission_paused',
+            detail: 'New paid work is paused while earlier payments are reconciled. Nothing was charged.',
+          }, true)
+        }
+        const ctx: AdmissionContext = {
+          jobId: randomUUID(),
+          paymentId,
+          intent: intentForTool(tier, args),
+          expiresAt: Date.now() + cfg.RETENTION_DAYS * 24 * 60 * 60 * 1000,
+          phase: 'start',
+        }
+        let releasePayment: (() => void) | undefined
+        inFlightPayments.set(paymentId, new Promise<void>((resolve) => { releasePayment = resolve }))
         try {
-          const result = await paidHandler(args, extra)
-          if (paymentId) {
-            const pending = store.getJobByPaymentId(paymentId)
-            if (pending?.status === 'payment_pending') {
-              store.failPaymentPendingJob(pending.id, 'payment_not_settled')
+          const result = await admissionStorage.run(ctx, () => paidHandler(args, extra))
+          if (ctx.phase === 'settled') {
+            if (finalizeAdmission(store, ctx, 'settlement_not_confirmed') !== 'settled') {
+              return jsonResult(unresolvedPaymentBody(ctx.jobId, cfg.PAYMENT_MODE))
             }
+            const accepted = await createProductJob({
+              store, runner, cfg, kind: tier, url: ctx.intent.url, admittedJobId: ctx.jobId,
+            })
+            const rest: Record<string, unknown> = { ...(result as ToolResult & Record<string, unknown>) }
+            delete rest['isError']
+            return { ...rest, content: jsonResult({ ...accepted, ...reconcileJobStatus(accepted.status as import('./types.js').JobStatus) }).content }
+          }
+          if (ctx.phase === 'admitted') {
+            // Settle was dispatched but not confirmed: never report failure or
+            // ask for another payment.
+            finalizeAdmission(store, ctx, 'settle_response_not_success')
+            return jsonResult(unresolvedPaymentBody(ctx.jobId, cfg.PAYMENT_MODE))
+          }
+          if (ctx.phase === 'not_admitted' && ctx.notAdmitted) {
+            const { reason, existing } = ctx.notAdmitted
+            if (reason === 'payment_exists' && existing) return replayResult(existing, args)
+            return jsonResult({
+              error: reason === 'capacity' ? 'payment_admission_paused' : 'payment_admission_unavailable',
+              code: reason === 'capacity' ? 'payment_admission_paused' : 'payment_admission_unavailable',
+              detail: 'Nothing was charged for this request. Retry later.',
+            }, true)
           }
           return result
+        } catch (error) {
+          if (finalizeAdmission(store, ctx, 'settle_exception') !== 'none') {
+            return jsonResult(unresolvedPaymentBody(ctx.jobId, cfg.PAYMENT_MODE))
+          }
+          throw error
         } finally {
+          if (ctx.phase === 'admitted') finalizeAdmission(store, ctx, 'request_ended_before_settlement')
           releasePayment?.()
-          if (paymentId) inFlightPayments.delete(paymentId)
+          inFlightPayments.delete(paymentId)
         }
       }
+    }
+
+    // Pre-payment validation shared by the paid wrapper and the handlers.
+    const preflightTool = async (
+      tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
+      args: Record<string, unknown>,
+    ): Promise<ToolResult | null> => {
+      const url = typeof args['url'] === 'string' ? args['url'] : ''
+      const valid = await validatePublicHttpsUrl(url)
+      if (tier === 'compare') {
+        const baselineJobId = typeof args['baselineJobId'] === 'string' ? args['baselineJobId'] : ''
+        const baseline = store.getJob(baselineJobId)
+        if (
+          !valid.valid ||
+          !baseline ||
+          baseline.status !== 'complete' ||
+          !baseline.reportPath ||
+          baseline.expiresAt <= Date.now() ||
+          !['phonePortrait', 'phoneLandscape', 'desktop'].every((viewport) =>
+            store.getScreenshot(baseline.id, viewport as 'phonePortrait'),
+          )
+        ) {
+          return jsonResult({ error: 'baseline_or_url_unavailable' }, true)
+        }
+        return null
+      }
+      if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
+      return null
+    }
+
+    // Paid calls reach a handler only after settlement; hand over the job that
+    // was admitted before settlement. Test mode creates the job directly.
+    const createToolJob = async (
+      tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
+      args: Record<string, unknown>,
+      fields: Omit<Parameters<typeof createProductJob>[0], 'store' | 'runner' | 'cfg' | 'kind'>,
+    ): Promise<ToolResult> => {
+      const ctx = admissionStorage.getStore()
+      if (context) {
+        if (!ctx) return jsonResult({ error: 'payment_admission_unavailable' }, true)
+        // Authorization flow: verified, not yet settled. The wrapper replaces
+        // this provisional result after settlement is confirmed.
+        if (ctx.phase === 'verified') return jsonResult({ status: 'payment_pending' })
+        if (finalizeAdmission(store, ctx, 'settlement_not_confirmed') !== 'settled') {
+          return jsonResult(unresolvedPaymentBody(ctx.jobId, cfg.PAYMENT_MODE))
+        }
+        return jsonResult(await createProductJob({ store, runner, cfg, kind: tier, ...fields, admittedJobId: ctx.jobId }))
+      }
+      const invalid = await preflightTool(tier, args)
+      if (invalid) return invalid
+      return jsonResult(await createProductJob({ store, runner, cfg, kind: tier, ...fields }))
     }
 
     mcp.tool(
@@ -353,22 +433,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       `Choose this for broad website testing when the caller wants screenshots, responsive layout checks, accessibility findings, console/network errors, performance evidence, and a release diagnosis across phone portrait, phone landscape, and desktop. For explicit pass/fail assertions use verify_page instead. Costs $${cfg.PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
       { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-      wrap('check', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
-        const valid = await validatePublicHttpsUrl(url)
-        if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
-        const paymentId = paymentIdFromContext(toolContext)
-        return jsonResult(
-          await createProductJob({
-            store,
-            runner,
-            cfg,
-            kind: 'check',
-            url,
-            ...(paymentId ? { paymentId } : {}),
-            deferEnqueue: Boolean(context),
-          }),
-        )
-      }),
+      wrap('check', async ({ url }: { url: string }) => createToolJob('check', { url }, { url })),
     )
 
     mcp.tool(
@@ -381,26 +446,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'verify',
-        async (
-          { url, assertions }: { url: string; assertions: PageAssertion[] },
-          toolContext: MCPToolContext,
-        ) => {
-          const valid = await validatePublicHttpsUrl(url)
-          if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
-          const paymentId = paymentIdFromContext(toolContext)
-          return jsonResult(
-            await createProductJob({
-              store,
-              runner,
-              cfg,
-              kind: 'verify',
-              url,
-              assertions,
-              ...(paymentId ? { paymentId } : {}),
-              deferEnqueue: Boolean(context),
-            }),
-          )
-        },
+        async ({ url, assertions }: { url: string; assertions: PageAssertion[] }) =>
+          createToolJob('verify', { url, assertions }, { url, assertions }),
       ),
     )
 
@@ -419,38 +466,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'compare',
-        async (
-          { url, baselineJobId }: { url: string; baselineJobId: string },
-          toolContext: MCPToolContext,
-        ) => {
-          const valid = await validatePublicHttpsUrl(url)
-          const baseline = store.getJob(baselineJobId)
-          if (
-            !valid.valid ||
-            !baseline ||
-            baseline.status !== 'complete' ||
-            !baseline.reportPath ||
-            baseline.expiresAt <= Date.now() ||
-            !['phonePortrait', 'phoneLandscape', 'desktop'].every((viewport) =>
-              store.getScreenshot(baseline.id, viewport),
-            )
-          ) {
-            return jsonResult({ error: 'baseline_or_url_unavailable' }, true)
-          }
-          const paymentId = paymentIdFromContext(toolContext)
-          return jsonResult(
-            await createProductJob({
-              store,
-              runner,
-              cfg,
-              kind: 'compare',
-              url,
-              baselineJobId,
-              ...(paymentId ? { paymentId } : {}),
-              deferEnqueue: Boolean(context),
-            }),
-          )
-        },
+        async ({ url, baselineJobId }: { url: string; baselineJobId: string }) =>
+          createToolJob('compare', { url, baselineJobId }, { url, baselineJobId }),
       ),
     )
 
@@ -470,26 +487,12 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'extract',
-        async (
-          { url, maxOutputTokens }: { url: string; maxOutputTokens: number | undefined },
-          toolContext: MCPToolContext,
-        ) => {
-          const valid = await validatePublicHttpsUrl(url)
-          if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
-          const paymentId = paymentIdFromContext(toolContext)
-          return jsonResult(
-            await createProductJob({
-              store,
-              runner,
-              cfg,
-              kind: 'extract',
-              url,
-              ...(maxOutputTokens ? { maxOutputTokens } : {}),
-              ...(paymentId ? { paymentId } : {}),
-              deferEnqueue: Boolean(context),
-            }),
-          )
-        },
+        async ({ url, maxOutputTokens }: { url: string; maxOutputTokens: number | undefined }) =>
+          createToolJob(
+            'extract',
+            { url, ...(maxOutputTokens ? { maxOutputTokens } : {}) },
+            { url, ...(maxOutputTokens ? { maxOutputTokens } : {}) },
+          ),
       ),
     )
 
@@ -498,22 +501,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       `Choose this for a passive website release-security review of headers, cookie flags, mixed content, cross-origin script integrity, and server disclosure. It does not run browser QA, probe the site, execute code, or replace a security audit. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorize payment.`,
       { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-      wrap('security', async ({ url }: { url: string }, toolContext: MCPToolContext) => {
-        const valid = await validatePublicHttpsUrl(url)
-        if (!valid.valid) return jsonResult({ error: 'invalid_url', code: valid.reason }, true)
-        const paymentId = paymentIdFromContext(toolContext)
-        return jsonResult(
-          await createProductJob({
-            store,
-            runner,
-            cfg,
-            kind: 'security',
-            url,
-            ...(paymentId ? { paymentId } : {}),
-            deferEnqueue: Boolean(context),
-          }),
-        )
-      }),
+      wrap('security', async ({ url }: { url: string }) => createToolJob('security', { url }, { url })),
     )
 
     mcp.tool(

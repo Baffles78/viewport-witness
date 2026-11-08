@@ -201,6 +201,10 @@ Paid modes also require a private `CUSTOMER_HASH_SECRET` of at least 32 characte
 stable, one-way customer label for repeat-use measurements; raw payer wallet addresses are not
 stored. Attribution is best-effort and never blocks delivery after a verified payment. Changing
 this secret starts a new measurement series and does not rewrite old jobs.
+A paid request is verified, recorded durably, then settled. If the settlement outcome cannot be
+proven, the job stays `payment_pending` with `paymentOutcome: unresolved` until an operator
+reconciles it; the buyer is told not to pay again. See
+[docs/PAID-ADMISSION-RECOVERY.md](docs/PAID-ADMISSION-RECOVERY.md).
 See [docs/RUNBOOK.md](docs/RUNBOOK.md) for activation steps.
 
 ---
@@ -235,6 +239,7 @@ curl http://localhost:3000/health
 - [Privacy policy](docs/PRIVACY.md) and [terms](docs/TERMS.md)
 - [Customer feedback](https://github.com/Baffles78/viewport-witness/issues/new?template=customer-feedback.yml) — request a capability or report a result without posting secrets
 - [Build evidence](docs/BUILD-EVIDENCE.md) — test results and known limits
+- [Paid admission and recovery](docs/PAID-ADMISSION-RECOVERY.md) — payment states, reconciliation and limits
 
 ---
 

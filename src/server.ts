@@ -18,6 +18,16 @@ async function main(): Promise<void> {
   // Initialize database
   const store = new JobStore(config.DB_PATH)
   store.init()
+  // A settle interrupted by a crash or restart has no proven outcome. Keep the
+  // original attempt, key and intent, and mark it for reconciliation.
+  const interrupted = store.recoverInterruptedSettlements()
+  if (interrupted > 0) {
+    console.error(`[payment] ${interrupted} interrupted settlement(s) need reconciliation`)
+  }
+  const unresolved = store.countUnresolvedPayments()
+  if (unresolved > 0) {
+    console.error(`[payment] ${unresolved} unresolved payment(s); see docs/RUNBOOK.md#unresolved-payments`)
+  }
 
   // Initialize retention manager (run cleanup every hour)
   const retention = new RetentionManager(
@@ -52,6 +62,11 @@ async function main(): Promise<void> {
     archive,
   )
   await runner.start()
+  // Reconciled payments become durable queued rows; pick them up without a restart.
+  const queueSweep = setInterval(() => {
+    try { runner.recoverQueuedJobs() } catch { /* next sweep retries */ }
+  }, 60_000)
+  queueSweep.unref()
 
   // Create Express app
   const app = createApp(store, runner, config, archive)
@@ -75,6 +90,7 @@ async function main(): Promise<void> {
     })
 
     // Stop worker (marks in-progress jobs as retryable)
+    clearInterval(queueSweep)
     await runner.stop()
 
     // Stop retention
