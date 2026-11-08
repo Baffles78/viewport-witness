@@ -133,7 +133,12 @@ function makeRunner() {
 }
 
 async function serve(cfg: Config, runner: WorkerRunner) {
-  const admission = { store, unresolvedLimit: cfg.PAYMENT_UNRESOLVED_LIMIT ?? 20, retentionDays: 7 }
+  const admission = {
+    store,
+    unresolvedLimit: cfg.PAYMENT_UNRESOLVED_LIMIT ?? 20,
+    ...(cfg.PAYMENT_UNRESOLVED_PER_PAYER ? { payerUnresolvedLimit: cfg.PAYMENT_UNRESOLVED_PER_PAYER } : {}),
+    retentionDays: 7,
+  }
   const pm = (route: 'POST /v1/checks' | 'POST /v1/verify' | 'POST /v1/compare' | 'POST /v1/extract' | 'POST /v1/security-gate', price: string) =>
     createPaymentMiddleware({
       payTo: PAY_TO,
@@ -176,7 +181,11 @@ async function challenge(base: string, route = '/v1/checks', body: unknown = { u
 }
 
 let nonceCounter = 0
-function evmPayment(required: { accepts: Accept[]; resource: { url: string } }, nonce?: string): string {
+function evmPayment(
+  required: { accepts: Accept[]; resource: { url: string } },
+  nonce?: string,
+  from = '0x1111111111111111111111111111111111111111',
+): string {
   const accepted = required.accepts.find((a) => a.network.startsWith('eip155:')) as Accept
   const n = nonce ?? `0x${(++nonceCounter).toString(16).padStart(64, '0')}`
   return Buffer.from(JSON.stringify({
@@ -185,7 +194,7 @@ function evmPayment(required: { accepts: Accept[]; resource: { url: string } }, 
     accepted,
     payload: {
       authorization: {
-        from: '0x1111111111111111111111111111111111111111',
+        from,
         to: accepted.payTo,
         value: accepted.amount,
         validAfter: '0',
@@ -615,5 +624,135 @@ describe('MCP paid admission and recovery', () => {
     expect(changed.isError).toBe(true)
     expect(changed.body).not.toHaveProperty('id')
     expect(fac.settleCalls).toBe(1)
+  })
+})
+
+describe('paid admission: review hardening', () => {
+  function reencode(header: string): string {
+    const decoded = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as Record<string, unknown>
+    return Buffer.from(JSON.stringify(decoded, null, 1)).toString('base64')
+  }
+
+  it('treats a re-encoded copy of one payment as the same payment and settles it once', async () => {
+    const { runner } = makeRunner()
+    const base = await serve(makeCfg(), runner)
+    const required = await challenge(base)
+    let releaseSettle!: () => void
+    const gate = new Promise<void>((resolve) => { releaseSettle = resolve })
+    fac.settle = async (_p, r) => { await gate; return { success: true, transaction: '0xone', network: r.network } }
+    const header = evmPayment(required)
+    const a = paid(base, header)
+    const b = paid(base, reencode(header))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    releaseSettle()
+    const [ra, rb] = await Promise.all([a, b])
+    expect(fac.settleCalls).toBe(1)
+    expect(ra.body['id']).toBe(rb.body['id'])
+    expect(jobCount()).toBe(1)
+    expect(store.countUnresolvedPayments()).toBe(0)
+  })
+
+  it('recognises a payment already used over HTTP when it arrives over MCP', async () => {
+    const { runner } = makeRunner()
+    const base = await serve(makeCfg(), runner)
+    const required = await challenge(base)
+    const header = evmPayment(required)
+    const first = await paid(base, header)
+    expect(first.status).toBe(202)
+    const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as unknown
+    const res = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call',
+        params: { name: 'check_page', arguments: { url: 'https://example.com' }, _meta: { 'x402/payment': payload } },
+      }),
+    })
+    const text = await res.text()
+    const json = JSON.parse(text.startsWith('{') ? text : text.split('\ndata: ')[1] ?? '{}') as {
+      result?: { content?: Array<{ text?: string }> }
+    }
+    const body = JSON.parse(json.result?.content?.[0]?.text ?? '{}') as Record<string, unknown>
+    expect(body).toMatchObject({ id: first.body['id'], paymentReplay: true })
+    expect(fac.settleCalls).toBe(1)
+    expect(jobCount()).toBe(1)
+  })
+
+  it('stops one payer from filling global capacity with failing settlements', async () => {
+    const { runner } = makeRunner()
+    const base = await serve({ ...makeCfg(5), PAYMENT_UNRESOLVED_PER_PAYER: 2 } as Config, runner)
+    const required = await challenge(base)
+    fac.settle = async (_p, r) => ({
+      success: false, transaction: '', network: r.network, errorReason: 'insufficient_funds',
+    })
+    const attacker = '0x2222222222222222222222222222222222222222'
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => paid(base, evmPayment(required, undefined, attacker))),
+    )
+    expect(results.filter((r) => r.status === 202)).toHaveLength(2)
+    const busy = results.filter((r) => r.status === 429)
+    expect(busy).toHaveLength(4)
+    for (const r of busy) {
+      expect(r.body).toMatchObject({ code: 'payment_payer_busy' })
+      expect(r.body['detail']).toContain('Nothing was charged')
+      expect(r.body).not.toHaveProperty('id')
+    }
+    expect(fac.settleCalls).toBe(2)
+    expect(store.countUnresolvedPayments()).toBe(2)
+
+    fac.settle = async (_p, r) => ({ success: true, transaction: '0xok', network: r.network })
+    const other = await paid(base, evmPayment(required, undefined, '0x3333333333333333333333333333333333333333'))
+    expect(other.status).toBe(202)
+    expect(other.body).toMatchObject({ status: 'queued' })
+  })
+
+  it('never sends a failed settlement receipt with an unresolved response', async () => {
+    const { runner } = makeRunner()
+    const base = await serve(makeCfg(), runner)
+    const required = await challenge(base)
+    fac.settle = async (_p, r) => ({
+      success: false, transaction: '', network: r.network, errorReason: 'insufficient_funds',
+    })
+    const res = await fetch(`${base}/v1/checks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'payment-signature': evmPayment(required) },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    })
+    expect(res.status).toBe(202)
+    expect(res.headers.get('payment-response')).toBeNull()
+    expect(res.headers.get('payment-required')).toBeNull()
+    expect(await res.json()).toMatchObject({ paymentOutcome: 'unresolved' })
+  })
+
+  it('refuses to mark a payment unpaid while its settlement is still in flight', () => {
+    const id = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    store.admitPaymentAttempt({
+      id, url: 'https://example.com', kind: 'check', request: {},
+      idempotencyKey: 'inflight', paymentId: 'p-inflight', network: 'eip155:8453',
+      expiresAt: Date.now() + 1000, unresolvedLimit: 5,
+    })
+    expect(store.markSettlementRejected(id, 'operator guessed while settle was running')).toBe(false)
+    expect(store.getJobByIdempotencyKey('inflight')?.id).toBe(id)
+    expect(store.recordSettlement(id, { network: 'eip155:8453', transaction: '0xlate' })).toBe(true)
+    expect(store.getJob(id)).toMatchObject({ status: 'queued', settlementState: 'settled' })
+  })
+
+  it('gives a late-reconciled payment a fresh retention period', () => {
+    const id = '99999999-9999-4999-8999-999999999999'
+    const retention = 7 * 24 * 60 * 60 * 1000
+    store.admitPaymentAttempt({
+      id, url: 'https://example.com', kind: 'check', request: {},
+      paymentId: 'p-late', network: 'eip155:8453', expiresAt: Date.now() + retention, unresolvedLimit: 5,
+    })
+    store.markSettlementUnknown(id, 'timeout')
+    const later = Date.now() + 10 * 24 * 60 * 60 * 1000
+    vi.useFakeTimers({ now: later, toFake: ['Date'] })
+    try {
+      store.recordSettlement(id, { network: 'eip155:8453', transaction: '0xlate' })
+      expect(store.listExpiredJobs(later).map((j) => j.id)).not.toContain(id)
+      expect(store.getJob(id)?.expiresAt).toBeGreaterThan(later)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -7,7 +7,11 @@ import { createWebProductsRouter } from './routes/web-products.js'
 import { createMcpRouter } from '../mcp.js'
 import type { JobStore } from '../db.js'
 import type { WorkerRunner } from '../worker/runner.js'
-import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT, type Config } from '../config.js'
+import {
+  DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
+  DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER,
+  type Config,
+} from '../config.js'
 import { createPaymentMiddleware, PAID_ROUTE_DESCRIPTIONS } from '../payment/index.js'
 import { growthMiddleware, growthErrorObserver } from '../growth.js'
 import { createHistoryRouter } from './routes/history.js'
@@ -58,6 +62,7 @@ export function createApp(
   const admission = {
     store,
     unresolvedLimit: cfg.PAYMENT_UNRESOLVED_LIMIT ?? DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
+    payerUnresolvedLimit: cfg.PAYMENT_UNRESOLVED_PER_PAYER ?? DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER,
     retentionDays: cfg.RETENTION_DAYS,
   }
 

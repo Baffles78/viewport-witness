@@ -65,4 +65,14 @@ describe('payment reconcile CLI', () => {
     expect(run(['bogus', ID]).code).toBe(2)
     expect(run(['settled', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '--tx', '0x' + 'b'.repeat(64)]).code).toBe(1)
   })
+  it('refuses to act on a payment that is still settling', () => {
+    const id = '12121212-1212-4121-8121-121212121212'
+    store.admitPaymentAttempt({
+      id, url: 'https://example.com', kind: 'check', request: {},
+      paymentId: 'cli-settling', network: 'eip155:8453', expiresAt: Date.now() + 60_000, unresolvedLimit: 5,
+    })
+    expect(run(['unpaid', id, '--evidence', 'authorizationState unused after validBefore']).code).toBe(1)
+    expect(run(['settled', id, '--tx', '0x' + 'c'.repeat(64)]).code).toBe(1)
+    expect(store.getJob(id)).toMatchObject({ status: 'payment_pending', settlementState: 'settling' })
+  })
 })

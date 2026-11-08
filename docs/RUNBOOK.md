@@ -297,6 +297,9 @@ A paid attempt whose settlement outcome is not proven stays `payment_pending` wi
 settlement state `unknown`. It keeps its idempotency key, never expires, and tells the buyer
 not to pay again. Startup logs the count (`[payment] N unresolved payment(s)`). When the count reaches
 `PAYMENT_UNRESOLVED_LIMIT` (default 20) new paid requests get 503 before any charge.
+One payer may hold at most `PAYMENT_UNRESOLVED_PER_PAYER` (default 3) settling or unknown
+attempts; its further payments get 429 with nothing charged. Rows still `settling` cannot be
+reconciled; wait until `list` shows them as `unknown`.
 
 ```bash
 docker exec viewport-witness node dist/payment-reconcile-cli.js list

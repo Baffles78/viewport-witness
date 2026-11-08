@@ -48,6 +48,12 @@ export function runReconcile(argv: string[], store: JobStore, out: (line: string
     out(`Job ${jobId} is not an unresolved payment.`)
     return 1
   }
+  if (job.settlementState === 'settling') {
+    // The service may still be waiting on the facilitator for this payment.
+    // Its outcome is recorded automatically, or it becomes unknown on restart.
+    out(`Job ${jobId} is still settling; wait until list shows it as unknown.`)
+    return 1
+  }
   if (command === 'settled') {
     const tx = arg(rest, '--tx')
     const network = arg(rest, '--network') ?? job.settlementNetwork ?? ''

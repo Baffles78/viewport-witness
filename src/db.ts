@@ -541,10 +541,14 @@ export class JobStore {
   // facilitator verified the payment and before settlement is dispatched. Its
   // id is the job id the buyer will receive, and it carries the exact intent.
 
-  countUnresolvedPayments(): number {
-    const row = this.conn
-      .prepare("SELECT COUNT(*) AS n FROM jobs WHERE settlement_state IN ('settling','unknown')")
-      .get() as { n: number }
+  countUnresolvedPayments(customerId?: string): number {
+    const row = (customerId
+      ? this.conn
+          .prepare("SELECT COUNT(*) AS n FROM jobs WHERE settlement_state IN ('settling','unknown') AND customer_id = ?")
+          .get(customerId)
+      : this.conn
+          .prepare("SELECT COUNT(*) AS n FROM jobs WHERE settlement_state IN ('settling','unknown')")
+          .get()) as { n: number }
     return Number(row.n)
   }
 
@@ -565,25 +569,37 @@ export class JobStore {
     baselineJobId?: string
     idempotencyKey?: string
     paymentId: string
+    paymentAliases?: string[]
     customerId?: string
     network: string
     expiresAt: number
     unresolvedLimit: number
+    payerUnresolvedLimit?: number
   }):
     | { admitted: true }
-    | { admitted: false; reason: 'capacity' | 'payment_exists' | 'key_bound'; existing?: JobRecord } {
+    | { admitted: false; reason: AdmissionRefusal; existing?: JobRecord } {
     const now = Date.now()
     this.conn.exec('BEGIN IMMEDIATE')
     let result:
       | { admitted: true }
-      | { admitted: false; reason: 'capacity' | 'payment_exists' | 'key_bound'; existing?: JobRecord }
+      | { admitted: false; reason: AdmissionRefusal; existing?: JobRecord }
     try {
-      const byPayment = this.getJobByPaymentId(params.paymentId)
+      let byPayment = this.getJobByPaymentId(params.paymentId)
+      for (const alias of params.paymentAliases ?? []) {
+        if (byPayment) break
+        byPayment = this.getJobByPaymentId(alias)
+      }
       const byKey = params.idempotencyKey ? this.getJobByIdempotencyKey(params.idempotencyKey) : null
       if (byPayment) {
         result = { admitted: false, reason: 'payment_exists', existing: byPayment }
       } else if (byKey) {
         result = { admitted: false, reason: 'key_bound', existing: byKey }
+      } else if (
+        params.customerId &&
+        params.payerUnresolvedLimit !== undefined &&
+        this.countUnresolvedPayments(params.customerId) >= params.payerUnresolvedLimit
+      ) {
+        result = { admitted: false, reason: 'payer_busy' }
       } else if (this.countUnresolvedPayments() >= params.unresolvedLimit) {
         result = { admitted: false, reason: 'capacity' }
       } else {
@@ -641,12 +657,14 @@ export class JobStore {
       .prepare(
         `UPDATE jobs SET settlement_state = 'settled', settlement_network = ?, settlement_tx = ?,
            settlement_updated_at = ?,
+           expires_at = MAX(expires_at, ? + (expires_at - created_at)),
            status = CASE WHEN status = 'payment_pending' THEN 'queued' ELSE status END
          WHERE id = ? AND settlement_state IN ('settling', 'unknown')`,
       )
       .run(
         settlement.network.slice(0, 100),
         settlement.transaction.slice(0, 200),
+        Date.now(),
         Date.now(),
         id,
       )
@@ -688,7 +706,7 @@ export class JobStore {
         .prepare(
           `UPDATE jobs SET settlement_state = 'rejected', settlement_note = ?, settlement_updated_at = ?,
              status = 'failed', completed_at = ?, error = 'payment_not_settled', idempotency_key = NULL
-           WHERE id = ? AND settlement_state IN ('settling', 'unknown') AND status = 'payment_pending'`,
+           WHERE id = ? AND settlement_state = 'unknown' AND status = 'payment_pending'`,
         )
         .run(evidence.slice(0, 500), Date.now(), Date.now(), id)
       const changed = Number(result.changes) === 1
@@ -869,6 +887,8 @@ export class JobStore {
     }
   }
 }
+
+export type AdmissionRefusal = 'capacity' | 'payer_busy' | 'payment_exists' | 'key_bound'
 
 export interface ArchiveSnapshotRecord {
   id: string

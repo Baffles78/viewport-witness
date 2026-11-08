@@ -26,6 +26,12 @@ import {
 } from '@x402/svm'
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 import { randomUUID } from 'node:crypto'
+import {
+  decodePaymentHeader,
+  legacyHeaderPaymentId,
+  legacyMcpPaymentId,
+  paymentIdentity,
+} from './identity.js'
 import type { JobRecord, PaymentMode } from '../types.js'
 import type { JobStore } from '../db.js'
 import { sameJobIntent, type JobIntent } from '../idempotency-replay.js'
@@ -34,6 +40,7 @@ import {
   admissionStorage,
   finalizeAdmission,
   installAdmissionHooks,
+  PAYER_BUSY_DETAIL,
   unresolvedPaymentBody,
   type AdmissionContext,
 } from './admission.js'
@@ -61,6 +68,8 @@ declare global {
 export interface PaymentAdmissionOptions {
   store: JobStore
   unresolvedLimit: number
+  /** Unresolved attempts one payer may hold; omitted means no per-payer cap. */
+  payerUnresolvedLimit?: number
   retentionDays: number
 }
 
@@ -130,10 +139,25 @@ function unavailable(error: string, detail: string): RequestHandler {
   }
 }
 
+// One id per signed payment, whatever its encoding or transport. A header
+// that cannot be decoded keeps a raw hash so it can still be serialized; such
+// a payment fails verification and is never stored.
 export function paymentFingerprint(req: Request): string | undefined {
   const signature = req.header('payment-signature') ?? req.header('x-payment')
   if (!signature) return undefined
-  return createHash('sha256').update(signature).digest('hex')
+  return (
+    paymentIdentity(decodePaymentHeader(signature)) ??
+    `raw_${createHash('sha256').update(signature).digest('hex')}`
+  )
+}
+
+// Ids the same payment may carry in rows written before ids were unified.
+export function paymentFingerprintAliases(req: Request): string[] {
+  const signature = req.header('payment-signature') ?? req.header('x-payment')
+  if (!signature) return []
+  return [legacyHeaderPaymentId(signature), legacyMcpPaymentId(decodePaymentHeader(signature))].filter(
+    (id): id is string => Boolean(id),
+  )
 }
 
 export function customerFingerprint(
@@ -437,7 +461,11 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
       : []),
   ]
   if (opts.admission) {
-    installAdmissionHooks(resourceServer, facilitator, opts.admission.store, opts.admission.unresolvedLimit)
+    installAdmissionHooks(resourceServer, facilitator, opts.admission.store, opts.admission.unresolvedLimit, {
+      ...(opts.admission.payerUnresolvedLimit !== undefined
+        ? { payerUnresolvedLimit: opts.admission.payerUnresolvedLimit }
+        : {}),
+    })
   }
   const x402 = paymentMiddleware(
     {
@@ -503,8 +531,12 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         }
 
   // Returns true when a response was sent for an already-recorded payment.
-  const answerExisting = (req: Request, res: Response, paymentId: string): boolean => {
-    const existing = admission.store.getJobByPaymentId(paymentId)
+  const answerExisting = (req: Request, res: Response, paymentIds: string[]): boolean => {
+    let existing: JobRecord | null = null
+    for (const id of paymentIds) {
+      existing = admission.store.getJobByPaymentId(id)
+      if (existing) break
+    }
     if (!existing) return false
     if (!req.jobIntent || !sameJobIntent(existing, req.jobIntent)) {
       res.status(409).json({
@@ -526,6 +558,8 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
       return
     }
     const paymentId = paymentFingerprint(req) as string
+    const paymentAliases = paymentFingerprintAliases(req)
+    const lookupIds = [paymentId, ...paymentAliases]
     const intent = req.jobIntent
     if (!intent) {
       res.status(500).json({ error: 'validation_state_missing', code: 'internal_error' })
@@ -534,11 +568,11 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
 
     // A retried payment never reaches the facilitator again: it gets its own
     // job (or its unresolved status) back, and only for the same work.
-    if (answerExisting(req, res, paymentId)) return
+    if (answerExisting(req, res, lookupIds)) return
     let waiting = inFlight.get(paymentId)
     while (waiting) {
       await waiting
-      if (answerExisting(req, res, paymentId)) return
+      if (answerExisting(req, res, lookupIds)) return
       waiting = inFlight.get(paymentId)
     }
     if (admission.store.countUnresolvedPayments() >= admission.unresolvedLimit) {
@@ -557,6 +591,7 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     const ctx: AdmissionContext = {
       jobId: randomUUID(),
       paymentId,
+      ...(paymentAliases.length ? { paymentAliases } : {}),
       intent,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(customerId ? { customerId } : {}),
@@ -579,6 +614,9 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         overridden = true
         const outcome = finalizeAdmission(admission.store, ctx, 'settle_response_not_success')
         res.removeHeader('PAYMENT-REQUIRED')
+        // x402 may have attached a failed settlement receipt; while the outcome
+        // is unproven no header may tell the client the payment failed.
+        if (outcome !== 'settled') res.removeHeader('PAYMENT-RESPONSE')
         res.status(202)
         originalJson(outcome === 'settled'
           ? {
@@ -599,6 +637,10 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         if (reason === 'payment_exists' && existing && sameJobIntent(existing, intent)) {
           res.status(202)
           originalJson(replayBody(existing))
+        } else if (reason === 'payer_busy') {
+          res.setHeader('Retry-After', '60')
+          res.status(429)
+          originalJson({ error: 'payment_payer_busy', code: 'payment_payer_busy', detail: PAYER_BUSY_DETAIL })
         } else if (reason === 'key_bound' || reason === 'payment_exists') {
           const code = reason === 'key_bound' ? 'idempotency_key_conflict' : 'payment_replay_conflict'
           res.status(409)

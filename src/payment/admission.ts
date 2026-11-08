@@ -23,7 +23,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { x402ResourceServer } from '@x402/core/server'
 import type { PaymentPayload, PaymentRequirements } from '@x402/core/types'
-import type { JobStore } from '../db.js'
+import type { AdmissionRefusal, JobStore } from '../db.js'
 import type { JobIntent } from '../idempotency-replay.js'
 import type { JobRecord } from '../types.js'
 
@@ -41,10 +41,12 @@ export interface AdmissionContext {
   intent: JobIntent
   idempotencyKey?: string
   customerId?: string
+  /** Ids this payment may have been stored under before ids were unified. */
+  paymentAliases?: string[]
   expiresAt: number
   phase: AdmissionPhase
   rejectReason?: string
-  notAdmitted?: { reason: 'capacity' | 'payment_exists' | 'key_bound' | 'store_error'; existing?: JobRecord }
+  notAdmitted?: { reason: AdmissionRefusal | 'store_error'; existing?: JobRecord }
   settlement?: { network: string; transaction: string }
   settleFailure?: string
 }
@@ -65,7 +67,7 @@ export function installAdmissionHooks(
   facilitator: VerifyingFacilitator,
   store: JobStore,
   unresolvedLimit: number,
-  { preverify = true }: { preverify?: boolean } = {},
+  { preverify = true, payerUnresolvedLimit }: { preverify?: boolean; payerUnresolvedLimit?: number } = {},
 ): void {
   if (installed.has(server)) return
   installed.add(server)
@@ -126,10 +128,12 @@ export function installAdmissionHooks(
         ...(ctx.intent.baselineJobId ? { baselineJobId: ctx.intent.baselineJobId } : {}),
         ...(ctx.idempotencyKey ? { idempotencyKey: ctx.idempotencyKey } : {}),
         paymentId: ctx.paymentId,
+        ...(ctx.paymentAliases?.length ? { paymentAliases: ctx.paymentAliases } : {}),
         ...(ctx.customerId ? { customerId: ctx.customerId } : {}),
         network: String(requirements.network),
         expiresAt: ctx.expiresAt,
         unresolvedLimit,
+        ...(payerUnresolvedLimit !== undefined ? { payerUnresolvedLimit } : {}),
       })
       if (!result.admitted) {
         ctx.phase = 'not_admitted'
@@ -221,3 +225,6 @@ export function unresolvedReplayBody(
   if (job.status !== 'payment_pending' || job.settlementState === 'rejected') return null
   return { ...unresolvedPaymentBody(job.id, paymentMode), idempotent: true }
 }
+
+export const PAYER_BUSY_DETAIL =
+  'Nothing was charged for this request. Earlier payments from this payer are still being confirmed; retry this same request in a minute.'

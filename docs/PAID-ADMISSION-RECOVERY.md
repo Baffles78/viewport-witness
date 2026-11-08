@@ -19,7 +19,11 @@ payment on either rail.
 ## What happens to a paid request
 
 1. Unsigned request: unchanged 402 challenge (Base and Solana requirements).
-2. Signed request whose payment fingerprint already has a job: the same job is
+2. Every signed payment gets one id from its signed content (EVM authorization
+   or Permit2 fields, or the Solana transaction message), independent of JSON
+   encoding, hex case and transport, so the same payment over HTTP and MCP is
+   one payment. Ids written before this change are still recognised.
+   Signed request whose payment id already has a job: the same job is
    returned if the request is the same work; different work gets 409 with no
    job id. Nothing is settled again.
 3. Same payment arriving concurrently in one process waits for the first
@@ -27,6 +31,10 @@ payment on either rail.
    constraint on the payment fingerprint and idempotency key does the same.
 4. If unresolved payments are at `PAYMENT_UNRESOLVED_LIMIT` (default 20), the
    request gets 503 `payment_admission_paused` before any facilitator call.
+   One payer (verified wallet, stored only as a keyed hash) may hold at most
+   `PAYMENT_UNRESOLVED_PER_PAYER` (default 3) settling or unknown attempts;
+   further payments from it get 429 `payment_payer_busy` before settle, with
+   "Nothing was charged", so one wallet cannot fill the global limit.
 5. HTTP: the app calls facilitator `/verify` itself in `onBeforeVerify` with
    the route's negotiated requirements. Invalid payments and verify outages
    stop here. Nothing is stored and no key is bound.
@@ -43,7 +51,8 @@ payment on either rail.
    with `paymentOutcome: "unresolved"`, `nextAction: "poll_same_job"` and the
    text "Do not send another payment for this request". The key stays bound,
    the row never expires automatically, and repeating the request with the
-   same payment returns the same job.
+   same payment returns the same job. Any failed settlement receipt header
+   from x402 is removed from that response.
 9. On startup any row still `settling` (the process died mid-settle) becomes
    `unknown`.
 
@@ -60,7 +69,11 @@ docker exec viewport-witness node dist/payment-reconcile-cli.js settled <jobId> 
 docker exec viewport-witness node dist/payment-reconcile-cli.js unpaid <jobId> --evidence "<proof>"
 ```
 
-- `settled` queues the original job exactly once (repeat calls are refused).
+- Both commands refuse rows still `settling`: the service may still be waiting
+  on the facilitator. Such rows resolve on their own or become `unknown` on
+  restart.
+- `settled` queues the original job exactly once (repeat calls are refused)
+  and gives it a fresh retention period from the settlement time.
 - `unpaid` fails the job and releases its key. Use it only with proof that the
   payment can no longer settle, for example an EVM transfer authorization that
   is still unused after its `validBefore` time, or a Solana transaction whose
@@ -82,8 +95,19 @@ docker exec viewport-witness node dist/payment-reconcile-cli.js unpaid <jobId> -
 - The app-side `/verify` call on upfront-flow HTTP payloads has not been run
   against the live CDP facilitator. Testnet or funded acceptance must confirm
   it before relying on it in production.
-- A funded attacker could pass verify and then drain the wallet before settle,
-  leaving an `unknown` row that binds one key. The capacity limit bounds this.
+- A funded attacker can pass verify and then drain the wallet before settle,
+  leaving `unknown` rows. The per-payer cap limits one wallet to 3, but about
+  seven funded wallets could still reach the global limit and pause paid
+  admission until an operator reconciles. This fails closed by design.
+  Automatic EVM reconciliation (reading `authorizationState` after
+  `validBefore` from a public RPC) would remove most operator work; it is not
+  built because it adds an external dependency that needs approval.
+- A specific facilitator rejection such as `insufficient_funds` is still
+  treated as unknown, not as proof of nonpayment.
+- A paid replay returns the job id to anyone who presents the same signed
+  payment. Signed payments become public on-chain after settlement, so the job
+  id should not be treated as secret from someone who can see the chain and
+  guess the URL. This predates this change.
 - The in-process wait is per process. The database constraints cover multiple
   processes, but a second process gets 409/replay instead of waiting.
 - `POST /v1/history` still uses the previous payment wrapper. The route is

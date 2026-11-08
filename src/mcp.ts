@@ -1,7 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { buildAgentResult } from './agent-result.js'
 import { reconcileJobStatus } from './job-reconciliation.js'
-import { createHash } from 'node:crypto'
 import type { Request, Response, Router } from 'express'
 import { Router as createRouter } from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -10,7 +9,7 @@ import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from 
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
-import { PaymentPayloadSchema } from '@x402/core/schemas'
+import { legacyMcpPaymentId, paymentIdentity } from './payment/identity.js'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { ExactSvmScheme } from '@x402/svm/exact/server'
 import { z } from 'zod'
@@ -23,11 +22,13 @@ import type { WorkerRunner } from './worker/runner.js'
 import { createProductJob } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 import { randomUUID } from 'node:crypto'
-import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT } from './config.js'
+import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT, DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER } from './config.js'
+import { customerFingerprint } from './payment/index.js'
 import {
   admissionStorage,
   finalizeAdmission,
   installAdmissionHooks,
+  PAYER_BUSY_DETAIL,
   unresolvedPaymentBody,
   type AdmissionContext,
 } from './payment/admission.js'
@@ -41,86 +42,8 @@ function jsonResult(value: unknown, isError = false): ToolResult {
   }
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
-  const record = value as Record<string, unknown>
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-    .join(',')}}`
-}
-
-export function mcpPaymentFingerprint(paymentPayload: unknown): string | undefined {
-  const parsed = PaymentPayloadSchema.safeParse(paymentPayload)
-  if (!parsed.success) return undefined
-  const envelope = parsed.data
-  const network = envelope.x402Version === 1 ? envelope.network : envelope.accepted.network
-  const scheme = envelope.x402Version === 1 ? envelope.scheme : envelope.accepted.scheme
-  const payload = envelope.payload
-  let signedIdentity: Record<string, unknown>
-  if (network.startsWith('solana:') && typeof payload['transaction'] === 'string') {
-    signedIdentity = { transaction: payload['transaction'] }
-  } else if (
-    network.startsWith('eip155:') &&
-    payload['permit2Authorization'] &&
-    typeof payload['permit2Authorization'] === 'object' &&
-    typeof payload['signature'] === 'string'
-  ) {
-    const authorization = payload['permit2Authorization'] as Record<string, unknown>
-    const permitted = authorization['permitted']
-    const witness = authorization['witness']
-    if (
-      typeof authorization['from'] !== 'string' ||
-      !permitted ||
-      typeof permitted !== 'object' ||
-      typeof (permitted as Record<string, unknown>)['token'] !== 'string' ||
-      typeof (permitted as Record<string, unknown>)['amount'] !== 'string' ||
-      typeof authorization['spender'] !== 'string' ||
-      typeof authorization['nonce'] !== 'string' ||
-      typeof authorization['deadline'] !== 'string' ||
-      !witness ||
-      typeof witness !== 'object' ||
-      typeof (witness as Record<string, unknown>)['to'] !== 'string' ||
-      typeof (witness as Record<string, unknown>)['validAfter'] !== 'string'
-    )
-      return undefined
-    signedIdentity = {
-      permit2Authorization: {
-        from: authorization['from'],
-        permitted: {
-          token: (permitted as Record<string, unknown>)['token'],
-          amount: (permitted as Record<string, unknown>)['amount'],
-        },
-        spender: authorization['spender'],
-        nonce: authorization['nonce'],
-        deadline: authorization['deadline'],
-        witness: {
-          to: (witness as Record<string, unknown>)['to'],
-          validAfter: (witness as Record<string, unknown>)['validAfter'],
-        },
-      },
-      signature: payload['signature'],
-    }
-  } else if (
-    network.startsWith('eip155:') &&
-    payload['authorization'] &&
-    typeof payload['authorization'] === 'object' &&
-    typeof payload['signature'] === 'string'
-  ) {
-    const authorization = payload['authorization'] as Record<string, unknown>
-    const fields = ['from', 'to', 'value', 'validAfter', 'validBefore', 'nonce'] as const
-    if (!fields.every((field) => typeof authorization[field] === 'string')) return undefined
-    signedIdentity = {
-      authorization: Object.fromEntries(fields.map((field) => [field, authorization[field]])),
-      signature: payload['signature'],
-    }
-  } else return undefined
-  const canonical = canonicalJson({ network, scheme, signedIdentity })
-  if (canonical.length > 64 * 1024) return undefined
-  return `mcp_${createHash('sha256').update(canonical).digest('hex')}`
-}
-
+// Kept for callers and tests that compare against pre-unification MCP ids.
+export const mcpPaymentFingerprint = legacyMcpPaymentId
 
 const assertionItemSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('noHorizontalOverflow') }).strict(),
@@ -192,7 +115,10 @@ async function createMcpPaymentContext(cfg: Config, store: JobStore): Promise<{
     cfg.PAYMENT_UNRESOLVED_LIMIT ?? DEFAULT_PAYMENT_UNRESOLVED_LIMIT,
     // MCP keeps its existing authorization flow: x402 calls facilitator
     // /verify before the handler and settles after it.
-    { preverify: false },
+    {
+      preverify: false,
+      payerUnresolvedLimit: cfg.PAYMENT_UNRESOLVED_PER_PAYER ?? DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER,
+    },
   )
   await server.initialize()
   const build = async (price: string): Promise<PaymentRequirements[]> => {
@@ -297,14 +223,24 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       }
       return async (args: T, extra: unknown) => {
         const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
-        const paymentId = mcpPaymentFingerprint(meta?.[MCP_PAYMENT_META_KEY])
+        const paymentPayload = meta?.[MCP_PAYMENT_META_KEY]
+        const paymentId = paymentIdentity(paymentPayload)
+        const legacyId = legacyMcpPaymentId(paymentPayload)
+        const paymentAliases = legacyId ? [legacyId] : []
+        const findExisting = (): import('./types.js').JobRecord | null => {
+          for (const id of [paymentId, ...paymentAliases]) {
+            const found = id ? store.getJobByPaymentId(id) : null
+            if (found) return found
+          }
+          return null
+        }
         if (paymentId) {
-          const existing = store.getJobByPaymentId(paymentId)
+          const existing = findExisting()
           if (existing) return replayResult(existing, args)
           let inFlight = inFlightPayments.get(paymentId)
           while (inFlight) {
             await inFlight
-            const completedRace = store.getJobByPaymentId(paymentId)
+            const completedRace = findExisting()
             if (completedRace) return replayResult(completedRace, args)
             inFlight = inFlightPayments.get(paymentId)
           }
@@ -326,9 +262,15 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             detail: 'New paid work is paused while earlier payments are reconciled. Nothing was charged.',
           }, true)
         }
+        const customerId = customerFingerprint(
+          Buffer.from(JSON.stringify(paymentPayload)).toString('base64'),
+          cfg.CUSTOMER_HASH_SECRET,
+        )
         const ctx: AdmissionContext = {
           jobId: randomUUID(),
           paymentId,
+          ...(paymentAliases.length ? { paymentAliases } : {}),
+          ...(customerId ? { customerId } : {}),
           intent: intentForTool(tier, args),
           expiresAt: Date.now() + cfg.RETENTION_DAYS * 24 * 60 * 60 * 1000,
           phase: 'start',
@@ -357,6 +299,14 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           if (ctx.phase === 'not_admitted' && ctx.notAdmitted) {
             const { reason, existing } = ctx.notAdmitted
             if (reason === 'payment_exists' && existing) return replayResult(existing, args)
+            if (reason === 'payer_busy') {
+              return jsonResult({
+                error: 'payment_payer_busy',
+                code: 'payment_payer_busy',
+                retryAfterSeconds: 60,
+                detail: PAYER_BUSY_DETAIL,
+              }, true)
+            }
             return jsonResult({
               error: reason === 'capacity' ? 'payment_admission_paused' : 'payment_admission_unavailable',
               code: reason === 'capacity' ? 'payment_admission_paused' : 'payment_admission_unavailable',
