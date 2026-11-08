@@ -27,6 +27,8 @@ import {
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 import { randomUUID } from 'node:crypto'
 import {
+  replayAllowed,
+  type PaymentDescription,
   describePayment,
   payerCustomerId,
   decodePaymentHeader,
@@ -533,14 +535,21 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         }
 
   // Returns true when a response was sent for an already-recorded payment.
-  const answerExisting = (req: Request, res: Response, paymentIds: string[]): boolean => {
+  const answerExisting = (
+    req: Request,
+    res: Response,
+    paymentIds: string[],
+    described: PaymentDescription,
+  ): boolean => {
     let existing: JobRecord | null = null
     for (const id of paymentIds) {
       existing = admission.store.getJobByPaymentId(id)
       if (existing) break
     }
     if (!existing) return false
-    if (!req.jobIntent || !sameJobIntent(existing, req.jobIntent)) {
+    // The id is built from values that are public once a payment settles, so
+    // only the exact signed payment that created the job may see it.
+    if (!replayAllowed(existing, described) || !req.jobIntent || !sameJobIntent(existing, req.jobIntent)) {
       res.status(409).json({
         error: 'payment_replay_conflict',
         code: 'payment_replay_conflict',
@@ -582,11 +591,11 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
 
     // A retried payment never reaches the facilitator again: it gets its own
     // job (or its unresolved status) back, and only for the same work.
-    if (answerExisting(req, res, lookupIds)) return
+    if (answerExisting(req, res, lookupIds, described)) return
     let waiting = inFlight.get(paymentId)
     while (waiting) {
       await waiting
-      if (answerExisting(req, res, lookupIds)) return
+      if (answerExisting(req, res, lookupIds, described)) return
       waiting = inFlight.get(paymentId)
     }
     if (admission.store.countUnresolvedPayments() >= admission.unresolvedLimit) {
@@ -604,6 +613,7 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
     const ctx: AdmissionContext = {
       jobId: randomUUID(),
       paymentId,
+      paymentProof: described.proof,
       ...(paymentAliases.length ? { paymentAliases } : {}),
       intent,
       ...(idempotencyKey ? { idempotencyKey } : {}),
@@ -647,7 +657,12 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
         res.removeHeader('PAYMENT-REQUIRED')
         res.removeHeader('PAYMENT-RESPONSE')
         const { reason, existing } = ctx.notAdmitted
-        if (reason === 'payment_exists' && existing && sameJobIntent(existing, intent)) {
+        if (
+          reason === 'payment_exists' &&
+          existing &&
+          sameJobIntent(existing, intent) &&
+          replayAllowed(existing, described)
+        ) {
           res.status(202)
           originalJson(replayBody(existing))
         } else if (reason === 'payer_busy') {

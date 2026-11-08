@@ -107,10 +107,12 @@ docker exec viewport-witness node dist/payment-reconcile-cli.js unpaid <jobId> -
   built because it adds an external dependency that needs approval.
 - A specific facilitator rejection such as `insufficient_funds` is still
   treated as unknown, not as proof of nonpayment.
-- A paid replay returns the job id to anyone who presents the same signed
-  payment. Signed payments become public on-chain after settlement, so the job
-  id should not be treated as secret from someone who can see the chain and
-  guess the URL. This predates this change.
+- A paid replay returns the job only to the exact signed payment that created
+  it (a stored hash of the signature and signed fields must match). Payer and
+  nonce alone, which are public after settlement, get 409 with no job id.
+  Someone who rebuilds the full signed authorization from settlement calldata
+  and also knows the URL could still obtain the job id; this predates this
+  change and would need caller authentication to close.
 - The in-process wait is per process. The database constraints cover multiple
   processes, but a second process gets 409/replay instead of waiting.
 - `POST /v1/history` still uses the previous payment wrapper. The route is

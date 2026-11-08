@@ -2,6 +2,7 @@ import type { Request } from 'express'
 import type { Config } from './config.js'
 import type { JobKind, JobRecord, PageAssertion } from './types.js'
 import { paymentFingerprint, paymentFingerprintAliases } from './payment/index.js'
+import { decodePaymentHeader, describePayment, replayAllowed } from './payment/identity.js'
 
 export interface JobIntent {
   kind: JobKind
@@ -32,6 +33,8 @@ export function canReplayJob(
   if (cfg.PAYMENT_MODE === 'test') return true
   const fingerprint = paymentFingerprint(req)
   if (!fingerprint || !existing.paymentId) return false
-  return [fingerprint, ...paymentFingerprintAliases(req)].includes(existing.paymentId)
+  if (![fingerprint, ...paymentFingerprintAliases(req)].includes(existing.paymentId)) return false
+  const header = req.header('payment-signature') ?? req.header('x-payment')
+  return replayAllowed(existing, describePayment(decodePaymentHeader(header)))
 }
 

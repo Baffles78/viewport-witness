@@ -9,7 +9,13 @@ import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from 
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
-import { describePayment, legacyMcpPaymentId, payerCustomerId } from './payment/identity.js'
+import {
+  describePayment,
+  legacyMcpPaymentId,
+  payerCustomerId,
+  replayAllowed,
+  type PaymentDescription,
+} from './payment/identity.js'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { ExactSvmScheme } from '@x402/svm/exact/server'
 import { z } from 'zod'
@@ -204,8 +210,12 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           url: `mcp://tool/${tier === 'check' ? 'check_page' : tier === 'security' ? 'web_release_gate' : `${tier}_page`}`,
         },
       })(handler)
-      const replayResult = (existing: import('./types.js').JobRecord, args: T): ToolResult => {
-        if (!sameJobIntent(existing, intentForTool(tier, args))) {
+      const replayResult = (
+        existing: import('./types.js').JobRecord,
+        args: T,
+        described: PaymentDescription | undefined,
+      ): ToolResult => {
+        if (!replayAllowed(existing, described) || !sameJobIntent(existing, intentForTool(tier, args))) {
           return jsonResult({ error: 'payment_replay_conflict', nextAction: 'stop' }, true)
         }
         if (existing.status === 'payment_pending' && existing.settlementState !== 'rejected') {
@@ -236,12 +246,12 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         }
         if (paymentId) {
           const existing = findExisting()
-          if (existing) return replayResult(existing, args)
+          if (existing) return replayResult(existing, args, described)
           let inFlight = inFlightPayments.get(paymentId)
           while (inFlight) {
             await inFlight
             const completedRace = findExisting()
-            if (completedRace) return replayResult(completedRace, args)
+            if (completedRace) return replayResult(completedRace, args, described)
             inFlight = inFlightPayments.get(paymentId)
           }
         }
@@ -275,6 +285,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         const ctx: AdmissionContext = {
           jobId: randomUUID(),
           paymentId,
+          paymentProof: described.proof,
           ...(paymentAliases.length ? { paymentAliases } : {}),
           ...(customerId ? { customerId } : {}),
           intent: intentForTool(tier, args),
@@ -304,7 +315,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           }
           if (ctx.phase === 'not_admitted' && ctx.notAdmitted) {
             const { reason, existing } = ctx.notAdmitted
-            if (reason === 'payment_exists' && existing) return replayResult(existing, args)
+            if (reason === 'payment_exists' && existing) return replayResult(existing, args, described)
             if (reason === 'payer_busy') {
               return jsonResult({
                 error: 'payment_payer_busy',

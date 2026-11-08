@@ -41,6 +41,8 @@ export interface AdmissionContext {
   intent: JobIntent
   idempotencyKey?: string
   customerId?: string
+  /** Hash of the full signed payment; replays must match it. */
+  paymentProof?: string
   /** Ids this payment may have been stored under before ids were unified. */
   paymentAliases?: string[]
   expiresAt: number
@@ -134,6 +136,7 @@ export function installAdmissionHooks(
         ...(ctx.intent.baselineJobId ? { baselineJobId: ctx.intent.baselineJobId } : {}),
         ...(ctx.idempotencyKey ? { idempotencyKey: ctx.idempotencyKey } : {}),
         paymentId: ctx.paymentId,
+        ...(ctx.paymentProof ? { paymentProof: ctx.paymentProof } : {}),
         ...(ctx.paymentAliases?.length ? { paymentAliases: ctx.paymentAliases } : {}),
         ...(ctx.customerId ? { customerId: ctx.customerId } : {}),
         network: String(requirements.network),

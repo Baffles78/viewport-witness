@@ -790,8 +790,15 @@ describe('paid admission: payment identity', () => {
       envelope({ ...auth, nonce: '42' }),
       envelope(auth, { transaction: 'junk-field' }),
     ]) {
-      expect(describePayment(variant)).toEqual(base)
+      const d = describePayment(variant)
+      expect({ id: d?.id, payer: d?.payer }).toEqual({ id: base?.id, payer: base?.payer })
     }
+    // Same spendable authorization, different signature: same id, different proof.
+    const forged = describePayment({ ...envelope(auth), payload: { authorization: auth, signature: `0x${'c'.repeat(130)}` } })
+    expect(forged?.id).toBe(base?.id)
+    expect(forged?.proof).not.toBe(base?.proof)
+    // Re-encoding the same signed payment keeps the proof.
+    expect(describePayment(envelope({ ...auth, value: '0x13880', nonce: '42' }))?.proof).toBe(base?.proof)
     expect(describePayment(envelope({ ...auth, nonce: '43' }))?.id).not.toBe(base?.id)
     expect(describePayment(envelope({ ...auth, from: '0x1' }))).toBeUndefined()
   })
@@ -822,6 +829,33 @@ describe('paid admission: payment identity', () => {
     expect((await paid(base, withJunk(evmPayment(required, undefined, attacker)))).status).toBe(202)
     const second = await paid(base, withJunk(evmPayment(required, undefined, attacker)))
     expect(second.status).toBe(429)
+    expect(fac.settleCalls).toBe(1)
+  })
+})
+
+describe('paid admission: replay requires the original signed payment', () => {
+  it('does not return a job to a forged payment that reuses its public payer and nonce', async () => {
+    const { runner } = makeRunner()
+    const base = await serve(makeCfg(), runner)
+    const required = await challenge(base)
+    const nonce = `0x${'7'.repeat(64)}`
+    const first = await paid(base, evmPayment(required, nonce), { key: 'owner-key' })
+    expect(first.status).toBe(202)
+    const forged = JSON.parse(Buffer.from(evmPayment(required, nonce), 'base64').toString('utf8')) as {
+      payload: { signature: string; authorization: Record<string, string> }
+    }
+    forged.payload.signature = `0x${'b'.repeat(130)}`
+    forged.payload.authorization['value'] = '1'
+    const header = Buffer.from(JSON.stringify(forged)).toString('base64')
+    for (const opts of [{}, { key: 'owner-key' }]) {
+      const r = await paid(base, header, opts)
+      expect(r.status).toBe(409)
+      expect(r.body).not.toHaveProperty('id')
+      expect(JSON.stringify(r.body)).not.toContain(first.body['id'] as string)
+    }
+    // The genuine payment still replays.
+    const again = await paid(base, evmPayment(required, nonce), { key: 'owner-key' })
+    expect(again.body['id']).toBe(first.body['id'])
     expect(fac.settleCalls).toBe(1)
   })
 })

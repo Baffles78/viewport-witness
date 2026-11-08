@@ -106,6 +106,30 @@ export interface PaymentDescription {
   id: string
   /** The wallet that pays, as verification checks it. */
   payer: string
+  /**
+   * Hash of the full signed payment (signature included). The id is built
+   * from values that become public on-chain, so a replay must also match
+   * this before it may return a stored job.
+   */
+  proof: string
+}
+
+function normalizedSigned(value: unknown): unknown {
+  if (typeof value === 'string') {
+    // Hex and decimal strings are compared as numbers, as the verifier parses them.
+    if (/^0x[0-9a-fA-F]+$/.test(value) || /^[0-9]+$/.test(value)) return `0x${BigInt(value).toString(16)}`
+    return value
+  }
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return `0x${value.toString(16)}`
+  if (Array.isArray(value)) return value.map(normalizedSigned)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalizedSigned(v)]))
+  }
+  return value
+}
+
+function sha256(text: string | Uint8Array): string {
+  return createHash('sha256').update(text).digest('hex')
 }
 
 /**
@@ -127,16 +151,15 @@ export function describePayment(paymentPayload: unknown): PaymentDescription | u
   const payload = envelope.payload as Record<string, unknown>
   let key: Record<string, string>
   let payer: string
+  let signed: unknown
   if (network.startsWith('solana:')) {
     if (typeof payload['transaction'] !== 'string') return undefined
     try {
       const transaction = decodeTransactionFromPayload({ transaction: payload['transaction'] })
       payer = getTokenPayerFromTransaction(transaction)
       if (!payer) return undefined
-      key = {
-        kind: 'svm',
-        message: createHash('sha256').update(Uint8Array.from(transaction.messageBytes)).digest('hex'),
-      }
+      key = { kind: 'svm', message: sha256(Uint8Array.from(transaction.messageBytes)) }
+      signed = { transaction: sha256(Buffer.from(payload['transaction'], 'base64')) }
     } catch {
       return undefined
     }
@@ -151,11 +174,17 @@ export function describePayment(paymentPayload: unknown): PaymentDescription | u
     if (typeof from !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(from) || nonce === undefined) return undefined
     payer = from.toLowerCase()
     key = { kind: isPermit2 ? 'permit2' : 'eip3009', asset: asset.toLowerCase(), from: payer, nonce }
+    if (typeof payload['signature'] !== 'string') return undefined
+    signed = { authorization: normalizedSigned(authorization), signature: normalizedSigned(payload['signature']) }
   } else {
     return undefined
   }
   const canonical = canonicalJson({ network, scheme, ...key })
-  return { id: `pid_${createHash('sha256').update(canonical).digest('hex')}`, payer }
+  return {
+    id: `pid_${sha256(canonical)}`,
+    payer,
+    proof: `proof_${sha256(canonicalJson({ network, scheme, signed }))}`,
+  }
 }
 
 export function paymentIdentity(paymentPayload: unknown): string | undefined {
@@ -189,4 +218,17 @@ export function legacyMcpPaymentId(paymentPayload: unknown): string | undefined 
 /** Id used by HTTP rows created before payment identities were unified. */
 export function legacyHeaderPaymentId(header: string | undefined): string | undefined {
   return header ? createHash('sha256').update(header).digest('hex') : undefined
+}
+
+/**
+ * A stored job may be returned for a payment only when that exact signed
+ * payment created it. Rows created before proofs existed were found through a
+ * full-payload legacy id, which already implies the same signature.
+ */
+export function replayAllowed(
+  existing: { paymentId: string | null; paymentProof?: string | null | undefined },
+  description: PaymentDescription | undefined,
+): boolean {
+  if (!existing.paymentProof) return !existing.paymentId?.startsWith('pid_')
+  return Boolean(description && description.proof === existing.paymentProof)
 }

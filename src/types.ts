@@ -241,4 +241,5 @@ export interface JobRecord {
   settlementNetwork?: string | null | undefined
   settlementTx?: string | null | undefined
   settlementNote?: string | null | undefined
+  paymentProof?: string | null | undefined
 }

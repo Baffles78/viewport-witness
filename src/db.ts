@@ -126,6 +126,7 @@ export class JobStore {
       ['settlement_tx', 'TEXT'],
       ['settlement_note', 'TEXT'],
       ['settlement_updated_at', 'INTEGER'],
+      ['payment_proof', 'TEXT'],
     ] as const) {
       if (!columns.some((column) => column.name === name)) {
         this.conn.exec(`ALTER TABLE jobs ADD COLUMN ${name} ${type}`)
@@ -569,6 +570,7 @@ export class JobStore {
     baselineJobId?: string
     idempotencyKey?: string
     paymentId: string
+    paymentProof?: string
     paymentAliases?: string[]
     customerId?: string
     network: string
@@ -607,8 +609,8 @@ export class JobStore {
           .prepare(
             `INSERT INTO jobs (id, url, status, idempotency_key, payment_id, customer_id, created_at,
                expires_at, kind, request_json, baseline_job_id, settlement_state, settlement_network,
-               settlement_updated_at)
-             VALUES (?, ?, 'payment_pending', ?, ?, ?, ?, ?, ?, ?, ?, 'settling', ?, ?)`,
+               settlement_updated_at, payment_proof)
+             VALUES (?, ?, 'payment_pending', ?, ?, ?, ?, ?, ?, ?, ?, 'settling', ?, ?, ?)`,
           )
           .run(
             params.id,
@@ -623,6 +625,7 @@ export class JobStore {
             params.baselineJobId ?? null,
             params.network.slice(0, 100),
             now,
+            params.paymentProof ?? null,
           )
         if (params.idempotencyKey) {
           this.conn
@@ -958,6 +961,7 @@ interface RawJobRow {
   settlement_network?: string | null
   settlement_tx?: string | null
   settlement_note?: string | null
+  payment_proof?: string | null
 }
 
 function rowToRecord(row: RawJobRow): JobRecord {
@@ -988,6 +992,7 @@ function rowToRecord(row: RawJobRow): JobRecord {
     settlementNetwork: row.settlement_network ?? null,
     settlementTx: row.settlement_tx ?? null,
     settlementNote: row.settlement_note ?? null,
+    paymentProof: row.payment_proof ?? null,
   }
 }
 
