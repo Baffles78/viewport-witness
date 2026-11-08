@@ -9,7 +9,7 @@ import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from 
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
-import { legacyMcpPaymentId, paymentIdentity } from './payment/identity.js'
+import { describePayment, legacyMcpPaymentId, payerCustomerId } from './payment/identity.js'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { ExactSvmScheme } from '@x402/svm/exact/server'
 import { z } from 'zod'
@@ -23,7 +23,6 @@ import { createProductJob } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT, DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER } from './config.js'
-import { customerFingerprint } from './payment/index.js'
 import {
   admissionStorage,
   finalizeAdmission,
@@ -224,7 +223,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       return async (args: T, extra: unknown) => {
         const meta = (extra as { _meta?: Record<string, unknown> } | undefined)?._meta
         const paymentPayload = meta?.[MCP_PAYMENT_META_KEY]
-        const paymentId = paymentIdentity(paymentPayload)
+        const described = describePayment(paymentPayload)
+        const paymentId = described?.id
         const legacyId = legacyMcpPaymentId(paymentPayload)
         const paymentAliases = legacyId ? [legacyId] : []
         const findExisting = (): import('./types.js').JobRecord | null => {
@@ -248,9 +248,19 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         if (!runner.isHealthy()) {
           return jsonResult({ error: 'worker_unavailable', code: 'worker_unavailable' }, true)
         }
-        if (!paymentId) {
-          // No usable payment: x402 returns the payment-required result.
+        if (paymentPayload === undefined) {
+          // No payment: x402 returns the payment-required result.
           return paidHandler(args, extra)
+        }
+        const customerId = described ? payerCustomerId(described.payer, cfg.CUSTOMER_HASH_SECRET) : undefined
+        if (!paymentId || !customerId) {
+          // Fail closed: an attempt that cannot be identified or bounded never
+          // reaches the facilitator.
+          return jsonResult({
+            error: 'payment_unrecognized',
+            code: 'payment_unrecognized',
+            detail: 'The payment could not be identified. Nothing was charged.',
+          }, true)
         }
         // Validate the work before any payment step can settle.
         const invalid = await preflightTool(tier, args)
@@ -262,10 +272,6 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
             detail: 'New paid work is paused while earlier payments are reconciled. Nothing was charged.',
           }, true)
         }
-        const customerId = customerFingerprint(
-          Buffer.from(JSON.stringify(paymentPayload)).toString('base64'),
-          cfg.CUSTOMER_HASH_SECRET,
-        )
         const ctx: AdmissionContext = {
           jobId: randomUUID(),
           paymentId,

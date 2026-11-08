@@ -526,9 +526,17 @@ describe('paid admission: every product route and both rails', () => {
     const required = await challenge(base)
     const solana = required.accepts.find((a) => a.network.startsWith('solana:')) as Accept
     expect(solana).toMatchObject({ payTo: SOLANA_PAY_TO, amount: '80000' })
+    // A real signed SVM transaction (offline blockhash) so the payer and
+    // message can be derived exactly as in production.
+    const { generateKeyPairSigner } = await import('@solana/kit')
+    const { ExactSvmScheme: ExactSvmClient, toClientSvmSigner } = await import('@x402/svm')
+    const client = new ExactSvmClient(toClientSvmSigner(await generateKeyPairSigner()))
+    const signed = await client.createPaymentPayload(2, {
+      ...solana,
+      extra: { ...solana.extra, recentBlockhash: '11111111111111111111111111111111', lastValidBlockHeight: '1' },
+    } as never)
     const header = Buffer.from(JSON.stringify({
-      x402Version: 2, resource: required.resource, accepted: solana,
-      payload: { transaction: Buffer.from('synthetic-solana-transaction').toString('base64') },
+      x402Version: 2, resource: required.resource, accepted: solana, payload: signed.payload,
     })).toString('base64')
     const r = await paid(base, header)
     expect(r.status).toBe(202)
@@ -754,5 +762,66 @@ describe('paid admission: review hardening', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('paid admission: payment identity', () => {
+  const accepted = {
+    scheme: 'exact', network: 'eip155:8453', amount: '80000',
+    asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', payTo: PAY_TO, maxTimeoutSeconds: 60,
+  }
+  const auth = {
+    from: '0xAbCdEf0000000000000000000000000000000001', to: PAY_TO, value: '80000',
+    validAfter: '0', validBefore: '9999999999', nonce: `0x${'0'.repeat(62)}2a`,
+  }
+  const envelope = (authorization: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+    x402Version: 2, resource: { url: 'https://x/v1/checks' }, accepted,
+    payload: { authorization, signature: `0x${'b'.repeat(130)}`, ...extra },
+  })
+
+  it('gives every encoding of one EVM authorization the same id and payer', async () => {
+    const { describePayment } = await import('../src/payment/identity.js')
+    const base = describePayment(envelope(auth))
+    expect(base?.id).toMatch(/^pid_[a-f0-9]{64}$/)
+    expect(base?.payer).toBe(auth.from.toLowerCase())
+    for (const variant of [
+      envelope({ ...auth, value: '0x13880', validBefore: '09999999999' }),
+      envelope({ ...auth, from: auth.from.toLowerCase(), nonce: '0x2A' }),
+      envelope({ ...auth, nonce: '42' }),
+      envelope(auth, { transaction: 'junk-field' }),
+    ]) {
+      expect(describePayment(variant)).toEqual(base)
+    }
+    expect(describePayment(envelope({ ...auth, nonce: '43' }))?.id).not.toBe(base?.id)
+    expect(describePayment(envelope({ ...auth, from: '0x1' }))).toBeUndefined()
+  })
+
+  it('refuses a payment it cannot identify before any facilitator call', async () => {
+    const { runner } = makeRunner()
+    const base = await serve(makeCfg(), runner)
+    await challenge(base)
+    const header = Buffer.from(JSON.stringify(envelope({ ...auth, nonce: 'not-a-number' }))).toString('base64')
+    const r = await paid(base, header)
+    expect(r.status).toBe(400)
+    expect(r.body).toMatchObject({ code: 'payment_unrecognized' })
+    expect(fac.verifyCalls + fac.settleCalls).toBe(0)
+    expect(jobCount()).toBe(0)
+  })
+
+  it('applies the per-payer cap even when junk fields are added to the payment', async () => {
+    const { runner } = makeRunner()
+    const base = await serve({ ...makeCfg(10), PAYMENT_UNRESOLVED_PER_PAYER: 1 } as Config, runner)
+    const required = await challenge(base)
+    fac.settle = async () => { throw new Error('socket hang up') }
+    const attacker = '0x4444444444444444444444444444444444444444'
+    const withJunk = (h: string) => {
+      const d = JSON.parse(Buffer.from(h, 'base64').toString('utf8')) as { payload: Record<string, unknown> }
+      d.payload['transaction'] = 'x'
+      return Buffer.from(JSON.stringify(d)).toString('base64')
+    }
+    expect((await paid(base, withJunk(evmPayment(required, undefined, attacker)))).status).toBe(202)
+    const second = await paid(base, withJunk(evmPayment(required, undefined, attacker)))
+    expect(second.status).toBe(429)
+    expect(fac.settleCalls).toBe(1)
   })
 })

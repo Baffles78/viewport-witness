@@ -27,6 +27,8 @@ import {
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from '@x402/extensions/bazaar'
 import { randomUUID } from 'node:crypto'
 import {
+  describePayment,
+  payerCustomerId,
   decodePaymentHeader,
   legacyHeaderPaymentId,
   legacyMcpPaymentId,
@@ -557,7 +559,19 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
       await legacy(req, res, next)
       return
     }
-    const paymentId = paymentFingerprint(req) as string
+    const described = describePayment(decodePaymentHeader(paymentHeader))
+    const customerId = described ? payerCustomerId(described.payer, customerHashSecret) : undefined
+    if (!described || (admission.payerUnresolvedLimit !== undefined && !customerId)) {
+      // Fail closed: without a stable payment id and payer the attempt could
+      // not be deduplicated or bounded, so it never reaches the facilitator.
+      res.status(400).json({
+        error: 'payment_unrecognized',
+        code: 'payment_unrecognized',
+        detail: 'The payment could not be identified. Nothing was charged.',
+      })
+      return
+    }
+    const paymentId = described.id
     const paymentAliases = paymentFingerprintAliases(req)
     const lookupIds = [paymentId, ...paymentAliases]
     const intent = req.jobIntent
@@ -587,7 +601,6 @@ export function createPaymentMiddleware(opts: PaymentMiddlewareOptions): Request
 
     const rawKey = req.headers['idempotency-key']
     const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey
-    const customerId = customerFingerprint(paymentHeader, customerHashSecret)
     const ctx: AdmissionContext = {
       jobId: randomUUID(),
       paymentId,

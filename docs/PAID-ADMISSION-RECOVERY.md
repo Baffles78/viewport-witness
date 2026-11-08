@@ -19,10 +19,13 @@ payment on either rail.
 ## What happens to a paid request
 
 1. Unsigned request: unchanged 402 challenge (Base and Solana requirements).
-2. Every signed payment gets one id from its signed content (EVM authorization
-   or Permit2 fields, or the Solana transaction message), independent of JSON
-   encoding, hex case and transport, so the same payment over HTTP and MCP is
-   one payment. Ids written before this change are still recognised.
+2. Every payment gets one id from the authorization settlement would spend:
+   EVM (network, asset, payer, nonce), since the token or Permit2 lets a nonce
+   be spent once; Solana, the signed transaction message. JSON encoding,
+   number formats, hex case, extra fields and transport do not change it, so
+   the same payment over HTTP and MCP is one payment. Ids written before this
+   change are still recognised. A payment whose id or payer cannot be derived
+   gets 400 `payment_unrecognized` before any facilitator call.
    Signed request whose payment id already has a job: the same job is
    returned if the request is the same work; different work gets 409 with no
    job id. Nothing is settled again.

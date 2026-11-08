@@ -116,6 +116,12 @@ export function installAdmissionHooks(
     if (!ctx || ctx.phase !== 'verified') {
       return { abort: true as const, reason: 'payment_admission_unavailable' }
     }
+    if (payerUnresolvedLimit !== undefined && !ctx.customerId) {
+      // The per-payer bound cannot be applied, so the attempt is refused.
+      ctx.phase = 'not_admitted'
+      ctx.notAdmitted = { reason: 'store_error' }
+      return { abort: true as const, reason: 'payment_admission_unavailable' }
+    }
     try {
       const result = store.admitPaymentAttempt({
         id: ctx.jobId,

@@ -1,14 +1,13 @@
 /**
- * Payment identity: one id per signed payment, independent of how the
- * envelope is encoded or which transport (HTTP header or MCP _meta) carried
- * it. Unsigned fields, key order, whitespace, hex case and base64 variants do
- * not change the id, so a re-encoded copy of one payment cannot be admitted or
+ * Payment identity: one id per spendable authorization, independent of how
+ * the envelope is encoded or which transport (HTTP header or MCP _meta)
+ * carried it, so a re-encoded copy of one payment cannot be admitted or
  * settled twice.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { PaymentPayloadSchema } from '@x402/core/schemas'
-import { decodeTransactionFromPayload } from '@x402/svm'
+import { decodeTransactionFromPayload, getTokenPayerFromTransaction } from '@x402/svm'
 
 const MAX_ENVELOPE_BYTES = 64 * 1024
 
@@ -92,37 +91,81 @@ function signedPaymentIdentity(
   return { network, scheme, signedIdentity }
 }
 
-function normalizeHex(value: unknown): unknown {
-  if (typeof value === 'string') return /^0x[0-9a-fA-F]*$/.test(value) ? value.toLowerCase() : value
-  if (Array.isArray(value)) return value.map(normalizeHex)
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalizeHex(v)]))
-  }
-  return value
-}
-
-function solanaMessageDigest(transaction: string): string | undefined {
+function bigintText(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
   try {
-    const decoded = decodeTransactionFromPayload({ transaction })
-    return createHash('sha256').update(Uint8Array.from(decoded.messageBytes)).digest('hex')
+    const n = BigInt(value)
+    return n >= 0n ? n.toString(16) : undefined
   } catch {
     return undefined
   }
 }
 
-/** Transport-independent id for a signed payment, or undefined if unusable. */
-export function paymentIdentity(paymentPayload: unknown): string | undefined {
-  const identity = signedPaymentIdentity(paymentPayload)
-  if (!identity) return undefined
-  let signed: unknown = normalizeHex(identity.signedIdentity)
-  if (identity.network.startsWith('solana:')) {
-    const transaction = identity.signedIdentity['transaction'] as string
-    const digest = solanaMessageDigest(transaction)
-    signed = digest ? { message: digest } : { transaction }
+export interface PaymentDescription {
+  /** One id per spendable authorization, whatever its encoding or transport. */
+  id: string
+  /** The wallet that pays, as verification checks it. */
+  payer: string
+}
+
+/**
+ * Identifies the authorization that settlement would spend. EVM payments are
+ * keyed on (network, asset, payer, nonce): the token contract or Permit2 lets a
+ * nonce be spent once, so two envelopes with the same key can never both
+ * settle, however their other fields are written. The variant is chosen the
+ * way x402 chooses it (Permit2 when `permit2Authorization` is present). Solana
+ * payments are keyed on the signed transaction message. Anything else returns
+ * undefined, and the caller refuses the payment before verification.
+ */
+export function describePayment(paymentPayload: unknown): PaymentDescription | undefined {
+  const parsed = PaymentPayloadSchema.safeParse(paymentPayload)
+  if (!parsed.success) return undefined
+  const envelope = parsed.data
+  const network = envelope.x402Version === 1 ? envelope.network : envelope.accepted.network
+  const scheme = envelope.x402Version === 1 ? envelope.scheme : envelope.accepted.scheme
+  const asset = envelope.x402Version === 1 ? '' : String(envelope.accepted.asset ?? '')
+  const payload = envelope.payload as Record<string, unknown>
+  let key: Record<string, string>
+  let payer: string
+  if (network.startsWith('solana:')) {
+    if (typeof payload['transaction'] !== 'string') return undefined
+    try {
+      const transaction = decodeTransactionFromPayload({ transaction: payload['transaction'] })
+      payer = getTokenPayerFromTransaction(transaction)
+      if (!payer) return undefined
+      key = {
+        kind: 'svm',
+        message: createHash('sha256').update(Uint8Array.from(transaction.messageBytes)).digest('hex'),
+      }
+    } catch {
+      return undefined
+    }
+  } else if (network.startsWith('eip155:')) {
+    const isPermit2 = 'permit2Authorization' in payload
+    const authorization = (isPermit2 ? payload['permit2Authorization'] : payload['authorization']) as
+      | Record<string, unknown>
+      | undefined
+    if (!authorization || typeof authorization !== 'object') return undefined
+    const from = authorization['from']
+    const nonce = bigintText(authorization['nonce'])
+    if (typeof from !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(from) || nonce === undefined) return undefined
+    payer = from.toLowerCase()
+    key = { kind: isPermit2 ? 'permit2' : 'eip3009', asset: asset.toLowerCase(), from: payer, nonce }
+  } else {
+    return undefined
   }
-  const canonical = canonicalJson({ network: identity.network, scheme: identity.scheme, signed })
-  if (canonical.length > MAX_ENVELOPE_BYTES) return undefined
-  return `pid_${createHash('sha256').update(canonical).digest('hex')}`
+  const canonical = canonicalJson({ network, scheme, ...key })
+  return { id: `pid_${createHash('sha256').update(canonical).digest('hex')}`, payer }
+}
+
+export function paymentIdentity(paymentPayload: unknown): string | undefined {
+  return describePayment(paymentPayload)?.id
+}
+
+/** Keyed, one-way label for a verified payer; the raw address is never stored. */
+export function payerCustomerId(payer: string, secret: string | undefined): string | undefined {
+  if (!secret || secret.length < 32) return undefined
+  return `cust_${createHmac('sha256', secret).update(payer).digest('hex')}`
 }
 
 export function decodePaymentHeader(header: string | undefined): unknown {
