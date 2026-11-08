@@ -16,7 +16,10 @@ export async function observeLayout(page: Page, timeoutMs = 5_000): Promise<Layo
     })
     const result = await Promise.race([
       page.evaluate(() => {
-          const overflow = document.body.scrollWidth > window.innerWidth
+          const overflow = Math.max(
+            document.body.scrollWidth,
+            document.documentElement.scrollWidth,
+          ) > window.innerWidth
           const allElements = Array.from(document.querySelectorAll('*'))
           const offscreen = allElements.filter((el) => {
             const rect = el.getBoundingClientRect()

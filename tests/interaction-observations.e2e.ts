@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { chromium, type Browser, type Page } from 'playwright'
 import { observeInteraction } from '../src/worker/interaction.js'
-import { observeLayout } from '../src/worker/layout.js'
+import { observeLayout, evaluateNoHorizontalOverflow } from '../src/worker/layout.js'
 
 describe('interaction observations in Chromium', () => {
   let browser: Browser
@@ -58,6 +58,32 @@ describe('interaction observations in Chromium', () => {
     const result = await observeLayout(page)
     expect(result.layoutObservation).toBe('measured')
     expect(result.overflowDetected).toBe(true)
+  })
+
+  it.each([
+    [375, 812],
+    [812, 375],
+    [1440, 900],
+  ])('records root-only overflow at %i x %i', async (width, height) => {
+    const originalViewport = page.viewportSize()!
+    try {
+      await page.setViewportSize({ width, height })
+      await page.setContent('<!doctype html><html><head><style>html{min-width:calc(100vw + 60px)}body{width:100vw;margin:0}</style></head><body><main>Root overflow</main></body></html>')
+      const dimensions = await page.evaluate(() => ({
+        body: document.body.scrollWidth,
+        root: document.documentElement.scrollWidth,
+        viewport: window.innerWidth,
+      }))
+      expect(dimensions.body).toBe(dimensions.viewport)
+      expect(dimensions.root).toBe(dimensions.viewport + 60)
+      const result = await observeLayout(page)
+      expect(result.layoutObservation).toBe('measured')
+      expect(result.offscreenElements).toBe(0)
+      expect(result.overflowDetected).toBe(true)
+      expect(evaluateNoHorizontalOverflow(result).passed).toBe(false)
+    } finally {
+      await page.setViewportSize(originalViewport)
+    }
   })
 
   it('records a measured clean layout', async () => {
