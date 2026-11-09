@@ -2,7 +2,6 @@
   "note": "Code files that were over 500 lines when the size rule started. They may shrink but never grow. Lower an entry whenever its file shrinks (npm run check:size -- --update). Never add new entries or raise a number.",
   "ceilings": {
     "src/db.ts": 998,
-    "src/mcp.ts": 542,
     "src/payment/index.ts": 825,
     "src/release-check.ts": 544,
     "tests/agent-result.test.ts": 547,
