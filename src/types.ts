@@ -70,6 +70,9 @@ export interface ViewportDimensions {
   height: number
 }
 
+// The three viewports in report order. Use this instead of writing the list out.
+export const VIEWPORT_NAMES: readonly Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
+
 export const VIEWPORTS: Record<Viewport, ViewportDimensions> = {
   phonePortrait: { width: 375, height: 812 },
   phoneLandscape: { width: 812, height: 375 },

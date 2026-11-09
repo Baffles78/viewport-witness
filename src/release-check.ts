@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { validatePublicHttpsUrl } from './ssrf.js'
 import { buildAgentResult } from './agent-result.js'
-import type { QAReport } from './types.js'
+import { VIEWPORT_NAMES, type QAReport } from './types.js'
 
 type Decision = 'PASS' | 'FAIL' | 'INCONCLUSIVE'
 export type Requirement = {
@@ -515,7 +515,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       `\n## Page ${r.index + 1}: ${r.decision}`,
       r.url,
       `[Report evidence](${r.reportUrl})`,
-      ...['phonePortrait', 'phoneLandscape', 'desktop'].map(
+      ...VIEWPORT_NAMES.map(
         (v) => `[${v} screenshot](${r.reportUrl}/screenshots/${v})`,
       ),
       ...r.reasons.map((x) => '- ' + x),

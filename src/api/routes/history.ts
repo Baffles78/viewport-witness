@@ -5,11 +5,11 @@ import { z } from 'zod'
 import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { archiveUrlKey, isSnapshotId, type ArchiveManager } from '../../archive.js'
-import type { Viewport } from '../../types.js'
+import { VIEWPORT_NAMES, type Viewport } from '../../types.js'
 import { challengeIfUnsigned } from './products.js'
 import { asyncHandler } from '../http-helpers.js'
 
-const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
+const VALID_VIEWPORTS = new Set<string>(VIEWPORT_NAMES)
 
 const historySchema = z
   .object({

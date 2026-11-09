@@ -13,6 +13,7 @@ import type {
   VisualComparisonResult,
   StoredReport,
 } from '../types.js'
+import { VIEWPORT_NAMES } from '../types.js'
 import { runViewportCheck } from './browser.js'
 import { summarizeAssertions } from './assertions.js'
 import type { ArchiveManager } from '../archive.js'
@@ -20,7 +21,6 @@ import { buildDiagnosis } from '../report-guidance.js'
 import { fetchBoundedHtml, WEB_JOB_BUDGET_MS } from '../web-products.js'
 import { runBoundedWebAnalysis } from '../web-analysis-runner.js'
 
-const VIEWPORTS_ORDER: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 
 interface QueueItem {
   jobId: string
@@ -282,7 +282,7 @@ export class WorkerRunner {
       'Keyboard observations measure potential focusability only; Tab traversal and keyboard activation were not tested.',
     ]
 
-    for (const viewport of VIEWPORTS_ORDER) {
+    for (const viewport of VIEWPORT_NAMES) {
       if (signal.aborted) throw new Error('job_aborted')
       try {
         const result = await runViewportCheck(
@@ -537,7 +537,7 @@ export class WorkerRunner {
     const baseline = JSON.parse(await fs.readFile(baselineJob.reportPath, 'utf8')) as QAReport
     const visual: Partial<Record<Viewport, VisualComparisonResult>> = {}
     const evidenceLimitations: string[] = []
-    for (const viewport of VIEWPORTS_ORDER) {
+    for (const viewport of VIEWPORT_NAMES) {
       const baselineShot = this.store.getScreenshot(baselineJobId, viewport)
       const currentShot = this.store.getScreenshot(jobId, viewport)
       const current = currentViewports[viewport]
@@ -598,7 +598,7 @@ export class WorkerRunner {
     return {
       baselineJobId,
       evidenceComplete:
-        evidenceLimitations.length === 0 && Object.keys(visual).length === VIEWPORTS_ORDER.length,
+        evidenceLimitations.length === 0 && Object.keys(visual).length === VIEWPORT_NAMES.length,
       evidenceLimitations,
       visual,
       accessibility: {
@@ -638,7 +638,7 @@ export class WorkerRunner {
 
     if (hasLoadFailure || hasCriticalViolations || hasFunctionalFailure) return 'FAIL'
 
-    const allViewportsCovered = VIEWPORTS_ORDER.every((v) => viewports[v] !== undefined)
+    const allViewportsCovered = VIEWPORT_NAMES.every((v) => viewports[v] !== undefined)
     if (!allViewportsCovered) return 'INCONCLUSIVE'
 
     const evidenceComplete = results.every(

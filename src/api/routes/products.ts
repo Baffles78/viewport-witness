@@ -7,7 +7,7 @@ import type { Config } from '../../config.js'
 import type { JobStore } from '../../db.js'
 import { validatePublicHttpsUrl } from '../../ssrf.js'
 import { canReplayJob, sameJobIntent } from '../../idempotency-replay.js'
-import type { JobKind, PageAssertion } from '../../types.js'
+import { VIEWPORT_NAMES, type JobKind, type PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { asyncHandler, readIdempotencyKey } from '../http-helpers.js'
 
@@ -72,10 +72,8 @@ const compareSchema = z
   })
   .strict()
 
-const REQUIRED_VIEWPORTS = ['phonePortrait', 'phoneLandscape', 'desktop'] as const
-
 export function hasCompleteBaselineScreenshots(store: JobStore, jobId: string): boolean {
-  return REQUIRED_VIEWPORTS.every((viewport) => store.getScreenshot(jobId, viewport) !== null)
+  return VIEWPORT_NAMES.every((viewport) => store.getScreenshot(jobId, viewport) !== null)
 }
 
 function paymentIdentity(

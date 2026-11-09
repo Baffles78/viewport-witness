@@ -9,7 +9,7 @@ import { validatePublicHttpsUrl } from '../../ssrf.js'
 import type { JobStore } from '../../db.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import type { Config } from '../../config.js'
-import type { StoredReport, Viewport } from '../../types.js'
+import { VIEWPORT_NAMES, type StoredReport, type Viewport } from '../../types.js'
 import { FEEDBACK_URL } from '../../public.js'
 import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
@@ -17,7 +17,7 @@ import { canReplayJob } from '../../idempotency-replay.js'
 import { activateAdmittedJob, challengeIfUnsigned, requireWorkerAvailable } from './products.js'
 import { asyncHandler, readIdempotencyKey } from '../http-helpers.js'
 
-const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
+const VALID_VIEWPORTS = new Set<string>(VIEWPORT_NAMES)
 
 const createCheckSchema = z.object({ url: z.string().url().max(2048) }).strict()
 
