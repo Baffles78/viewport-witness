@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { WorkerRunner } from '../src/worker/runner.js'
+import { computeReportStatus } from '../src/worker/verdict.js'
 
 type Observation = Record<string, unknown>
 const compute = (viewports: Record<string, Observation>): string =>
-  (WorkerRunner.prototype as unknown as {
-    computeReportStatus: (value: Record<string, Observation>) => string
-  }).computeReportStatus(viewports)
+  computeReportStatus(viewports as never)
 
 function viewport(layoutObservation: 'measured' | 'unavailable', overflowDetected = false) {
   return {
