@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import type { Request, RequestHandler, Router } from 'express'
 import { unresolvedReplayBody } from '../../payment/admission.js'
 import { Router as createRouter } from 'express'
 import { z } from 'zod'
@@ -8,6 +8,7 @@ import { validatePublicHttpsUrl } from '../../ssrf.js'
 import { canReplayJob } from '../../idempotency-replay.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { challengeIfUnsigned, createProductJob, requireWorkerAvailable, sendProductJob } from './products.js'
+import { asyncHandler, readIdempotencyKey } from '../http-helpers.js'
 
 const extractSchema = z
   .object({
@@ -16,17 +17,6 @@ const extractSchema = z
   })
   .strict()
 const securitySchema = z.object({ url: z.string().url().max(2048) }).strict()
-
-function asyncHandler(
-  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-): RequestHandler {
-  return (req, res, next): void => void handler(req, res, next).catch(next)
-}
-
-function idempotencyKey(req: Request): string | undefined {
-  const raw = req.headers['idempotency-key']
-  return Array.isArray(raw) ? raw[0] : raw
-}
 
 export function createWebProductsRouter(
   store: JobStore,
@@ -77,7 +67,7 @@ export function createWebProductsRouter(
         next()
       }),
         (req, res, next) => {
-        const key = idempotencyKey(req)
+        const key = readIdempotencyKey(req)
         if (!key) {
           next()
           return
@@ -138,7 +128,7 @@ export function createWebProductsRouter(
           res.status(402).json({ error: 'payment_required', code: 'payment_required' })
           return
         }
-        const key = idempotencyKey(req)
+        const key = readIdempotencyKey(req)
         await sendProductJob(res, createProductJob({
           store,
           runner,

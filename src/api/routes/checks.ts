@@ -15,6 +15,7 @@ import { buildAgentResult } from '../../agent-result.js'
 import { reconcileJobStatus } from '../../job-reconciliation.js'
 import { canReplayJob } from '../../idempotency-replay.js'
 import { activateAdmittedJob, challengeIfUnsigned, requireWorkerAvailable } from './products.js'
+import { asyncHandler, readIdempotencyKey } from '../http-helpers.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -29,22 +30,9 @@ declare global {
   }
 }
 
-function readIdempotencyKey(req: Request): string | undefined {
-  const rawKey = req.headers['idempotency-key']
-  return Array.isArray(rawKey) ? rawKey[0] : rawKey
-}
-
 function isPathInside(root: string, candidate: string): boolean {
   const relative = path.relative(path.resolve(root), path.resolve(candidate))
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
-}
-
-function asyncHandler(
-  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-): RequestHandler {
-  return (req, res, next): void => {
-    void handler(req, res, next).catch(next)
-  }
 }
 
 export function createChecksRouter(

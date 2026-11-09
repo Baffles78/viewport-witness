@@ -1,7 +1,6 @@
 {
   "note": "Code files that were over 500 lines when the size rule started. They may shrink but never grow. Lower an entry whenever its file shrinks (npm run check:size -- --update). Never add new entries or raise a number.",
   "ceilings": {
-    "src/api/routes/checks.ts": 505,
     "src/db.ts": 998,
     "src/mcp.ts": 544,
     "src/openapi.ts": 1233,

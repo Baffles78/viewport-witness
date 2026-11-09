@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs'
-import type { NextFunction, Request, RequestHandler, Response, Router } from 'express'
+import type { RequestHandler, Response, Router } from 'express'
 import { Router as createRouter } from 'express'
 import { z } from 'zod'
 import type { Config } from '../../config.js'
@@ -7,6 +7,7 @@ import type { JobStore } from '../../db.js'
 import { archiveUrlKey, isSnapshotId, type ArchiveManager } from '../../archive.js'
 import type { Viewport } from '../../types.js'
 import { challengeIfUnsigned } from './products.js'
+import { asyncHandler } from '../http-helpers.js'
 
 const VALID_VIEWPORTS = new Set<string>(['phonePortrait', 'phoneLandscape', 'desktop'])
 
@@ -25,12 +26,6 @@ declare global {
       historyQuery?: { urlKey: string; limit: number; beforeMs?: number }
     }
   }
-}
-
-function asyncHandler(
-  handler: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-): RequestHandler {
-  return (req, res, next): void => void handler(req, res, next).catch(next)
 }
 
 function invalidUrl(res: Response): void {
