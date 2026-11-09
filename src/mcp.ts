@@ -25,7 +25,7 @@ import { PUBLIC_BASE_URL } from './public.js'
 import { validatePublicHttpsUrl } from './ssrf.js'
 import type { PageAssertion, StoredReport } from './types.js'
 import type { WorkerRunner } from './worker/runner.js'
-import { createProductJob } from './api/routes/products.js'
+import { createProductJob, hasCompleteBaselineScreenshots } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_PAYMENT_UNRESOLVED_LIMIT, DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER } from './config.js'
@@ -360,9 +360,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           baseline.status !== 'complete' ||
           !baseline.reportPath ||
           baseline.expiresAt <= Date.now() ||
-          !['phonePortrait', 'phoneLandscape', 'desktop'].every((viewport) =>
-            store.getScreenshot(baseline.id, viewport as 'phonePortrait'),
-          )
+          !hasCompleteBaselineScreenshots(store, baseline.id)
         ) {
           return jsonResult({ error: 'baseline_or_url_unavailable' }, true)
         }

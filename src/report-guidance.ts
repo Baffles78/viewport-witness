@@ -1,6 +1,5 @@
-import type { QAReport, Viewport, ViewportResult } from './types.js'
+import { VIEWPORT_NAMES, type QAReport, type Viewport, type ViewportResult } from './types.js'
 
-const VIEWPORTS: Viewport[] = ['phonePortrait', 'phoneLandscape', 'desktop']
 const MAX_FINDINGS = 12
 const MAX_LOCATORS = 5
 
@@ -30,7 +29,7 @@ function addFinding(findings: Finding[], next: Finding): void {
     findings.push(next)
     return
   }
-  existing.viewports = VIEWPORTS.filter(
+  existing.viewports = VIEWPORT_NAMES.filter(
     (viewport) => existing.viewports.includes(viewport) || next.viewports.includes(viewport),
   )
   existing.locatorHints = [...new Set([...existing.locatorHints, ...next.locatorHints])].slice(
@@ -52,7 +51,7 @@ export function buildDiagnosis(
 ): QAReport['diagnosis'] {
   const findings: Finding[] = []
 
-  for (const viewport of VIEWPORTS) {
+  for (const viewport of VIEWPORT_NAMES) {
     const result = viewports[viewport]
     if (!result) continue
 
@@ -115,7 +114,7 @@ export function buildDiagnosis(
   }
 
   if (evidence.assertions && evidence.assertions.failed > 0) {
-    const failedViewports = VIEWPORTS.filter((viewport) =>
+    const failedViewports = VIEWPORT_NAMES.filter((viewport) =>
       (evidence.assertions?.results[viewport] ?? []).some(
         (assertion) => !assertion.passed && assertion.measured !== false,
       ),
@@ -131,7 +130,7 @@ export function buildDiagnosis(
   }
 
   if (evidence.comparison && !evidence.comparison.evidenceComplete) {
-    const missingViewports = VIEWPORTS.filter((viewport) => !evidence.comparison?.visual[viewport])
+    const missingViewports = VIEWPORT_NAMES.filter((viewport) => !evidence.comparison?.visual[viewport])
     addFinding(findings, {
       code: 'incomplete-comparison-evidence',
       severity: 'high',
@@ -144,7 +143,7 @@ export function buildDiagnosis(
   }
 
   if (evidence.comparison) {
-    const changedViewports = VIEWPORTS.filter(
+    const changedViewports = VIEWPORT_NAMES.filter(
       (viewport) => (evidence.comparison?.visual[viewport]?.changedPixels ?? 0) > 0,
     )
     if (changedViewports.length > 0) {
