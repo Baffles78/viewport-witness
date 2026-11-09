@@ -28,3 +28,7 @@ This repository is a standalone, machine-facing browser QA service.
 - Include unit, integration, security-boundary, and local end-to-end checks.
 - Keep operations understandable to a non-technical owner: one setup guide, one runbook, and plain error messages.
 
+
+## Keeping the code organized
+
+Follow the "Keeping the code organized" section in `CLAUDE.md`: one job per file, where each kind of code goes, the 300/500 line size limits (`npm run check:size`), reuse before writing, no backup copies, and no hand-edited generated files.

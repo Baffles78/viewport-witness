@@ -30,8 +30,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run check:size
       - run: npm test
-      - run: node --test scripts/registry-publish-guard.test.mjs
+      - run: node --test scripts/registry-publish-guard.test.mjs scripts/check-file-sizes.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build

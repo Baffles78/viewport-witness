@@ -22,6 +22,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:all": "vitest run",
     "test:watch": "vitest",
+    "check:size": "node scripts/check-file-sizes.mjs",
     "check:discovery": "node scripts/check-agent-discovery.mjs",
     "check:page": "node scripts/first-check.mjs",
     "demo:buyer": "node scripts/demo-buyer-workflow.mjs"
