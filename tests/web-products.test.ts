@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  buildExtractReport,
-  buildSecurityReport,
   createPinnedLookup,
   fetchBoundedHtml,
-  htmlToMarkdown,
   type PinnedRequester,
   type PublicResolver,
 } from '../src/web-products.js'
+import { buildExtractReport, htmlToMarkdown } from '../src/web-extract.js'
+import { buildSecurityReport } from '../src/web-security-gate.js'
 
 const publicResolver: PublicResolver = vi.fn(async (hostname: string) =>
   hostname.includes('blocked')

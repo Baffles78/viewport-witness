@@ -37,8 +37,8 @@ These rules apply to every agent and person working here. `AGENTS.md` points her
 | x402 payments, admission, payer identity | `src/payment/` and `src/x402-adapter.ts` (risky: ask first) |
 | URL safety and SSRF blocking | `src/ssrf.ts` (risky: ask first) |
 | Saving and loading data (SQLite) | `src/db.ts` now; new tables or queries go in `src/db/<area>.ts` |
-| Browser worker (Playwright, viewports, checks) | `src/worker/` |
-| Lightweight HTML products (extract, release gate) | `src/web-*.ts` |
+| Browser worker (Playwright, viewports, checks) | `src/worker/`: `runner.ts` (queue and jobs), `browser.ts` (one viewport), one file per check (`accessibility.ts`, `page-assertions.ts`, `layout.ts`, `interaction.ts`), `verdict.ts`, `comparison.ts` |
+| Lightweight HTML products | `src/web-products.ts` (bounded, SSRF-pinned fetch: risky), `src/web-extract.ts`, `src/web-security-gate.ts`, `src/web-analysis-runner.ts` + `src/web-parser-worker.ts` |
 | Report shaping for agents | `src/agent-result.ts`, `src/report-guidance.ts`, `src/recheck.ts` |
 | Settings read from the environment | `src/config.ts` only; every threshold and price stays configurable via `.env` |
 | Shared types | `src/types.ts` |

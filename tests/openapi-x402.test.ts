@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { openApiSpec } from '../src/openapi.js'
-import { buildExtractReport, buildSecurityReport } from '../src/web-products.js'
+import { buildExtractReport } from '../src/web-extract.js'
+import { buildSecurityReport } from '../src/web-security-gate.js'
 
 type PathItem = Record<string, unknown>
 type Operation = {
