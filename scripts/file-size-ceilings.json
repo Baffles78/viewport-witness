@@ -4,11 +4,6 @@
     "src/db.ts": 998,
     "src/payment/index.ts": 825,
     "src/release-check.ts": 544,
-    "tests/agent-result.test.ts": 547,
-    "tests/info.test.ts": 516,
-    "tests/mcp-discovery.test.ts": 511,
-    "tests/paid-admission-recovery.test.ts": 861,
-    "tests/payment.test.ts": 542,
-    "tests/release-check.test.ts": 671
+    "tests/paid-admission-recovery.test.ts": 861
   }
 }
