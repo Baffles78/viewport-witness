@@ -2,16 +2,16 @@ import crypto from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import type { Browser, Page } from 'playwright'
-import { AxeBuilder } from '@axe-core/playwright'
 import { validatePublicHttpsUrl } from '../ssrf.js'
 import { observeInteraction } from './interaction.js'
-import { observeLayout, evaluateNoHorizontalOverflow } from './layout.js'
+import { observeLayout } from './layout.js'
+import { runAccessibilityCheck } from './accessibility.js'
+import { evaluatePageAssertions } from './page-assertions.js'
+import { withTimeout } from './timeout.js'
 import type {
   Viewport,
   ViewportResult,
-  AccessibilityViolation,
   PageAssertion,
-  AssertionResult,
   PerformanceEvidence,
 } from '../types.js'
 import { VIEWPORTS as VP } from '../types.js'
@@ -21,18 +21,6 @@ const MAX_RESPONSE_BYTES = 15 * 1024 * 1024 // 15 MB
 const MAX_CONSOLE_ERRORS = 50
 const MAX_FAILED_REQUESTS = 50
 const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: NodeJS.Timeout | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(label)), timeoutMs)
-  })
-  try {
-    return await Promise.race([promise, timeout])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
 
 function redactUrl(rawUrl: string): string {
   try {
@@ -246,88 +234,7 @@ export async function runViewportCheck(
     }
 
     // Accessibility check
-    let accessibilityResult: ViewportResult['accessibility'] = {
-      completed: false,
-      violations: [],
-      passes: 0,
-      incomplete: 0,
-      impact: {},
-    }
-
-    try {
-      const axeResults = await withTimeout(
-        new AxeBuilder({ page })
-          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'best-practice'])
-          .analyze(),
-        10_000,
-        'accessibility_timeout',
-      )
-
-      let remainingLocatorHints = 20
-      const violations: AccessibilityViolation[] = await Promise.all(
-        axeResults.violations.slice(0, 50).map(async (v) => ({
-          id: v.id,
-          impact: (v.impact as AccessibilityViolation['impact']) ?? null,
-          description: v.description,
-          helpUrl: v.helpUrl,
-          nodes: await Promise.all(
-            v.nodes.slice(0, 5).map(async (n) => {
-              let locator: string | undefined
-              const target = n.target[0]
-              if (typeof target === 'string' && remainingLocatorHints > 0) {
-                remainingLocatorHints--
-                try {
-                  locator = await page
-                    .locator(target)
-                    .first()
-                    .evaluate((element) => {
-                      const parts: string[] = []
-                      let current: Element | null = element
-                      while (current && parts.length < 5 && current !== document.documentElement) {
-                        const tag = current.tagName.toLowerCase()
-                        const siblings = current.parentElement
-                          ? Array.from(current.parentElement.children).filter(
-                              (sibling) => sibling.tagName === current?.tagName,
-                            )
-                          : []
-                        const position = Math.max(1, siblings.indexOf(current) + 1)
-                        parts.unshift(`${tag}:nth-of-type(${position})`)
-                        current = current.parentElement
-                      }
-                      return parts.join(' > ').slice(0, 200)
-                    })
-                } catch {
-                  // Keep the finding without a locator if the node cannot be resolved.
-                }
-              }
-              return {
-                html: '[redacted]',
-                failureSummary: n.failureSummary?.slice(0, 500) ?? '',
-                ...(locator ? { locator } : {}),
-              }
-            }),
-          ),
-          count: v.nodes.length,
-        })),
-      )
-
-      const impactCounts: Record<string, number> = {}
-      for (const v of violations) {
-        if (v.impact) {
-          impactCounts[v.impact] = (impactCounts[v.impact] ?? 0) + 1
-        }
-      }
-
-      accessibilityResult = {
-        completed: true,
-        violations,
-        passes: axeResults.passes.length,
-        incomplete: axeResults.incomplete.length,
-        impact: impactCounts,
-      }
-    } catch {
-      // axe failed - record as inconclusive
-    }
+    const accessibilityResult = await runAccessibilityCheck(page)
 
     // Layout checks
     const layoutData = await observeLayout(page)
@@ -416,81 +323,8 @@ export async function runViewportCheck(
       // Request and transfer totals remain available when page timing APIs are unavailable.
     }
 
-    // Declarative, read-only assertions. These only inspect the loaded DOM and
-    // observations already collected above; they never click, type, or submit.
-    let assertionResults: AssertionResult[] | undefined
-    if (assertions.length > 0) {
-      assertionResults = []
-      for (const assertion of assertions) {
-        try {
-          let passed = false
-          let detail = ''
-          if (assertion.type === 'noHorizontalOverflow') {
-            assertionResults.push(evaluateNoHorizontalOverflow(layoutData))
-            continue
-          } else if (assertion.type === 'noConsoleErrors') {
-            passed = consoleErrors.length === 0
-            detail = passed
-              ? 'No console errors observed.'
-              : `${consoleErrors.length} console error(s) observed.`
-          } else if (assertion.type === 'titleIncludes') {
-            passed = await withTimeout(
-              page.evaluate((value) => document.title.includes(value), assertion.value),
-              2_000,
-              'assertion_timeout',
-            )
-            detail = passed
-              ? 'Page title contains the expected text.'
-              : 'Expected title text not found.'
-          } else if (assertion.type === 'textVisible') {
-            passed = await withTimeout(
-              page.evaluate(
-                (value) => (document.body?.innerText ?? '').includes(value),
-                assertion.value,
-              ),
-              2_000,
-              'assertion_timeout',
-            )
-            detail = passed ? 'Expected visible text found.' : 'Expected visible text not found.'
-          } else {
-            const found = await withTimeout(
-              page.evaluate((selector) => {
-                const element = document.querySelector(selector)
-                if (!element) return { exists: false, visible: false }
-                const rect = element.getBoundingClientRect()
-                const style = window.getComputedStyle(element)
-                return {
-                  exists: true,
-                  visible:
-                    rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.display !== 'none' &&
-                    style.visibility !== 'hidden' &&
-                    style.opacity !== '0',
-                }
-              }, assertion.selector),
-              2_000,
-              'assertion_timeout',
-            )
-            passed = assertion.type === 'selectorExists' ? found.exists : found.visible
-            detail = passed
-              ? assertion.type === 'selectorExists'
-                ? 'Selector exists.'
-                : 'Selector is visible.'
-              : assertion.type === 'selectorExists'
-                ? 'Selector not found.'
-                : 'Selector not found or not visible.'
-          }
-          assertionResults.push({ assertion, passed, detail })
-        } catch {
-          assertionResults.push({
-            assertion,
-            passed: false,
-            detail: 'Assertion could not be evaluated.',
-          })
-        }
-      }
-    }
+    // Declarative, read-only assertions (src/worker/page-assertions.ts).
+    const assertionResults = await evaluatePageAssertions(page, assertions, layoutData, consoleErrors)
 
     // Interaction observations
     let interactionObservations: ViewportResult['interactionObservations'] = {

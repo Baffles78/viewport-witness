@@ -6,7 +6,6 @@
     "src/payment/index.ts": 825,
     "src/release-check.ts": 544,
     "src/web-products.ts": 528,
-    "src/worker/browser.ts": 578,
     "tests/agent-result.test.ts": 547,
     "tests/info.test.ts": 516,
     "tests/mcp-discovery.test.ts": 511,
