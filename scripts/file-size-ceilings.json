@@ -3,7 +3,6 @@
   "ceilings": {
     "src/db.ts": 998,
     "src/mcp.ts": 542,
-    "src/openapi.ts": 1233,
     "src/payment/index.ts": 825,
     "src/release-check.ts": 544,
     "src/web-products.ts": 528,

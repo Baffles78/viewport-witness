@@ -33,7 +33,7 @@ These rules apply to every agent and person working here. `AGENTS.md` points her
 | HTTP app setup and middleware order | `src/api/index.ts` |
 | HTTP routes, one router per product area | `src/api/routes/<area>.ts` |
 | MCP tools | `src/mcp.ts` now; new tools go in `src/mcp/<tool>.ts` and are registered from `src/mcp.ts` |
-| OpenAPI document | `src/openapi.ts` now; new paths go in `src/openapi/<area>.ts` and are merged in |
+| OpenAPI document | Sections in `src/openapi/` (`paths-*.ts`, `schemas-*.ts`), assembled in `src/openapi.ts` |
 | x402 payments, admission, payer identity | `src/payment/` and `src/x402-adapter.ts` (risky: ask first) |
 | URL safety and SSRF blocking | `src/ssrf.ts` (risky: ask first) |
 | Saving and loading data (SQLite) | `src/db.ts` now; new tables or queries go in `src/db/<area>.ts` |
