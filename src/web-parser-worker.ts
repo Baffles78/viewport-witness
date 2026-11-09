@@ -1,5 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { buildExtractReport, buildSecurityReport, type BoundedHtml } from './web-products.js'
+import type { BoundedHtml } from './web-products.js'
+import { buildExtractReport } from './web-extract.js'
+import { buildSecurityReport } from './web-security-gate.js'
 import type { PaymentMode } from './types.js'
 
 interface WorkerInput {

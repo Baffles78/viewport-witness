@@ -6,7 +6,7 @@ export default defineConfig({
     environment: 'node',
     testTimeout: 180000,
     hookTimeout: 60000,
-    include: ['tests/e2e.test.ts', 'tests/interaction-observations.e2e.ts'],
+    include: ['tests/e2e.test.ts', 'tests/interaction-observations.e2e.ts', 'tests/page-checks.e2e.ts'],
     exclude: ['node_modules', 'dist'],
   },
 })
