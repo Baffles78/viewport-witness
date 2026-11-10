@@ -11,3 +11,11 @@ Source is deployed through a separate pull-only checkout at `/opt/viewport-witne
 Tests: `python3 operations/test_backup_sqlite.py`. Tests include a committed WAL record, a tampered offsite readback preserving old success, malformed key rejection before transfer and corrupt database failure.
 
 A successful job proves saved SQLite data recovery, not public application/payment integration or alert delivery. The recurring schedule requires later evidence of an actual timer-triggered completion. An intentionally disabled or never-firing timer is not currently covered by a separate receipt-staleness alarm; check timer status and receipt age in operational acceptance. The systemd stop-post hook covers process errors, timeout and OOM exits. Failures append a fixed sanitized finding through the existing `/usr/local/bin/apex-error` helper into `/opt/apex-errors/errors.jsonl`, for the retained VPS alerter. No direct Telegram sender, routine message, or Sarah dependency is added. End-to-end delivery on a real failure is not proven by fixture tests.
+
+# ViewportWitness error watch
+
+The public `/health` check (apex-vps-http-health) only proves the app answers. `error_watch.py` catches errors that leave `/health` green. Every 5 minutes (`deploy/vps/viewport-witness-watch.timer`) it checks that the container is healthy, looks for new `error`, `exception`, `unhandled` or `fatal` lines in the container logs, and checks that all five paid routes still answer 402 with headers under `WATCH_HEADER_LIMIT` (default 3900 bytes; nginx fails at 4096). Each problem is reported once through `/usr/local/bin/apex-error`, so the existing alerter sends it to Telegram, and is muted for `ALERT_REPEAT_SECONDS` (default 3600) while it continues. It never restarts anything and makes no payments.
+
+Install from the pull-only `/opt/viewport-witness-operations` checkout: `systemd-analyze verify` both units, symlink them into `/etc/systemd/system`, `daemon-reload`, run the service once and check its output says `ok`, then `systemctl enable --now viewport-witness-watch.timer`. Remove: `systemctl disable --now viewport-witness-watch.timer`.
+
+Tests: `python3 operations/test_error_watch.py`.
