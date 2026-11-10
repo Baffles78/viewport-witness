@@ -27,6 +27,14 @@ class FindProblems(unittest.TestCase):
         self.assertEqual(w.header_bytes(402, 'Payment Required', [('a', '1'), ('bb', '22')]), len(raw))
 
 
+class DockerTimeout(unittest.TestCase):
+    def test_timeouts_become_problems(self):
+        boom = mock.patch.object(w.subprocess, 'run', side_effect=w.subprocess.TimeoutExpired('docker', 60))
+        with boom:
+            self.assertEqual(w.container_health(), 'unknown (docker timed out)')
+            self.assertEqual(len(w.new_error_lines('0')), 1)
+
+
 class Main(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()

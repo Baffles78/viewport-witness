@@ -19,16 +19,23 @@ SOURCE = 'viewport-witness-watch'
 
 
 def run(cmd):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 124, '', 'docker command timed out')
 
 
 def container_health():
     out = run(['docker', 'inspect', '--format', '{{.State.Health.Status}}', CONTAINER])
+    if out.returncode == 124:
+        return 'unknown (docker timed out)'
     return out.stdout.strip() if out.returncode == 0 else 'missing'
 
 
 def new_error_lines(since):
     out = run(['docker', 'logs', '--since', since, CONTAINER])
+    if out.returncode == 124:
+        return ['error: docker logs timed out']
     lines = (out.stdout + out.stderr).splitlines()
     return [line for line in lines if ERROR_LINE.search(line)]
 
@@ -108,4 +115,8 @@ def main(now=None):
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as exc:  # report a broken watch instead of failing silently
+        report(f'Error watch itself failed ({type(exc).__name__}); check journalctl -u viewport-witness-watch.')
+        raise
