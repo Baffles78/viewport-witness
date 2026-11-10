@@ -9,3 +9,5 @@ artifacts/
 output/
 .playwright-cli/
 *.log
+__pycache__/
+*.pyc

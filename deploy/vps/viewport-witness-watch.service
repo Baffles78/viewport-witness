@@ -1,0 +1,18 @@
+[Unit]
+Description=ViewportWitness error watch (logs, health, paid 402 routes)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/viewport-witness-operations/operations/error_watch.py
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+StateDirectory=viewport-witness-watch
+ReadWritePaths=/opt/apex-errors
+MemoryMax=128M
+CPUQuota=20%
+TimeoutStartSec=120

@@ -265,6 +265,10 @@ docker image inspect viewport-witness-viewport-witness:latest \
   --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
+After a release, check `/opt/apex-errors/errors.jsonl` stays quiet; the error watch
+(`operations/README.md`, "ViewportWitness error watch") reports app errors, unhealthy
+containers and broken 402 routes to Telegram every 5 minutes.
+
 Roll back on any failure (see below). `tests/payment-header-size.test.ts` guards the header
 budget in CI.
 
