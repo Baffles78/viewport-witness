@@ -20,6 +20,19 @@ Install from the pull-only `/opt/viewport-witness-operations` checkout: `systemd
 
 Tests: `python3 operations/test_error_watch.py`.
 
+Every paid-route health probe sends `X-ViewportWitness-Source: monitor`. The existing
+growth counters retain those events under `source=monitor`, separately from agent-client
+and unknown traffic. This is a caller-declared operational label, not authenticated buyer
+identity. The shared uptime check requests only `/health`, which is not counted as a
+documentation request or payment challenge by the product's growth middleware.
+
+The labeling cutover is prospective: older `source=unknown` counters include unlabeled
+probes and must not be relabeled or presented as unique visitors. The cutover UTC day is
+mixed; use the next full UTC day for a complete post-cutover daily comparison. The release
+receipt records the exact installation and observed counter changes. Monitor labels do
+not make remaining unknown traffic verified organic demand. Controlled purchase job IDs
+must be recorded separately and excluded from customer-demand summaries.
+
 # New feedback notifications
 
 Owner-approved on 2026-11-22: check every 15 minutes and send new production feedback

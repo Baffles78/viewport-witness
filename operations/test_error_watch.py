@@ -26,6 +26,17 @@ class FindProblems(unittest.TestCase):
         raw = 'HTTP/1.1 402 Payment Required\r\na: 1\r\nbb: 22\r\n\r\n'
         self.assertEqual(w.header_bytes(402, 'Payment Required', [('a', '1'), ('bb', '22')]), len(raw))
 
+    def test_all_paid_probes_are_labeled_as_monitoring_without_payment(self):
+        for route in w.PAID_ROUTES:
+            rejected = w.urllib.error.HTTPError('https://example.invalid', 402, 'Payment Required', {}, None)
+            with mock.patch.object(w.urllib.request, 'urlopen', side_effect=rejected) as transport:
+                self.assertEqual(w.probe_route(route)[0], 402)
+                request = transport.call_args.args[0]
+                self.assertEqual(request.get_header('X-viewportwitness-source'), 'monitor')
+                self.assertEqual(request.get_method(), 'POST')
+                self.assertEqual(request.data, b'{"url":"https://example.com"}')
+                self.assertIsNone(request.get_header('Payment-signature'))
+
 
 class DockerTimeout(unittest.TestCase):
     def test_timeouts_become_problems(self):
