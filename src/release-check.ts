@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { validatePublicHttpsUrl } from './ssrf.js'
 import { buildAgentResult } from './agent-result.js'
 import { VIEWPORT_NAMES, type QAReport } from './types.js'
+import { buildReleasePreview } from './release-preview.js'
 
 type Decision = 'PASS' | 'FAIL' | 'INCONCLUSIVE'
 export type Requirement = {
@@ -68,10 +69,6 @@ export function usdcAtomic(value: string): bigint {
   if (!/^\d{1,8}(\.\d{1,6})?$/.test(value)) throw new Error('Invalid USDC budget')
   const [whole, fraction = ''] = value.split('.')
   return BigInt(whole!) * 1000000n + BigInt(fraction.padEnd(6, '0'))
-}
-function displayUsdc(value: bigint): string {
-  const fraction = (value % 1000000n).toString().padStart(6, '0').replace(/0+$/, '')
-  return `${value / 1000000n}${fraction ? '.' + fraction : ''}`
 }
 const allowedAssets: Record<string, string> = {
   'eip155:8453': '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
@@ -348,22 +345,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
   }
   if (reserved + planned > budget)
     throw new Error('Release exceeds approved budget; no payment adapter invoked')
-  if (!execute)
-    return {
-      decision: 'INCONCLUSIVE' as Decision,
-      dryRun: true,
-      maximumAtomic: budget.toString(),
-      quotedAtomic: planned.toString(),
-      reservedAtomic: reserved.toString(),
-      pages: manifest.pages.map(safeDisplayUrl),
-      markdown:
-        [
-          '# Release check preview',
-          `Pages: ${manifest.pages.length}. Additional quoted price: ${displayUsdc(planned)} USDC. Maximum approved budget: ${displayUsdc(budget)} USDC.`,
-          `Previously reserved: ${displayUsdc(reserved)} USDC (not an actual-settlement receipt).`,
-          'No payment adapter invoked. No release verdict is available.',
-        ].join('\n') + '\n',
-    }
+  if (!execute) return buildReleasePreview({ budget, planned, reserved, preflights, pages: manifest.pages.map(safeDisplayUrl) })
   const reports: Array<{
     index: number
     url: string

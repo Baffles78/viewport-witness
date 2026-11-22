@@ -8,8 +8,8 @@ per page. It cannot inspect authenticated pages or private staging networks.
 
 Open the [free static sample](https://qa.honeygate.app/samples/example/).
 This example was generated locally in test mode; no payment or customer data is involved.
-It is a saved demonstration, not current target health. The sample URL becomes available
-after the offering update is deployed; its files also live in `samples/example/` in this repository.
+It is a saved demonstration, not current target health. Its files also live in
+`samples/example/` in this repository.
 
 ## Preview a budget without paying
 
@@ -26,29 +26,51 @@ npm run build
 For one page, no handwritten configuration is needed:
 
 ```sh
-npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/
+npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
-This displays the quoted price and budget without loading a wallet or paying. It does not
-return a QA verdict. For up to five pages, use the manifest-based client in
+This shows the quote, native-USDC asset, network and recipient in one step, plus any missing
+CDP environment variable **names**, without loading a wallet or paying. The machine-readable
+summary contains `paymentTerms` and `spendingApproved: false`. A quote is not approval of its
+recipient or permission to spend, and execution rechecks the current challenge against your
+approved network, recipient and budget. Preview does not return a QA verdict.
+Omit `--wallet cdp` for another existing connector; Base and Solana remain available.
+For up to five pages, use the manifest-based client in
 [AGENT-CLIENT.md](AGENT-CLIENT.md).
 
 ## Authorize and run
 
-Use your existing customer-owned wallet connector. An existing Coinbase CDP Base account can use the supplied `examples/wallets/existing-cdp-base.mjs` connector; see the environment setup in [AGENT-CLIENT.md](AGENT-CLIENT.md). Follow [AGENT-CLIENT.md](AGENT-CLIENT.md)
-to configure the approved network, recipient, and (for Solana) facilitator fee payer in the
-manifest. The connector must expose the signing interface documented there; an MCP connection
-or wallet balance alone is insufficient. Never put keys or seed phrases in this repository.
+For an **existing CDP Base account**, `--wallet cdp` selects the supplied connector. Configure
+`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` and `VW_PAYER_ADDRESS` in your local
+secret manager/environment. The command reports missing names, never their values. It does
+not create or fund an account. Another existing signer can use `--wallet-module /path/to/connector.mjs`
+instead. See [AGENT-CLIENT.md](AGENT-CLIENT.md) for both signing interfaces and Solana fee-payer
+approval. An MCP connection or wallet balance alone is insufficient. Never paste keys or
+seed phrases into commands or this service.
 
 Only after granting spending authority for that run:
 
 ```sh
-npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/ --execute --network base --recipient <approved-recipient> --wallet-module ./examples/wallets/existing-cdp-base.mjs
+npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
 ```
 
-Keep the checkpoint and generated reports. On interruption, resume the same run and checkpoint;
-a `payment-attempted` state requires reconciliation, not a new payment. A new deployment gets
-a fresh run ID. See [GROWTH-ACTIVATION.md](GROWTH-ACTIVATION.md) for recovery details.
+Replace `APPROVED_RECIPIENT` with the independently approved address, and keep the same run ID,
+target, budget and directory. Do not rerun with changed policy to bypass an uncertain payment.
+
+## Retrieve an accepted job again without a wallet
+
+```sh
+npm run check:page -- --resume --output out/my-deployment-001
+```
+
+This uses the saved `first-check.json` reference and original checkpoint. It can poll or
+retrieve only an already accepted job; no wallet connector is loaded and payment is forbidden.
+Original purchase reports stay in the run directory; refreshed output goes into `resumed/`.
+The checkpoint retains the same run/job binding and may update its terminal result.
+An uncertain `payment-attempted` checkpoint stops for reconciliation instead of paying again.
+For a legacy run without a reference, add `--manifest` with its original generated basename.
+Keep all files; use a new run ID only for a new deployment. See
+[GROWTH-ACTIVATION.md](GROWTH-ACTIVATION.md) for recovery details.
 
 ## Read the result
 

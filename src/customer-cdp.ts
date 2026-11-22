@@ -2,6 +2,7 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import { fromCdpEvmAccount, type CdpEvmAccount } from '@coinbase/cdp-sdk/x402'
 import type { Address } from 'viem'
 import type { ClientEvmSigner } from '@x402/evm'
+import { missingCdpCustomerSettings } from './customer-cdp-settings.js'
 
 type CustomerEnvironment = Record<string, string | undefined>
 type LookupClient = { evm: { getAccount(options: { address: Address }): Promise<CdpEvmAccount> } }
@@ -13,13 +14,7 @@ export async function connectExistingCdpBaseAccount(
   createClient: (credentials: Credentials) => LookupClient = (credentials) =>
     new CdpClient(credentials),
 ): Promise<ClientEvmSigner> {
-  const required = [
-    'CDP_API_KEY_ID',
-    'CDP_API_KEY_SECRET',
-    'CDP_WALLET_SECRET',
-    'VW_PAYER_ADDRESS',
-  ] as const
-  if (required.some((name) => !env[name]?.trim()))
+  if (missingCdpCustomerSettings(env).length > 0)
     throw new Error(
       'Existing CDP account requires CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET and VW_PAYER_ADDRESS in your local environment; never paste them into commands or reports.',
     )

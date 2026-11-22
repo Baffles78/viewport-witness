@@ -16,8 +16,10 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { unlinkSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 import { runReleaseCheck } from '../dist/release-check.js'
+import { loadBoundedJson } from './lib/bounded-json.mjs'
+import { guardResumeOutput } from './first-check-resume.mjs'
 
 function parseArgs(argv) {
   const args = {}
@@ -25,6 +27,11 @@ function parseArgs(argv) {
     const arg = argv[i]
     if (arg === '--execute') {
       args.execute = true
+      continue
+    }
+    if (arg === '--resume-only') {
+      if (args.resumeOnly) throw new Error('Repeated --resume-only')
+      args.resumeOnly = true
       continue
     }
     if (arg === '--test-mode') {
@@ -55,6 +62,7 @@ function usage(msg) {
       '  --state <path>         Checkpoint file. Required for --execute.',
       '  --output <dir>         Output directory for report.md and summary.json.',
       '  --execute              Enable paid execution (requires --state and --wallet-module or --adapter).',
+      '  --resume-only          Retrieve accepted checkpoint jobs without a wallet or any permitted payment.',
       '  --adapter <path>       Customer-owned JS module exporting a default payment adapter.',
       '  --wallet-module <path> Existing customer wallet connector exporting signer; uses the built-in x402 adapter.',
       '  --service-url <url>    Service base URL (local test only).',
@@ -71,16 +79,7 @@ class CliExit extends Error {
   }
 }
 
-async function loadBoundedJson(filePath, maxBytes = 64 * 1024) {
-  const abs = resolve(filePath)
-  const stat = await fs.lstat(abs)
-  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Expected a regular JSON file')
-  if (stat.size > maxBytes) throw new Error(`File exceeds ${maxBytes} byte limit: ${abs}`)
-  const text = await fs.readFile(abs, 'utf8')
-  return JSON.parse(text)
-}
-
-async function atomicWriteJson(filePath, value) {
+async function atomicWriteText(filePath, text) {
   const abs = resolve(filePath)
   const tmp = `${abs}.tmp.${randomUUID()}`
   await fs.mkdir(dirname(abs), { recursive: true })
@@ -92,7 +91,7 @@ async function atomicWriteJson(filePath, value) {
     throw new Error('Checkpoint must be a regular file')
   const file = await fs.open(tmp, 'wx', 0o600)
   try {
-    await file.writeFile(JSON.stringify(value, null, 2), 'utf8')
+    await file.writeFile(text, 'utf8')
     await file.sync()
   } finally {
     await file.close()
@@ -112,6 +111,10 @@ async function atomicWriteJson(filePath, value) {
       await dir.close()
     }
   }
+}
+
+async function atomicWriteJson(filePath, value) {
+  return atomicWriteText(filePath, JSON.stringify(value, null, 2))
 }
 
 async function loadCheckpoint(statePath) {
@@ -137,8 +140,14 @@ async function main() {
 
   if (!args.manifest) usage('--manifest is required')
 
-  const execute = args.execute === true
+  const execute = args.execute === true || args.resumeOnly === true
   const testMode = args.testMode === true
+
+  if (args.resumeOnly) {
+    if (args.execute || args.adapter || args['wallet-module'])
+      usage('Resume-only does not accept execution, adapter or wallet options')
+    args.adapter = fileURLToPath(new URL('./no-payment-adapter.mjs', import.meta.url))
+  }
 
   if (execute && !args.state) usage('--state is required for --execute')
   if (args.adapter && args['wallet-module']) usage('Choose adapter or wallet-module, not both')
@@ -201,6 +210,27 @@ async function main() {
       console.error(`Checkpoint load failed (fail-closed): ${err.message}`)
       return 2
     }
+    // Check under the existing exclusive checkpoint lock, on the same object the runner uses.
+    if (
+      args.resumeOnly &&
+      (!loaded ||
+        loaded.schema !== 'viewport-witness-release/v1' ||
+        !Array.isArray(loaded.pages) ||
+        loaded.pages.length !== manifest.pages?.length ||
+        loaded.pages.length === 0 ||
+        loaded.pages.some(
+          (page) =>
+            !page ||
+            page.state !== 'accepted' ||
+            !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+              page.jobId ?? '',
+            ),
+        ))
+    )
+      usage(
+        'Resume-only requires accepted checkpoint jobs. Preserve and reconcile uncertain payments; no new payment is allowed',
+      )
+    if (args.resumeOnly && args.output) await guardResumeOutput(args.output, statePath)
     checkpoint = {
       load: () => loaded,
       save: async (state) => {
@@ -273,10 +303,16 @@ async function main() {
   // Write outputs.
   if (args.output) {
     const outDir = resolve(args.output)
-    await fs.mkdir(outDir, { recursive: true })
-    await fs.writeFile(resolve(outDir, 'report.md'), result.markdown, 'utf8')
     const { markdown: _md, ...summary } = result
-    await fs.writeFile(resolve(outDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8')
+    if (args.resumeOnly) {
+      await guardResumeOutput(outDir, args.state)
+      await atomicWriteText(resolve(outDir, 'report.md'), result.markdown)
+      await atomicWriteJson(resolve(outDir, 'summary.json'), summary)
+    } else {
+      await fs.mkdir(outDir, { recursive: true })
+      await fs.writeFile(resolve(outDir, 'report.md'), result.markdown, 'utf8')
+      await fs.writeFile(resolve(outDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8')
+    }
     console.log(`Output written to ${outDir}`)
   }
 
@@ -284,7 +320,7 @@ async function main() {
 
   if (result.dryRun) {
     console.log(
-      '\nNo verdict: unpaid preview. Re-run with --execute --state and --wallet-module or --adapter for a live release check.',
+      '\nNo verdict: unpaid preview. Execution requires explicit approval and an existing payment-enabled connector; see docs/QUICKSTART.md.',
     )
     return 0
   }

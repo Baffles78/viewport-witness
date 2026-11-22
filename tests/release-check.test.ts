@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runReleaseCheck, usdcAtomic, safeDisplayUrl } from '../src/release-check.js'
-import { makeManifest, jsonResponse, challengeResponse, terminalReport, makeCheckpoint, noValidation } from './helpers/release-check-fixtures.js'
+import {
+  makeManifest,
+  jsonResponse,
+  challengeResponse,
+  terminalReport,
+  makeCheckpoint,
+  noValidation,
+} from './helpers/release-check-fixtures.js'
 
 // --- helpers ----------------------------------------------------------------
 
@@ -140,7 +147,8 @@ describe('same-job recovery conformance', () => {
   })
 
   it('continues the same ID through retryable and running to a report', async () => {
-    const fetchFn = vi.fn()
+    const fetchFn = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
       .mockResolvedValueOnce(jsonResponse({ id, status: 'retryable', nextAction: 'poll_same_job' }))
       .mockResolvedValueOnce(jsonResponse({ id, status: 'running', nextAction: 'poll_same_job' }))
@@ -152,7 +160,8 @@ describe('same-job recovery conformance', () => {
   })
 
   it('stops at a permanent job failure without resubmitting', async () => {
-    const fetchFn = vi.fn()
+    const fetchFn = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
       .mockResolvedValueOnce(jsonResponse({ id, status: 'failed', nextAction: 'stop' }))
     const result = await runReleaseCheck(makeManifest(), options(fetchFn))
@@ -167,7 +176,8 @@ describe('same-job recovery conformance', () => {
       jobStatus: 'complete',
       nextAction: 'inspect_report',
     }
-    const fetchFn = vi.fn()
+    const fetchFn = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
       .mockResolvedValueOnce(jsonResponse(expired))
     const result = await runReleaseCheck(makeManifest(), options(fetchFn))
@@ -177,14 +187,17 @@ describe('same-job recovery conformance', () => {
 
   it('keeps the accepted ID after an interrupted poll and resumes without another POST', async () => {
     const checkpoint = makeCheckpoint()
-    const firstFetch = vi.fn()
+    const firstFetch = vi
+      .fn()
       .mockResolvedValueOnce(jsonResponse({ id, status: 'queued' }, 202))
       .mockRejectedValueOnce(new Error('network interrupted'))
     const first = await runReleaseCheck(makeManifest(), options(firstFetch, checkpoint))
     expect(first.decision).toBe('INCONCLUSIVE')
     expect(checkpoint.get()?.pages[0]?.jobId).toBe(id)
 
-    const secondFetch = vi.fn().mockResolvedValue(jsonResponse(terminalReport(id, 'https://example.com')))
+    const secondFetch = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(terminalReport(id, 'https://example.com')))
     const second = await runReleaseCheck(makeManifest(), options(secondFetch, checkpoint))
     expect(second.decision).toBe('PASS')
     expect(secondFetch).toHaveBeenCalledTimes(1)
@@ -206,6 +219,17 @@ describe('runReleaseCheck — preflight dry-run', () => {
     expect(result.decision).toBe('INCONCLUSIVE')
     expect(fetch).toHaveBeenCalled()
     expect(result.markdown).toContain('No payment adapter invoked')
+    expect(result).toMatchObject({
+      spendingApproved: false,
+      paymentTerms: [
+        {
+          network: 'eip155:8453',
+          recipient: '0xRevenue',
+          amountAtomicUsdc: '80000',
+        },
+      ],
+    })
+    expect(result.markdown).toContain('Review the recipient independently')
   })
 
   it('quote cap aborts before any adapter when budget is exceeded', async () => {
