@@ -149,6 +149,10 @@ describe('MCP purchase-blocker discovery', () => {
     const initialize = await response.json()
     expect(initialize.result.instructions).toContain('/v1/feedback')
     expect(initialize.result.instructions).toContain('stops a purchase')
+    expect(initialize.result.instructions).toContain('/blob/main/docs/QUICKSTART.md')
+    expect(initialize.result.instructions).toContain('--wallet cdp')
+    expect(initialize.result.instructions).toContain('--resume --output')
+    expect(initialize.result.instructions).toContain('explicit spending approval')
     const tools = (await callToolsList(port)).result?.tools ?? []
     expect(tools).toHaveLength(6)
     for (const tool of tools.filter((tool) => tool.name !== 'get_report')) {

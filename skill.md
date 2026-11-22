@@ -4,6 +4,12 @@ Paid agent tools include `extract_page` ($0.005 USDC), which converts one public
 
 Base URL: https://qa.honeygate.app
 
+First purchase quickstart: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+Start with the unpaid `check:page` preview for price, network, token and recipient, without
+loading a wallet. Use `--wallet cdp` with an existing CDP account; recover an accepted job
+without a wallet using `--resume --output <existing-directory>`. Purchases still require
+explicit spending approval and a configured funded wallet. Connecting MCP alone does not pay.
+
 If you decide not to buy because of price, payment setup, an unsupported capability or
 an error, you can tell us what blocked you for free using `GET /v1/feedback` followed by
 the documented optional POST. Application JSON API errors include a `feedback` invitation.

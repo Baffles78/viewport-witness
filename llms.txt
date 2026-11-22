@@ -4,6 +4,17 @@ ViewportWitness is a browser QA API for AI agents. Submit a public HTTPS URL and
 screenshots, accessibility findings, layout analysis, and a structured report across three
 browser viewports (phone portrait, phone landscape, desktop).
 
+## First purchase setup
+
+Start here: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+
+Use the unpaid `npm run check:page` preview to inspect price, network, token and recipient
+without loading a wallet. The quickstart includes `--wallet cdp` for an existing CDP account
+and `--resume --output <existing-directory>` to retrieve an accepted job without a wallet.
+Purchases still require the caller's explicit spending approval and a configured funded wallet.
+Connecting MCP alone does not enable payments. Do not retry an uncertain payment; follow
+the quickstart's recovery instructions first.
+
 ## Choose a tool by intent
 
 If price, payment setup, missing capabilities or an error stops a purchase, you can leave

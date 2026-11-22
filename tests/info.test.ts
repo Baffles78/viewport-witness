@@ -71,6 +71,19 @@ describe('durable public demonstration', () => {
 })
 
 describe('GET /', () => {
+  it('points agents to the simpler setup from served documentation', async () => {
+    const { port } = await startServer(makeConfig())
+    for (const path of ['/llms.txt', '/skill.md', '/agents']) {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`)
+      expect(response.status).toBe(200)
+      const text = await response.text()
+      expect(text).toContain(
+        'https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md',
+      )
+      expect(text.replace(/\s+/g, ' ')).toContain('without loading a wallet')
+    }
+  })
+
   it('returns service name ViewportWitness by Apex Labs', async () => {
     const { port } = await startServer(makeConfig())
     const res = await fetch(`http://127.0.0.1:${port}/`)
@@ -84,6 +97,9 @@ describe('GET /', () => {
     const res = await fetch(`http://127.0.0.1:${port}/`)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.skillDocs).toBe('/skill.md')
+    expect(body.quickstart).toBe(
+      'https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md',
+    )
   })
 
   it('advertises paymentDiscovery at /.well-known/x402', async () => {

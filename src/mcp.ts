@@ -26,6 +26,7 @@ import type { WorkerRunner } from './worker/runner.js'
 import { assertionsSchema, jsonResult, publicPageUrlSchema, type ToolResult } from './mcp/tool-schemas.js'
 import { registerGetReportTool } from './mcp/get-report.js'
 import { mcpFeedbackInvitation } from './feedback/invitation.js'
+import { mcpSetupGuidance } from './mcp/setup-guidance.js'
 import { createProductJob, hasCompleteBaselineScreenshots } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 import { randomUUID } from 'node:crypto'
@@ -117,7 +118,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   }
 
   async function buildServer(): Promise<McpServer> {
-    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' }, { instructions: mcpFeedbackInvitation })
+    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' }, { instructions: `${mcpSetupGuidance} ${mcpFeedbackInvitation}` })
     const context = await getPaymentContext()
     const intentForTool = (
       tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
