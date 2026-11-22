@@ -20,6 +20,23 @@ This policy describes how the ViewportWitness service handles data submitted to 
 
 **Anonymous usage counts.** The application records bounded daily counts of successful documentation requests and unpaid payment challenges, using only predefined product, mode and caller-declared source labels. These counters contain no IP addresses, referrers, target URLs, arbitrary headers or payment credentials. Retained jobs carry a predefined source/mode label for offline product and repeat-use summaries. Source labels do not prove acquisition origin, and request counts do not identify unique visitors. There is no public analytics endpoint.
 
+## Quickstart usage measurement
+
+The `/quickstart` redirect records daily opens, not unique readers. The one-page quickstart
+client creates a random per-output-directory usage ID and sends it with preview and purchase
+requests. The server stores its SHA-256 hash to deduplicate setup runs and match them to an
+accepted production purchase. It never uses this ID for authorization. Set
+`VW_DISABLE_USAGE_TRACKING=1` locally to omit it; old clients and direct GitHub visits cannot
+be matched. Setup-run records expire after 30 days, with a ceiling of 10,000 runs. A separate private
+measurement ledger retains job ID, run hash, predefined source, existing HMAC customer label,
+and purchase/completion times for up to 90 days (50,000 jobs), independently of seven-day
+reports. It contains no target URLs, raw wallet addresses, signed payment data or credentials.
+It provides first-observed payer history, not lifetime purchase identity. Monitors, test
+clients, nonproduction modes and operator-known controlled jobs are excluded from the private
+funnel summary. Labels are caller-declared; unidentified tests cannot be inferred. Analytics
+is best effort and never blocks a purchase; missing measurements and capacity limits are
+disclosed. Existing encrypted recovery backups can retain copies for their own lifecycle.
+
 ## Optional product feedback
 
 The free `/v1/feedback` endpoint accepts a product category, purchase-blocker category,

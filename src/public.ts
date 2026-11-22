@@ -1,4 +1,5 @@
 export const PUBLIC_BASE_URL = 'https://qa.honeygate.app'
+export const QUICKSTART_ENTRY_URL = `${PUBLIC_BASE_URL}/quickstart`
 export const QUICKSTART_URL =
   'https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md'
 export const FEEDBACK_URL =

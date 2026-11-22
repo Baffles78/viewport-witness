@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { RequestHandler, ErrorRequestHandler } from 'express'
 import type { JobStore } from './db.js'
 import type { PaymentMode } from './types.js'
+import { quickstartRunHash } from './quickstart-attribution.js'
 
 export const GROWTH_SOURCES = [
   'unknown',
@@ -22,6 +23,7 @@ export const GROWTH_PRODUCTS = [
   'discovery',
 ] as const
 export const GROWTH_EVENTS = [
+  'quickstart_open',
   'document_request',
   'unpaid_challenge',
   'payment_header_attempt',
@@ -39,7 +41,7 @@ export const GROWTH_EVENTS = [
 export type GrowthSource = (typeof GROWTH_SOURCES)[number]
 export type GrowthProduct = (typeof GROWTH_PRODUCTS)[number]
 export type GrowthEvent = (typeof GROWTH_EVENTS)[number]
-export const growthContext = new AsyncLocalStorage<{ source: GrowthSource; mode: PaymentMode }>()
+export const growthContext = new AsyncLocalStorage<{ source: GrowthSource; mode: PaymentMode; quickstartRunHash?: string }>()
 
 export function growthSource(value: unknown): GrowthSource {
   return typeof value === 'string' && GROWTH_SOURCES.includes(value as GrowthSource)
@@ -68,6 +70,7 @@ export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHan
   return (req, res, next) => {
     // Registered before express.json(); its error observer marks only normalized parser categories.
     const source = growthSource(req.headers['x-viewportwitness-source'])
+    const runHash = quickstartRunHash(req.headers['x-viewportwitness-quickstart-run'])
     // Labels (including monitor/test-client) are caller-declared, never verified attribution.
     // Only allowlisted categories survive. Raw headers, bodies, URLs and IPs are never retained.
     const product = req.method === 'POST' ? productPaths[req.path] : undefined
@@ -83,7 +86,12 @@ export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHan
       }
     }
     res.once('finish', () => {
+      if (product && res.statusCode === 402 && runHash) {
+        try { store.quickstart.start(runHash, source, mode) } catch { /* Independent optional observer. */ }
+      }
       try {
+        if (req.method === 'GET' && req.path === '/quickstart' && res.statusCode === 302)
+          store.recordGrowth('discovery', source, 'quickstart_open', mode)
         if (document && res.statusCode === 200)
           store.recordGrowth('discovery', source, 'document_request', mode)
         if (product && res.statusCode === 402)
@@ -103,7 +111,7 @@ export function growthMiddleware(store: JobStore, mode: PaymentMode): RequestHan
       }
     })
     growthContext.run(
-      { source: source === 'unknown' && req.path === '/mcp' ? 'mcp' : source, mode },
+      { source: source === 'unknown' && req.path === '/mcp' ? 'mcp' : source, mode, ...(runHash ? { quickstartRunHash: runHash } : {}) },
       next,
     )
   }

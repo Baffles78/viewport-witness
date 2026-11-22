@@ -59,6 +59,46 @@ Pass operator-known smoke or indexing job IDs in `VW_CONTROLLED_JOB_IDS` or via 
 
 ## Limitations
 
+### Quickstart funnel (prospective measurement)
+
+Live discovery links use `https://qa.honeygate.app/quickstart`, a fixed, noncached redirect
+to this repository's quickstart. `quickstartOpens` counts successful requests in the last
+30 UTC buckets; it is not unique agents. Direct GitHub visits are not observed.
+
+The current `check:page` client saves a random per-output-directory ID. A successful unpaid
+402 preview records a distinct started run. Matching authoritative settled acceptance records
+one purchased run; completion records a completed-report run. Retries and multiple jobs in
+one setup directory do not multiply the run count. Old clients and telemetry opt-outs cannot
+be matched. The private summary returns `purchaseRate` and `firstObservedPurchaseRate` using
+the same started-run cohort, with `null` rates when there are no starts.
+
+`firstObservedPurchaseRuns` deduplicates existing HMAC payer labels against the retained
+90-day purchase ledger, seeded from trustworthy retained acceptance markers at cutover.
+This is not proof of first-ever purchase, unique AI identity or causal conversion. Missing
+payer labels cannot establish first-purchase status. Shared wallets merge identities.
+Measurement is prospective; expired history cannot be reconstructed.
+
+On the VPS, use the owner report so known real-money tests are automatically excluded:
+
+```sh
+python3 /opt/viewport-witness-operations/operations/quickstart_summary.py
+```
+
+It reads all owner-controlled JSON ledgers in `/var/lib/viewport-witness-controlled` and
+passes their controlled job IDs to the existing read-only SQLite summary. Broken/missing
+configured evidence or unavailable analytics fails the report rather than claiming zero.
+Production purchases and their matched start denominator exclude these IDs, `monitor`
+and `test-client`; test/testnet modes never enter the cohort. Unlabeled operator activity
+cannot be guessed. For every operator first-check preview/execute set
+`VW_USAGE_SOURCE=test-client`; monitors use `monitor`. Customers can disable run measurement
+using `VW_DISABLE_USAGE_TRACKING=1`. Neither setting changes payment authorization.
+
+Run records retain 30 days (10,000 maximum). The separate purchase ledger retains 90 days
+(50,000 maximum), survives normal seven-day job deletion and preserves controlled exclusions.
+Pruning uses existing hourly/request cleanup. The summary exposes capacity and observed
+write failures; measurements are best effort. No raw usage tokens, URLs, payment proofs,
+wallet addresses or customer labels are emitted. No public analytics endpoint is added.
+
 - Sources are caller-declared or protocol labels, not verified acquisition attribution.
 - Document and challenge counts are requests, not unique visitors or a matched conversion funnel.
 - Job metrics cover retained jobs only; default retention is seven days. Historical unknown mode is not proven production.

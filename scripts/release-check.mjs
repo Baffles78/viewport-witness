@@ -289,6 +289,7 @@ async function main() {
   let result
   try {
     result = await runReleaseCheck(manifest, {
+      usage: { runId: process.env.VW_QUICKSTART_RUN_ID, source: process.env.VW_QUICKSTART_SOURCE },
       execute,
       testMode,
       ...(args['service-url'] ? { serviceUrl: args['service-url'] } : {}),

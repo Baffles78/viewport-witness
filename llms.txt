@@ -6,7 +6,7 @@ browser viewports (phone portrait, phone landscape, desktop).
 
 ## First purchase setup
 
-Start here: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+Start here: https://qa.honeygate.app/quickstart
 
 Use the unpaid `npm run check:page` preview to inspect price, network, token and recipient
 without loading a wallet. The quickstart includes `--wallet cdp` for an existing CDP account

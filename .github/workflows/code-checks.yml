@@ -35,6 +35,7 @@ jobs:
       - run: node --test scripts/registry-publish-guard.test.mjs scripts/check-file-sizes.test.mjs
       - run: python3 operations/test_feedback_notify.py
       - run: python3 operations/test_error_watch.py
+      - run: python3 operations/test_quickstart_summary.py
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build

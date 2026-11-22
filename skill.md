@@ -4,7 +4,7 @@ Paid agent tools include `extract_page` ($0.005 USDC), which converts one public
 
 Base URL: https://qa.honeygate.app
 
-First purchase quickstart: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+First purchase quickstart: https://qa.honeygate.app/quickstart
 Start with the unpaid `check:page` preview for price, network, token and recipient, without
 loading a wallet. Use `--wallet cdp` with an existing CDP account; recover an accepted job
 without a wallet using `--resume --output <existing-directory>`. Purchases still require
@@ -28,7 +28,7 @@ operator and is not a promise to implement or buy anything.
 Check a deployed public website before sign-off without installing browser dependencies.
 Free static evidence: https://qa.honeygate.app/samples/example/ . This is a local-test
 demonstration, not a current production check.
-Setup and no-payment budget preview: https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md
+Setup and no-payment budget preview: https://qa.honeygate.app/quickstart
 
 Submit a public HTTPS URL; receive a structured browser QA report and screenshots across three
 viewports: phone portrait (375×812), phone landscape (812×375), and desktop (1440×900).

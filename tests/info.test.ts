@@ -78,7 +78,7 @@ describe('GET /', () => {
       expect(response.status).toBe(200)
       const text = await response.text()
       expect(text).toContain(
-        'https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md',
+        'https://qa.honeygate.app/quickstart',
       )
       expect(text.replace(/\s+/g, ' ')).toContain('without loading a wallet')
     }
@@ -98,7 +98,7 @@ describe('GET /', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect(body.skillDocs).toBe('/skill.md')
     expect(body.quickstart).toBe(
-      'https://github.com/Baffles78/viewport-witness/blob/main/docs/QUICKSTART.md',
+      'https://qa.honeygate.app/quickstart',
     )
   })
 

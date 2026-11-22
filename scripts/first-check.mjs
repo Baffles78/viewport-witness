@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { prepareFirstCheckResume, saveFirstCheckReference } from './first-check-resume.mjs'
 import { loadBoundedJson } from './lib/bounded-json.mjs'
+import { quickstartUsage } from './lib/quickstart-usage.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const networks = { base: 'eip155:8453', solana: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }
@@ -197,7 +198,11 @@ async function main() {
         ? 'Explicit execution requested; checkpoint protections remain active.'
         : 'Unpaid preview. Wallet code will not be loaded.',
   )
-  const child = spawn(process.execPath, prepared.clientArgs, { stdio: 'inherit', shell: false })
+  const usage = prepared.resume ? {} : await quickstartUsage(prepared.output)
+  const child = spawn(process.execPath, prepared.clientArgs, {
+    stdio: 'inherit', shell: false,
+    env: { ...process.env, VW_QUICKSTART_RUN_ID: usage.runId ?? '', VW_QUICKSTART_SOURCE: usage.source ?? '' },
+  })
   process.exitCode = await new Promise((resolve, reject) => {
     child.once('error', reject)
     child.once('exit', (code) => resolve(code ?? 2))
