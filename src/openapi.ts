@@ -9,12 +9,14 @@ import { webProductSchemas } from './openapi/schemas-web-products.js'
 import { reportSchemas } from './openapi/schemas-report.js'
 import { viewportSchemas } from './openapi/schemas-viewport.js'
 import { feedbackPaths, feedbackSchemas } from './openapi/paths-feedback.js'
+import { mcpFeedbackInvitation } from './feedback/invitation.js'
 
 export const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'ViewportWitness by Apex Labs',
     version: '0.2.1',
+    'x-feedback-guidance': mcpFeedbackInvitation,
     'x-guidance':
       'Use POST /v1/checks for general browser QA, POST /v1/verify for explicit assertions, and POST /v1/compare when you already have a completed baseline job. Each paid operation returns an x402 challenge before work begins.',
     description:

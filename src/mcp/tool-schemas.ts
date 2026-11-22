@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { withErrorFeedback } from '../feedback/invitation.js'
 
 // Shared MCP tool result shape and input schemas.
 export type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean }
 
 export function jsonResult(value: unknown, isError = false): ToolResult {
   return {
-    content: [{ type: 'text', text: JSON.stringify(value) }],
+    content: [{ type: 'text', text: JSON.stringify(withErrorFeedback(value, isError)) }],
     ...(isError ? { isError: true } : {}),
   }
 }

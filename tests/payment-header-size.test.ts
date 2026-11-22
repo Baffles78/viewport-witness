@@ -7,6 +7,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import express from 'express'
+import { feedbackDiscovery } from '../src/api/feedback-discovery.js'
 
 vi.mock('@coinbase/cdp-sdk/x402', () => ({
   createCdpFacilitatorClient: () => ({
@@ -45,6 +46,7 @@ describe('402 challenge fits the production proxy header buffer', () => {
     it(`${route} challenge headers stay under ${MAX_CHALLENGE_HEADER_BYTES} bytes with both rails`, async () => {
       const path = route.split(' ')[1] as string
       const app = express()
+      app.use(feedbackDiscovery)
       app.use(express.json())
       app.post(path, createPaymentMiddleware({
         payTo: '0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400',
@@ -68,6 +70,12 @@ describe('402 challenge fits the production proxy header buffer', () => {
           body: JSON.stringify({ url: 'https://example.com' }),
         })
         expect(res.status).toBe(402)
+        expect(res.headers.get('link')).toBeNull()
+        const body = await res.json()
+        expect(body.feedback).toMatchObject({ endpoint: '/v1/feedback', paymentRequired: false, optional: true })
+        const challenge = JSON.parse(Buffer.from(res.headers.get('payment-required')!, 'base64').toString('utf8'))
+        expect(challenge).not.toHaveProperty('feedback')
+        expect(challenge.x402Version).toBe(2)
         let bytes = `HTTP/1.1 402 Payment Required\r\n`.length
         res.headers.forEach((value, key) => { bytes += key.length + value.length + 4 })
         expect(bytes).toBeLessThan(MAX_CHALLENGE_HEADER_BYTES)

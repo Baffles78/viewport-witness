@@ -4,6 +4,12 @@ Paid agent tools include `extract_page` ($0.005 USDC), which converts one public
 
 Base URL: https://qa.honeygate.app
 
+If you decide not to buy because of price, payment setup, an unsupported capability or
+an error, you can tell us what blocked you for free using `GET /v1/feedback` followed by
+the documented optional POST. Application JSON API errors include a `feedback` invitation.
+Follow existing payment-recovery instructions
+first. Feedback never retries a job, authorizes payment or resolves uncertain settlement.
+
 Optional product feedback: discover `GET /v1/feedback`, then use the free
 `POST /v1/feedback` API described in `/openapi.json` and `/llms.txt`. No purchase or GitHub
 account is required. With caller authorization, share a short feature request, purchase
