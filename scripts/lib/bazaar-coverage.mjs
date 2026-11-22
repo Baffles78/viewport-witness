@@ -38,6 +38,7 @@ export async function merchantCoverage(baseUrl, addresses, fetchFn = fetch) {
   let pages = 0
   for (const payTo of payTos) {
     let offset = 0
+    let expectedTotal
     let addressComplete = false
     for (let page = 0; page < 10; page++) {
       const url = new URL(`${API}/discovery/merchant`)
@@ -48,15 +49,20 @@ export async function merchantCoverage(baseUrl, addresses, fetchFn = fetch) {
       if (!Array.isArray(body.resources) || body.resources.length > 100 ||
           !pagination || pagination.offset !== offset ||
           !Number.isSafeInteger(pagination.total) || pagination.total < 0 ||
-          !Number.isSafeInteger(pagination.limit) || pagination.limit < 1 || pagination.limit > 100) {
+          !Number.isSafeInteger(pagination.limit) || pagination.limit < 1 || pagination.limit > 100 ||
+          body.resources.length > pagination.limit || offset + body.resources.length > pagination.total ||
+          (expectedTotal !== undefined && pagination.total !== expectedTotal)) {
         throw new Error('Merchant pagination response is incomplete or malformed')
       }
+      expectedTotal = pagination.total
       for (const item of body.resources) {
+        let candidate
         try {
-          const candidate = new URL(item.resource)
-          if (candidate.origin === base.origin && !candidate.search && !candidate.hash &&
-              !candidate.username && !candidate.password) resources.add(candidate.href)
-        } catch { /* A malformed catalog item is not positive evidence. */ }
+          if (!item || typeof item.resource !== 'string') throw new Error('invalid_resource')
+          candidate = new URL(item.resource)
+          if (candidate.protocol !== 'https:' || candidate.username || candidate.password) throw new Error('invalid_resource')
+        } catch { throw new Error('Merchant resource record is malformed; catalog coverage is unknown') }
+        if (candidate.origin === base.origin && !candidate.search && !candidate.hash) resources.add(candidate.href)
       }
       const consumed = offset + body.resources.length
       if (consumed >= pagination.total) { addressComplete = true; break }

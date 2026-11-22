@@ -32,9 +32,23 @@ test('truncated pagination yields unknown rather than missing products', async (
 
 test('malformed or unavailable catalogs do not turn into empty catalogs', async () => {
   await assert.rejects(merchantCoverage(base,['0xabc'],async()=>response({resources:[]})),/pagination/)
+  await assert.rejects(merchantCoverage(base,['0xabc'],async()=>response({
+    resources:[{}],pagination:{offset:0,limit:100,total:1},
+  })),/malformed/)
+  await assert.rejects(merchantCoverage(base,['0xabc'],async()=>response({
+    resources:[{resource:base+'/v1/checks'}],pagination:{offset:0,limit:100,total:0},
+  })),/pagination/)
   await assert.rejects(merchantCoverage(base,['0xabc'],async()=>new Response('',{status:503})),/503/)
   await assert.rejects(merchantCoverage(base,[],async()=>response({})),/addresses/)
   await assert.rejects(discoveryJson('https://example.com',{},async()=>new Response('x'.repeat(2*1024*1024+1))),/2 MiB/)
+})
+
+test('changing catalog totals during pagination leave coverage unknown', async () => {
+  let calls=0
+  await assert.rejects(merchantCoverage(base,['0xabc'],async()=>response({
+    resources:[{resource:base+'/v1/checks'}],
+    pagination:{offset:calls++,limit:1,total:calls===1?2:3},
+  })),/pagination/)
 })
 
 test('official validation is unsigned read-only diagnostics with explicit limits', async () => {
