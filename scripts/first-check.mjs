@@ -161,7 +161,7 @@ export async function prepareFirstCheck(argv) {
   }
 }
 
-async function main() {
+export async function main() {
   if (process.argv.includes('--help')) {
     console.log(help)
     return

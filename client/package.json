@@ -1,0 +1,32 @@
+{
+  "name": "viewport-witness-client",
+  "version": "0.1.0",
+  "description": "Preview, approve and retrieve a hosted ViewportWitness browser QA report without installing a browser",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "viewport-witness": "bin/viewport-witness.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "scripts",
+    "examples",
+    "README.md",
+    "npm-shrinkwrap.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Baffles78/viewport-witness.git"
+  },
+  "dependencies": {
+    "@coinbase/cdp-sdk": "1.56.0",
+    "@x402/core": "2.27.0",
+    "@x402/evm": "2.27.0",
+    "@x402/svm": "2.27.0",
+    "viem": "2.56.8"
+  }
+}

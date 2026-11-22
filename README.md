@@ -10,6 +10,8 @@ The sample is a static local-test demonstration.
 The [first-purchase quickstart](docs/QUICKSTART.md) shows a no-wallet preview with network,
 recipient and price, the `--wallet cdp` shortcut for an existing CDP Base account, and
 `--resume --output <same-directory>` to retrieve an accepted job without signing or paying again.
+The [ready-to-run client](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.1.0)
+runs through `npx` with Node.js 22+: no checkout, build or local browser installation.
 
 Two low-resource paid agent tools complement browser QA: `extract_page` converts one public HTML page to deterministic Markdown for $0.005 USDC, and `web_release_gate` passively checks one public page's release security controls for $0.05 USDC. Both share the Base/Solana x402 rails, idempotency protection, single-worker queue, and seven-day report lifecycle. They do not accept caller-supplied HTML, credentials, cookies, custom headers, uploads, or private-network targets.
 

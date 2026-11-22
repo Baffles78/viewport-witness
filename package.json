@@ -14,6 +14,8 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "tsc",
+    "build:client": "npm run build && node scripts/build-client-package.mjs",
+    "test:client-package": "npm run build:client && node scripts/test-client-package.mjs",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ tests/ --ext .ts",
