@@ -1,3 +1,5 @@
+import { discoveryJson, merchantCoverage, validateProducts } from './lib/bazaar-coverage.mjs'
+
 const BASE_URL = process.env.VIEWPORT_WITNESS_BASE_URL ?? 'https://qa.honeygate.app'
 const REGISTRY_NAME = 'io.github.Baffles78/viewport-witness'
 const BAZAAR_SEARCH = 'https://api.cdp.coinbase.com/platform/v2/x402/discovery/search'
@@ -48,7 +50,7 @@ async function checkChallenge() {
   try {
     const response = await fetch(`${BASE_URL}/v1/checks`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-viewportwitness-source': 'monitor' },
       body: JSON.stringify({ url: 'https://example.com' }),
       signal: AbortSignal.timeout(20_000),
     })
@@ -81,7 +83,7 @@ async function checkBazaar() {
     const found = []
     const missing = []
     for (const [query, paths] of expectations) {
-      const url = `${BAZAAR_SEARCH}?query=${encodeURIComponent(query)}&type=http`
+      const url = `${BAZAAR_SEARCH}?query=${encodeURIComponent(query)}&type=http&url=${encodeURIComponent(new URL(BASE_URL).hostname)}`
       const response = await requireOk(url)
       const body = await response.json()
       const resources = new Set(
@@ -95,12 +97,34 @@ async function checkBazaar() {
       }
     }
     return result(
-      'Coinbase Bazaar coverage',
+      'Coinbase Bazaar search visibility',
       missing.length === 0,
       `found: ${found.join('; ') || 'none'}; missing: ${missing.join('; ') || 'none'}`,
     )
   } catch (error) {
-    return result('Coinbase Bazaar coverage', false, error instanceof Error ? error.message : String(error))
+    return result('Coinbase Bazaar search visibility', false, error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function checkMerchant() {
+  try {
+    const terms = await discoveryJson(`${BASE_URL}/.well-known/x402`)
+    const addresses = [terms.payTo, ...(terms.accepts ?? []).map(item => item.payTo)].filter(Boolean)
+    const coverage = await merchantCoverage(BASE_URL, addresses)
+    return result('Coinbase merchant catalog', coverage.complete && !coverage.missing.length,
+      JSON.stringify(coverage))
+  } catch (error) {
+    return result('Coinbase merchant catalog', false, `unknown: ${error.message}`)
+  }
+}
+
+async function checkValidation() {
+  if (!process.argv.includes('--validate-endpoints')) return []
+  try {
+    return (await validateProducts(BASE_URL)).map(item => result(`Coinbase validator ${item.path}`,
+      item.valid && item.accepted && item.failures.length === 0, JSON.stringify(item)))
+  } catch (error) {
+    return [result('Coinbase endpoint validation', false, `unknown: ${error.message}`)]
   }
 }
 
@@ -108,12 +132,19 @@ const checks = [
   ...(await checkPublicDocuments()),
   await checkRegistry(),
   await checkChallenge(),
+  await checkMerchant(),
   await checkBazaar(),
+  ...(await checkValidation()),
 ]
 
+const searchName = 'Coinbase Bazaar search visibility'
+const optional = new Set([searchName, 'Coinbase merchant catalog'])
 for (const check of checks) {
-  console.log(`${check.ok ? 'PASS' : 'FAIL'} ${check.name}: ${check.detail}`)
+  const label = check.ok ? 'PASS' : optional.has(check.name) ? 'WARN' : 'FAIL'
+  console.log(`${label} ${check.name}: ${check.detail}`)
 }
-
-const coreFailure = checks.some((check) => !check.ok && check.name !== 'Coinbase Bazaar coverage')
-if (coreFailure || (process.argv.includes('--require-bazaar') && !checks.at(-1).ok)) process.exitCode = 1
+const coreFailure = checks.some(check => !check.ok && !optional.has(check.name))
+const catalogFailure = checks.some(check => check.name === 'Coinbase merchant catalog' && !check.ok)
+const searchFailure = checks.some(check => check.name === searchName && !check.ok)
+if (coreFailure || (process.argv.includes('--require-bazaar') && catalogFailure) ||
+    (process.argv.includes('--require-search') && searchFailure)) process.exitCode = 1
