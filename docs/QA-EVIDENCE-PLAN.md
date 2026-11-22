@@ -72,7 +72,8 @@ lesson-independent-test-evidence (updated 2026-10-05): clean working tree checke
 tests must include independently specified negative cases. Their dated historical
 evidence does not certify this build. Planning identified that global rule-ID
 unions hide viewport migrations; repair outcomes must preserve viewport identity.
-Independent acceptance and deployment remain pending until recorded below.
+Independent source acceptance and deployment are complete; see
+[release evidence](QA-EVIDENCE-RELEASE.md). Hosted exclusions remain follow-up.
 
 Local validation: baseline 596 tests passed before changes. With the additions,
 629 unit/integration tests, 32 browser end-to-end tests and the offline CLI test
