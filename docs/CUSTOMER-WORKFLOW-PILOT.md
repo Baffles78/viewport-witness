@@ -36,8 +36,8 @@ Reuse the existing pinned client from [QUICKSTART.md](QUICKSTART.md) to preview 
 single baseline. Do not add `--execute` or load a signing connector. Save its quote
 and missing-configuration names. Do not put secrets into this repository or guide.
 
-The approved source version will support this comparison input (do not send it to
-the deployed service until hosted exclusions are released):
+The released service supports this comparison input. Replace placeholders only
+after obtaining an unexpired baseline and the caller's spending authority:
 
 ```json
 {

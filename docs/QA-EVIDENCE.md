@@ -1,10 +1,10 @@
 # Repair and visual evidence
 
-The hosted additions were deployed on 2026-11-22 from reviewed source
-`e35f2555d554b4432ee58a689877a743e17bd26a`. Hosted visual exclusions are prepared
-in source and tested locally; they are not deployed by this change.
+Hosted browser evidence, including visual exclusions, is deployed from reviewed
+source `c0ebd88c51d702f122fd9fd4eadf6bd48f5f5ae6` as of 2026-11-22.
 HTTP remains primary. Prices, payment authorization and three viewports are unchanged.
-See [release evidence](QA-EVIDENCE-RELEASE.md) for verification and its limits.
+See [hosted exclusion release evidence](HOSTED-EXCLUSIONS-RELEASE.md) and the
+[earlier evidence release](QA-EVIDENCE-RELEASE.md) for verification and its limits.
 
 ## Check whether a repair worked
 
@@ -90,9 +90,9 @@ untouched. No accessibility, layout, assertion or browser-error finding is hidde
 
 Zero filtered differences do not certify a safe release.
 
-## Hosted visual exclusions (prepared, not deployed)
+## Hosted visual exclusions
 
-The prepared `POST /v1/compare` and MCP `compare_page` accept optional
+`POST /v1/compare` and MCP `compare_page` accept optional
 `visualExclusions` with the same explicit integer rectangles, grouped by viewport:
 
 ```json
