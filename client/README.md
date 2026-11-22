@@ -6,7 +6,7 @@ This package calls the hosted service; it does not run a server or browser worke
 Preview one public HTTPS page without loading a wallet or paying:
 
 ```sh
-npx --yes https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
 The versioned GitHub release tarball is the distribution. It is not an npm registry listing.
@@ -27,7 +27,7 @@ Funded CDP-provider acceptance remains unverified; the underlying generic Base f
 Retrieve an already accepted job without a wallet or a permitted new payment:
 
 ```sh
-npx --yes https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz --resume --output out/my-deployment-001
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --resume --output out/my-deployment-001
 ```
 
 Keep the output/checkpoint for recovery. Uncertain payment attempts require reconciliation;

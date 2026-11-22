@@ -11,14 +11,14 @@ import { quickstartUsage } from './lib/quickstart-usage.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const networks = { base: 'eip155:8453', solana: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' }
 const help = `Preview one deployed page without paying:
-  node scripts/first-check.mjs --url https://example.com --run-id deploy-123
+  viewport-witness --url https://example.com --run-id deploy-123
 
 After approving a payment, repeat with:
   --execute --wallet-module <existing-connector.mjs> --network base --recipient <approved-address>
 Or select the supplied existing-account connector with --wallet cdp instead of --wallet-module.
 
 Retrieve an accepted job without a wallet or new payment:
-  node scripts/first-check.mjs --resume --output <same-output-directory>
+  viewport-witness --resume --output <same-output-directory>
 
 Options: --url, --run-id, --output, --budget (default 0.08 USDC), --network base|solana,
 --recipient, --fee-payer (required for Solana), --wallet-module, --wallet cdp, --execute, --resume.
