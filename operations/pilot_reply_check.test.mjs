@@ -10,6 +10,7 @@ test('quiet unchanged checks and reply deduplication', () => {
   assert.deepEqual(notices(validateReport(r, contacts), s, contacts), []);
   r.builders[0].incoming_ids = ['id123', 'id123'];
   assert.equal(notices(r, s, contacts).length, 1);
+  assert.match(notices(r, s, contacts)[0].text, /verify the author/);
   s.seen.push('B01:id123');
   assert.equal(notices(r, s, contacts).length, 0);
 });
