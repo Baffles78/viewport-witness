@@ -1,0 +1,21 @@
+[Unit]
+Description=Notify owner of new ViewportWitness agent feedback
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/viewport-witness-operations/operations/feedback_notify.py
+EnvironmentFile=/etc/apex-telegram-bot.env
+User=root
+UMask=0077
+StateDirectory=viewport-witness-feedback
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/docker/volumes/viewport-witness_vw-data/_data
+ReadWritePaths=/opt/apex-errors
+MemoryMax=128M
+CPUQuota=20%
+TimeoutStartSec=60

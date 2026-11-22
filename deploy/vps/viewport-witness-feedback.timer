@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ViewportWitness agent feedback every 15 minutes
+
+[Timer]
+OnActiveSec=15s
+OnUnitActiveSec=15min
+AccuracySec=15s
+Unit=viewport-witness-feedback.service
+
+[Install]
+WantedBy=timers.target
