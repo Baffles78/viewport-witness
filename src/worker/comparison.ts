@@ -5,6 +5,7 @@ import pixelmatch from 'pixelmatch'
 import type { JobStore } from '../db.js'
 import type { QAReport, Viewport, ViewportResult, VisualComparisonResult } from '../types.js'
 import { VIEWPORT_NAMES } from '../types.js'
+import { buildRepairVerification } from './repair-verification.js'
 
 // Compares a finished job with its baseline: pixel diffs per viewport (diff PNGs are
 // written next to the job's screenshots), accessibility ids added/resolved, error counts.
@@ -82,6 +83,10 @@ export async function buildComparison(
   )
   return {
     baselineJobId,
+    repairVerification: buildRepairVerification(baseline, {
+      url: store.getJob(jobId)?.url ?? '',
+      viewports: currentViewports,
+    }),
     evidenceComplete:
       evidenceLimitations.length === 0 && Object.keys(visual).length === VIEWPORT_NAMES.length,
     evidenceLimitations,

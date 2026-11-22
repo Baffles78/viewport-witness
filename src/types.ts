@@ -93,6 +93,7 @@ export interface AccessibilityViolation {
 }
 
 export interface PerformanceEvidence {
+  resourceDetails?: import('./worker/performance.js').ResourceDetails
   navigation: {
     dnsMs?: number
     connectMs?: number
@@ -117,6 +118,7 @@ export interface PerformanceEvidence {
 }
 
 export interface ViewportResult {
+  annotations?: import('./worker/annotations.js').ScreenshotAnnotations
   viewport: Viewport
   dimensions: ViewportDimensions
   loadStatus: 'success' | 'timeout' | 'error'
@@ -211,6 +213,7 @@ export interface QAReport {
     results: Partial<Record<Viewport, AssertionResult[]>>
   }
   comparison?: {
+    repairVerification?: import('./worker/repair-verification.js').RepairVerification
     baselineJobId: string
     evidenceComplete: boolean
     evidenceLimitations: string[]

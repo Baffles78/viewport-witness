@@ -8,6 +8,7 @@ import { serviceSchemas } from './openapi/schemas-service.js'
 import { webProductSchemas } from './openapi/schemas-web-products.js'
 import { reportSchemas } from './openapi/schemas-report.js'
 import { viewportSchemas } from './openapi/schemas-viewport.js'
+import { evidenceSchemas, annotationPaths } from './openapi/schemas-evidence.js'
 import { feedbackPaths, feedbackSchemas } from './openapi/paths-feedback.js'
 import { mcpFeedbackInvitation } from './feedback/invitation.js'
 
@@ -36,6 +37,7 @@ export const openApiSpec = {
     ...serviceInfoPaths,
     ...productPaths,
     ...checkPaths,
+    ...annotationPaths,
     ...feedbackPaths,
   },
   components: {
@@ -54,6 +56,7 @@ export const openApiSpec = {
       ...webProductSchemas,
       ...reportSchemas,
       ...viewportSchemas,
+      ...evidenceSchemas,
       ...feedbackSchemas,
     },
   },

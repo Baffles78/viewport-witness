@@ -458,3 +458,13 @@ ENABLE_MAINNET_PAYMENTS=false
 | `mainnet_payments_disabled` 503     | `PAYMENT_MODE=production` but `ENABLE_MAINNET_PAYMENTS=false` | Set `ENABLE_MAINNET_PAYMENTS=true` (after review) or use `test` mode                            |
 | Out of disk space                   | Storage ceiling reached                                       | Decrease `RETENTION_DAYS` or increase `MAX_STORAGE_GB`                                          |
 | High memory usage                   | Playwright browser leak                                       | Restart service; check for stuck jobs                                                           |
+
+## Prepared QA evidence additions
+
+See [QA evidence](QA-EVIDENCE.md) for repair states, optional derivative PNGs and
+local exclusions. Derivatives use the existing job directory and are counted by
+recursive disk storage cleanup; they expire with jobs. Archives omit annotations.
+Missing derivative evidence must not be interpreted as a clean page. No new
+payment, listener, worker process or background job is introduced. Deployment
+still requires exact-source independent acceptance and owner release approval.
+

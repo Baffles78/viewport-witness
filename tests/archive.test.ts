@@ -69,6 +69,7 @@ async function completedJob(
       viewport,
       screenshotUrl: `/v1/checks/${id}/screenshots/${viewport}`,
       screenshotBytes: pngBytes,
+      annotations: { url: `/v1/checks/${id}/annotations/${viewport}`, boxes: [] },
       assertions: [
         { assertion: { type: 'textVisible', value: 'secret' }, passed: true, detail: '' },
       ],
@@ -126,6 +127,7 @@ describe('ArchiveManager', () => {
     expect(text).not.toContain('secret')
     expect(snapshot).not.toHaveProperty('assertions')
     expect(snapshot).not.toHaveProperty('comparison')
+    expect(snapshot.viewports.desktop).not.toHaveProperty('annotations')
     expect(snapshot.viewports.desktop?.screenshotUrl).toBe(
       `/v1/history/snapshots/${record!.id}/screenshots/desktop`,
     )

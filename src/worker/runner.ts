@@ -292,6 +292,10 @@ export class WorkerRunner {
           job.request.assertions ?? [],
         )
         viewportResults[viewport] = result
+        if (!result.annotations && (result.layoutLocatorHints.length > 0 ||
+            result.accessibility.violations.some((v) => v.nodes.some((n) => n.locator)))) {
+          limitations.push(`viewport:${viewport} annotated screenshot unavailable; inspect original evidence.`)
+        }
         if (result.layoutObservation !== 'measured') {
           limitations.push(`viewport:${viewport} layout observation unavailable.`)
         }
@@ -367,6 +371,7 @@ export class WorkerRunner {
         'layout:offscreen',
         'network:failed-requests',
         'performance:navigation-and-paint',
+        'performance:largest-observable-resources',
         'interaction:visibility',
         'interaction:focusability',
       ],

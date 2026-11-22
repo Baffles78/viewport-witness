@@ -4,6 +4,7 @@ import { createInfoRouter } from './routes/info.js'
 import { createFeedbackRouter } from './routes/feedback.js'
 import { feedbackDiscovery } from './feedback-discovery.js'
 import { createChecksRouter } from './routes/checks.js'
+import { createAnnotationsRouter } from './routes/annotations.js'
 import { createProductsRouter } from './routes/products.js'
 import { createWebProductsRouter } from './routes/web-products.js'
 import { createMcpRouter } from '../mcp.js'
@@ -190,6 +191,7 @@ export function createApp(
 
   const checksRouter = createChecksRouter(store, runner, cfg, paymentMiddleware)
   app.use(checksRouter)
+  app.use(createAnnotationsRouter(store, cfg))
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
