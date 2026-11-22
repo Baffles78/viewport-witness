@@ -1,5 +1,6 @@
 import { createCheckRequestSchema } from './shared.js'
 import { FEEDBACK_URL, QUICKSTART_ENTRY_URL } from '../public.js'
+import { visualExclusionsInputSchema } from './visual-exclusions.js'
 
 // OpenAPI section: Request bodies and service/status responses.
 export const serviceSchemas = {
@@ -76,6 +77,7 @@ export const serviceSchemas = {
     properties: {
       url: { type: 'string', format: 'uri' },
       baselineJobId: { type: 'string', format: 'uuid' },
+      visualExclusions: visualExclusionsInputSchema,
     },
   },
   ServiceInfo: {

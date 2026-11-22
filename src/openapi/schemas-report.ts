@@ -1,4 +1,5 @@
 import { FEEDBACK_URL } from '../public.js'
+import { visualComparisonSchema } from './visual-exclusions.js'
 
 // OpenAPI section: QA report, agent result and assertion results.
 export const reportSchemas = {
@@ -110,7 +111,7 @@ export const reportSchemas = {
           baselineJobId: { type: 'string' },
           evidenceComplete: { type: 'boolean' },
           evidenceLimitations: { type: 'array', items: { type: 'string' } },
-          visual: { type: 'object' },
+          visual: { type: 'object', additionalProperties: visualComparisonSchema },
           accessibility: { type: 'object' },
           errors: { type: 'object' },
           repairVerification: { $ref: '#/components/schemas/RepairVerification' },

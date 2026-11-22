@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { FeedbackStore, initializeFeedback } from './db/feedback.js'
 import { QuickstartStore } from './db/quickstart.js'
 import { initializeGrowth } from './db/growth-schema.js'
-import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
+import type { JobKind, JobRecord, JobStatus } from './types.js'
 import {
   growthContext,
   GROWTH_SOURCES,
@@ -143,7 +143,7 @@ export class JobStore {
     customerId?: string
     expiresAt: number
     kind?: JobKind
-    request?: { assertions?: PageAssertion[]; maxOutputTokens?: number }
+    request?: JobRecord['request']
     baselineJobId?: string
     initialStatus?: 'queued' | 'payment_pending'
   }): JobRecord {
@@ -565,7 +565,7 @@ export class JobStore {
     id: string
     url: string
     kind: JobKind
-    request: { assertions?: PageAssertion[]; maxOutputTokens?: number }
+    request: JobRecord['request']
     baselineJobId?: string
     idempotencyKey?: string
     paymentId: string

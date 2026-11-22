@@ -10,6 +10,7 @@ import { canReplayJob, sameJobIntent } from '../../idempotency-replay.js'
 import { VIEWPORT_NAMES, type JobKind, type PageAssertion } from '../../types.js'
 import type { WorkerRunner } from '../../worker/runner.js'
 import { asyncHandler, readIdempotencyKey } from '../http-helpers.js'
+import { visualExclusionsSchema, normalizeVisualExclusions, type VisualExclusions } from '../../visual-exclusions.js'
 
 // In paid modes, send the x402 challenge to unsigned requests before running any
 // body, URL, or baseline validation. Signed requests skip this and proceed to
@@ -69,6 +70,7 @@ const compareSchema = z
   .object({
     url: z.string().url().max(2048),
     baselineJobId: z.string().uuid(),
+    visualExclusions: visualExclusionsSchema.optional(),
   })
   .strict()
 
@@ -102,6 +104,7 @@ export async function createProductJob(params: {
   assertions?: PageAssertion[]
   maxOutputTokens?: number
   baselineJobId?: string
+  visualExclusions?: VisualExclusions
   idempotencyKey?: string
   paymentId?: string
   customerId?: string
@@ -118,6 +121,7 @@ export async function createProductJob(params: {
       ...(params.assertions ? { assertions: params.assertions } : {}),
       ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
       ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
+      ...(params.visualExclusions ? { visualExclusions: params.visualExclusions } : {}),
     }) && (!params.paymentId || job.paymentId === params.paymentId)
   const existing =
     (params.idempotencyKey ? params.store.getJobByIdempotencyKey(params.idempotencyKey) : null) ??
@@ -144,6 +148,7 @@ export async function createProductJob(params: {
       request: {
         ...(params.assertions ? { assertions: params.assertions } : {}),
         ...(params.maxOutputTokens ? { maxOutputTokens: params.maxOutputTokens } : {}),
+        ...(params.visualExclusions ? { visualExclusions: normalizeVisualExclusions(params.visualExclusions) } : {}),
       },
       ...(params.baselineJobId ? { baselineJobId: params.baselineJobId } : {}),
       initialStatus: params.deferEnqueue ? 'payment_pending' : 'queued',
@@ -239,13 +244,14 @@ export function createProductsRouter(
     const existing = store.getJobByIdempotencyKey(key)
     if (existing) {
       const input = (req as Request & {
-        productInput?: { url: string; assertions?: PageAssertion[]; baselineJobId?: string }
+        productInput?: { url: string; assertions?: PageAssertion[]; baselineJobId?: string; visualExclusions?: VisualExclusions }
       }).productInput
       const intent = kind === 'verify'
         ? { kind: 'verify' as const, url: input?.url ?? '',
             ...(input?.assertions ? { assertions: input.assertions } : {}) }
         : { kind: 'compare' as const, url: input?.url ?? '',
-            ...(input?.baselineJobId ? { baselineJobId: input.baselineJobId } : {}) }
+            ...(input?.baselineJobId ? { baselineJobId: input.baselineJobId } : {}),
+            ...(input?.visualExclusions ? { visualExclusions: input.visualExclusions } : {}) }
       if (!canReplayJob(existing, req, cfg, intent)) {
         res.status(409).json({ error: 'idempotency_key_conflict', code: 'idempotency_key_conflict' })
         return
@@ -363,7 +369,8 @@ export function createProductsRouter(
         return
       }
       ;(req as Request & { productInput?: unknown }).productInput = parsed.data
-      req.jobIntent = { kind: 'compare', url: parsed.data.url, baselineJobId: parsed.data.baselineJobId }
+      req.jobIntent = { kind: 'compare', url: parsed.data.url, baselineJobId: parsed.data.baselineJobId,
+        ...(parsed.data.visualExclusions ? { visualExclusions: parsed.data.visualExclusions } : {}) }
       next()
     }),
     idempotencyPreflight('compare'),
@@ -383,6 +390,7 @@ export function createProductsRouter(
         kind: 'compare',
         url: input.url,
         baselineJobId: input.baselineJobId,
+        ...(input.visualExclusions ? { visualExclusions: input.visualExclusions } : {}),
         ...(key ? { idempotencyKey: key } : {}),
         ...identity,
       }))

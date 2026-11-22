@@ -6,6 +6,8 @@ import type { JobStore } from '../db.js'
 import type { QAReport, Viewport, ViewportResult, VisualComparisonResult } from '../types.js'
 import { VIEWPORT_NAMES } from '../types.js'
 import { buildRepairVerification } from './repair-verification.js'
+import { normalizeVisualExclusions, type VisualExclusions } from '../visual-exclusions.js'
+import { compareWithExclusions } from './visual-exclusions.js'
 
 // Compares a finished job with its baseline: pixel diffs per viewport (diff PNGs are
 // written next to the job's screenshots), accessibility ids added/resolved, error counts.
@@ -15,7 +17,9 @@ export async function buildComparison(
   jobId: string,
   baselineJobId: string,
   currentViewports: Partial<Record<Viewport, ViewportResult>>,
+  requestedExclusions: VisualExclusions = {},
 ): Promise<NonNullable<QAReport['comparison']>> {
+  const exclusions = normalizeVisualExclusions(requestedExclusions)
   const baselineJob = store.getJob(baselineJobId)
   if (!baselineJob?.reportPath || baselineJob.status !== 'complete') {
     throw new Error('baseline_unavailable')
@@ -33,9 +37,13 @@ export async function buildComparison(
     }
     let baselinePng: PNG
     let currentPng: PNG
+    let before: Buffer
+    let after: Buffer
     try {
-      baselinePng = PNG.sync.read(await fs.readFile(baselineShot.path))
-      currentPng = PNG.sync.read(await fs.readFile(currentShot.path))
+      before = await fs.readFile(baselineShot.path)
+      after = await fs.readFile(currentShot.path)
+      baselinePng = PNG.sync.read(before)
+      currentPng = PNG.sync.read(after)
     } catch {
       evidenceLimitations.push(`${viewport}: screenshot evidence could not be decoded.`)
       continue
@@ -45,7 +53,7 @@ export async function buildComparison(
       continue
     }
     const diff = new PNG({ width: currentPng.width, height: currentPng.height })
-    const changedPixels = pixelmatch(
+    let changedPixels = pixelmatch(
       baselinePng.data,
       currentPng.data,
       diff.data,
@@ -53,14 +61,29 @@ export async function buildComparison(
       currentPng.height,
       { threshold: 0.1 },
     )
+    let diffBytes = PNG.sync.write(diff)
+    let exclusionEvidence: Partial<VisualComparisonResult> = {}
+    if (exclusions[viewport]?.length) {
+      try {
+        const filtered = compareWithExclusions(before, after, exclusions[viewport])
+        changedPixels = filtered.summary.changedPixels
+        diffBytes = filtered.diff
+        const { exclusions: applied, excludedPixels, includedPixels, rawChangedPixels, rawChangedPercent } = filtered.summary
+        exclusionEvidence = { exclusions: applied, excludedPixels, includedPixels, rawChangedPixels, rawChangedPercent }
+      } catch {
+        evidenceLimitations.push(`${viewport}: exclusions could not be applied to the screenshot evidence.`)
+        continue
+      }
+    }
     const diffPath = path.join(screenshotsDir, jobId, `diff-${viewport}.png`)
-    await fs.writeFile(diffPath, PNG.sync.write(diff))
+    await fs.writeFile(diffPath, diffBytes)
     visual[viewport] = {
       viewport,
       changedPixels,
       changedPercent: Number(
-        ((changedPixels / (currentPng.width * currentPng.height)) * 100).toFixed(4),
+        ((changedPixels / (exclusionEvidence.includedPixels ?? (currentPng.width * currentPng.height))) * 100).toFixed(4),
       ),
+      ...exclusionEvidence,
       diffImageUrl: `/v1/checks/${jobId}/diffs/${viewport}`,
       baselineScreenshotSha256: baselineShot.sha256,
       currentScreenshotSha256: currentShot.sha256,

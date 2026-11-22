@@ -17,6 +17,7 @@ import {
 import { ExactEvmScheme } from '@x402/evm/exact/server'
 import { ExactSvmScheme } from '@x402/svm/exact/server'
 import { z } from 'zod'
+import { visualExclusionsSchema, normalizeVisualExclusions, type VisualExclusions } from './visual-exclusions.js'
 import type { Config } from './config.js'
 import type { JobStore } from './db.js'
 import { PUBLIC_BASE_URL } from './public.js'
@@ -130,6 +131,8 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
         ? { assertions: args['assertions'] as PageAssertion[] } : {}),
       ...(tier === 'compare' && typeof args['baselineJobId'] === 'string'
         ? { baselineJobId: args['baselineJobId'] } : {}),
+      ...(tier === 'compare' && args['visualExclusions'] !== undefined
+        ? { visualExclusions: normalizeVisualExclusions(args['visualExclusions']) } : {}),
       ...(tier === 'extract' && typeof args['maxOutputTokens'] === 'number'
         ? { maxOutputTokens: args['maxOutputTokens'] } : {}),
     })
@@ -303,6 +306,9 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
       const url = typeof args['url'] === 'string' ? args['url'] : ''
       const valid = await validatePublicHttpsUrl(url)
       if (tier === 'compare') {
+        if (!visualExclusionsSchema.optional().safeParse(args['visualExclusions']).success) {
+          return jsonResult({ error: 'invalid_visual_exclusions', code: 'invalid_visual_exclusions' }, true)
+        }
         const baselineJobId = typeof args['baselineJobId'] === 'string' ? args['baselineJobId'] : ''
         const baseline = store.getJob(baselineJobId)
         if (
@@ -369,7 +375,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'compare_page',
-      `Choose this for visual regression testing after check_page has produced a completed, unexpired baseline. Compares screenshots and QA evidence, returning pixel-diff percentages, new or resolved accessibility issues, error deltas, performance evidence, and diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website and existing baseline report are not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402. ${mcpFeedbackInvitation}`,
+      `Choose this for visual regression testing after check_page has produced a completed, unexpired baseline. Compares screenshots and QA evidence, returning pixel-diff percentages, new or resolved accessibility issues, error deltas, performance evidence, and diagnosis. Optional visualExclusions mask explicit rectangles only in visual diffs; raw changes and nonvisual findings remain. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website and existing baseline report are not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402. ${mcpFeedbackInvitation}`,
       {
         url: publicPageUrlSchema,
         baselineJobId: z
@@ -378,12 +384,15 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
           .describe(
             'Completed, unexpired ViewportWitness check job to use as the visual baseline.',
           ),
+        visualExclusions: visualExclusionsSchema.optional(),
       },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap(
         'compare',
-        async ({ url, baselineJobId }: { url: string; baselineJobId: string }) =>
-          createToolJob('compare', { url, baselineJobId }, { url, baselineJobId }),
+        async ({ url, baselineJobId, visualExclusions }: { url: string; baselineJobId: string; visualExclusions?: VisualExclusions | undefined }) => {
+          const fields = { url, baselineJobId, ...(visualExclusions ? { visualExclusions } : {}) }
+          return createToolJob('compare', fields, fields)
+        },
       ),
     )
 

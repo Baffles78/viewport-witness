@@ -1,3 +1,5 @@
+import type { VisualExclusion, VisualExclusions } from './visual-exclusions.js'
+
 export type PaymentMode = 'test' | 'testnet' | 'production'
 
 export type JobStatus =
@@ -171,6 +173,11 @@ export interface VisualComparisonResult {
   viewport: Viewport
   changedPixels: number
   changedPercent: number
+  rawChangedPixels?: number
+  rawChangedPercent?: number
+  exclusions?: VisualExclusion[]
+  excludedPixels?: number
+  includedPixels?: number
   diffImageUrl: string
   baselineScreenshotSha256: string
   currentScreenshotSha256: string
@@ -241,7 +248,7 @@ export interface JobRecord {
   error: string | null
   retryCount: number
   kind: JobKind
-  request: { assertions?: PageAssertion[]; maxOutputTokens?: number }
+  request: { assertions?: PageAssertion[]; maxOutputTokens?: number; visualExclusions?: VisualExclusions }
   baselineJobId: string | null
   settlementState?: 'settling' | 'settled' | 'unknown' | 'rejected' | null | undefined
   settlementNetwork?: string | null | undefined
