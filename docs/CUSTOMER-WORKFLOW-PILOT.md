@@ -20,7 +20,7 @@ private staging, cookies and credentials are outside the service boundary.
 | --- | --- | --- | --- |
 | Baseline | `check_page` / `POST /v1/checks` | 0.08 USDC | Job ID, authoritative settlement receipt, report, originals and annotations |
 | Repair | Caller changes/deploys their site | No service purchase | Deployment reference, time, intended repair |
-| Verify repair | `compare_page` / `POST /v1/compare` | 0.12 USDC | Exact baseline ID, new job ID, settlement, repair states, raw/filtered diffs |
+| Verify repair | `compare_page` / `POST /v1/compare` | 0.12 USDC | Exact baseline ID, new job ID, settlement, repair states, originals, raw/filtered counts and diff PNG |
 | Later repeat use | `check_page` on a later deployment | 0.08 USDC | New deployment reference, distinct job and authoritative settlement |
 
 The proposed three-report ceiling is **0.28 USDC**, excluding any network/provider
