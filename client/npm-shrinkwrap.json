@@ -20,7 +20,7 @@
         "viewport-witness": "bin/viewport-witness.mjs"
       },
       "engines": {
-        "node": ">=22"
+        "node": ">=22.12.0"
       }
     },
     "node_modules/@adraffy/ens-normalize": {

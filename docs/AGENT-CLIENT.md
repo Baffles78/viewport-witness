@@ -1,6 +1,6 @@
 # Ready client for AI callers
 
-For one page, use the pinned [ready-to-run package](../client/README.md) with Node.js 22+
+For one page, use the pinned [ready-to-run package](../client/README.md) with Node.js 22.12.0 or newer
 and npm; no source checkout, TypeScript build or browser installation is required.
 The repository workflow below remains available for programmatic and multi-page callers.
 

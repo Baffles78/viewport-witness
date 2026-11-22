@@ -20,7 +20,7 @@ in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator test
 `VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
 Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
 
-Prerequisites: Node.js 22 or later and npm. Run the pinned client directly; no checkout,
+Prerequisites: Node.js 22.12.0 or later and npm. Run the pinned client directly; no checkout,
 TypeScript build or browser installation is needed. This tarball is a GitHub release asset,
 not an npm registry listing. Runtime dependencies are pinned by its included shrinkwrap.
 

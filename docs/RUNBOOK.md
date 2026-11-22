@@ -41,7 +41,7 @@ this locally. Public release still follows the existing exact-source review/rele
 
 ## Prerequisites
 
-- Node.js 22 or newer (`node --version`)
+- Node.js 22.13.0 or newer (`node --version`)
 - npm 10 or newer
 - git
 - Docker and Compose (for container deployment; optional for local dev)

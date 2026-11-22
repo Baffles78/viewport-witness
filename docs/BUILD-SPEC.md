@@ -53,7 +53,7 @@ Top-level report includes `PASS`, `FAIL`, or `INCONCLUSIVE`, created/expiry time
 
 ## Runtime design
 
-- Node.js 22 or newer and strict TypeScript.
+- Node.js 22.13.0 or newer and strict TypeScript.
 - Express is acceptable. SQLite in WAL mode is acceptable for jobs, idempotency, and metadata.
 - One worker at a time by default. API and worker code must be separable into different processes later.
 - Use Playwright Chromium and axe-core.

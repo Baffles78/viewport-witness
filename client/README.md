@@ -1,6 +1,6 @@
 # ViewportWitness ready-to-run client
 
-Node.js 22+ and npm are required. No checkout, TypeScript build or local browser installation.
+Node.js 22.12.0 or newer and npm are required. No checkout, TypeScript build or local browser installation.
 This package calls the hosted service; it does not run a server or browser worker.
 
 Preview one public HTTPS page without loading a wallet or paying:
