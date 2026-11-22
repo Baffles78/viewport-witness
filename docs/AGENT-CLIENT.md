@@ -38,6 +38,13 @@ Use [AGENT-WORKFLOW.md](AGENT-WORKFLOW.md) to select products, interpret actiona
 
 ## Supplied connector for an existing CDP Base account
 
+The one-page entrypoint accepts `--wallet cdp --network base` to select this connector;
+preview shows the chosen public payment terms and missing environment variable names.
+No connector code is loaded until explicitly executing after approval. After a job is
+accepted, `npm run check:page -- --resume --output <same-directory>` retrieves it without
+any connector or signing capability. It refuses uncertain/unaccepted states. See the
+[quickstart](QUICKSTART.md) for the preview → approve → execute → wallet-free resume flow.
+
 The repository includes `examples/wallets/existing-cdp-base.mjs`. Configure these in your local
 secret manager or environment, never in a committed file or command-line arguments:
 

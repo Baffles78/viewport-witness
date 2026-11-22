@@ -3,7 +3,7 @@
   "ceilings": {
     "src/db.ts": 998,
     "src/payment/index.ts": 825,
-    "src/release-check.ts": 544,
+    "src/release-check.ts": 526,
     "tests/paid-admission-recovery.test.ts": 861
   }
 }

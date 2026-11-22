@@ -5,7 +5,11 @@ evidence across three screen sizes without setting up a browser. Public HTTPS pa
 
 [Free sample report](https://qa.honeygate.app/samples/example/) · [Start with a no-payment budget preview](docs/QUICKSTART.md)
 
-The sample is a static local-test demonstration. Its public URL becomes available when this change is deployed.
+The sample is a static local-test demonstration.
+
+The [first-purchase quickstart](docs/QUICKSTART.md) shows a no-wallet preview with network,
+recipient and price, the `--wallet cdp` shortcut for an existing CDP Base account, and
+`--resume --output <same-directory>` to retrieve an accepted job without signing or paying again.
 
 Two low-resource paid agent tools complement browser QA: `extract_page` converts one public HTML page to deterministic Markdown for $0.005 USDC, and `web_release_gate` passively checks one public page's release security controls for $0.05 USDC. Both share the Base/Solana x402 rails, idempotency protection, single-worker queue, and seven-day report lifecycle. They do not accept caller-supplied HTML, credentials, cookies, custom headers, uploads, or private-network targets.
 
