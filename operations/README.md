@@ -78,3 +78,43 @@ is changed. Monitor/test-client sources and nonproduction modes are excluded. It
 missing/broken exclusion evidence or unavailable analytics instead of claiming zero sales.
 Tests: `python3 operations/test_quickstart_summary.py`. Interpretation and retention:
 `docs/GROWTH-ACTIVATION.md`, quickstart funnel section.
+
+## First real purchase Telegram alerts
+
+`purchase_notify.py` checks the production-only `quickstart_jobs` measurement ledger every
+five minutes through a read-only SQLite connection. It selects the first accepted production
+purchase per existing HMAC payer identity within retained 90-day history, excluding monitor,
+test-client and owner-controlled job IDs loaded from `/var/lib/viewport-witness-controlled`.
+It covers all observed access paths, including MCP, not only matched quickstart runs.
+An accepted payment triggers the alert; it does not claim report completion or lifetime
+customer/AI identity. Missing payer attribution cannot establish a first purchase.
+
+First normal run establishes a quiet baseline. Later checks send at most ten new payer
+alerts in one aggregate message and retain a durable outbox before network delivery. Successful
+acknowledgements persist private hashes so repeats, restarts and expiry of the purchase ledger
+do not re-alert the same observed payer. Transport failure retries next check; the acknowledged
+send/local-state-write crash boundary can produce a duplicate (at-least-once delivery).
+Pending candidates are revalidated against current exclusion evidence on every retry.
+No raw customer labels, target URLs, payment proofs or job IDs are sent to Telegram.
+Missing/broken ledger, analytics failures/capacity loss, or broken state fail the check rather
+than guessing that a payment is real or first. Diagnostics use the existing sanitized error book.
+
+Install only after exact-source independent review and green CI. Update the clean separate
+operations checkout to that commit, preserving existing monitor/feedback file hashes and units.
+Install `deploy/vps/viewport-witness-purchases.{service,timer}` under `/etc/systemd/system`.
+The unit reuses `/etc/apex-telegram-bot.env` and its existing authorized owner chat. It grants
+read-only DB/controlled-ledger access, bounded memory/CPU/time and mode-0700 state directory.
+Run `systemctl daemon-reload`, then `systemctl start viewport-witness-purchases.service` to
+establish the baseline. Send one explicitly labeled setup check using `purchase_notify.py
+--test` with the existing protected environment loaded; do not insert a synthetic sale.
+Enable `viewport-witness-purchases.timer`, verify a timer-triggered successful check and
+its next run. State: `/var/lib/viewport-witness-purchases/state.json`, mode 0600. No app
+deployment/restart, new credential, recipient or real payment is needed.
+
+Rollback: disable/stop only the purchases timer and oneshot, retaining its state to prevent
+re-alerts if resumed. Restore the prior operations commit if needed; existing feedback and
+monitor timers stay active. Registry: `vault/automations/registry.yaml`, entry
+`viewport-witness-purchases`. Review 2026-12-22; retire if purchase measurement is disabled
+or the owner asks. Tests: `python3 operations/test_purchase_notify.py` (seven cases), plus
+existing feedback and operator-report suites. Learning: count actual accepted payments,
+baseline old history quietly, and revalidate exclusions before retrying queued notifications.
