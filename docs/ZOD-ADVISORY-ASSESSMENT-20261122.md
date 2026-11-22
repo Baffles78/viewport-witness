@@ -27,8 +27,9 @@ Raw checkout SHA-256 values, including local line endings:
 ## Exposure and limits
 
 The advisory identifies versions below 4.6.6 as affected. The upstream patch
-changes v4 array/set/map parsers to reject oversized collections before parsing
-their elements. No verified v3 backport was found. The installed v3 array parser
+changes v4 array/set/map parsers to reject collections exceeding leading `.max()`,
+`.length()` or `.size()` bounds before parsing their elements. Unbounded schemas
+do not gain an automatic size limit. No verified v3 backport was found. The installed v3 array parser
 records the upper-bound issue and still visits the elements, so `.max(20)` alone
 does not prove early rejection or bounded parsing work.
 
