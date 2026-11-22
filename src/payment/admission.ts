@@ -132,6 +132,7 @@ export function installAdmissionHooks(
         request: {
           ...(ctx.intent.assertions ? { assertions: ctx.intent.assertions } : {}),
           ...(ctx.intent.maxOutputTokens ? { maxOutputTokens: ctx.intent.maxOutputTokens } : {}),
+          ...(ctx.intent.visualExclusions ? { visualExclusions: ctx.intent.visualExclusions } : {}),
         },
         ...(ctx.intent.baselineJobId ? { baselineJobId: ctx.intent.baselineJobId } : {}),
         ...(ctx.idempotencyKey ? { idempotencyKey: ctx.idempotencyKey } : {}),

@@ -2,12 +2,8 @@ import { createHash } from 'node:crypto'
 import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
 
-export interface VisualExclusion {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+import { validateExclusions, exclusionMask } from '../visual-exclusions.js'
+export { validateExclusions, type VisualExclusion } from '../visual-exclusions.js'
 
 const MAX_PNG_BYTES = 8 * 1024 * 1024
 const MAX_PIXELS = 1440 * 900
@@ -30,40 +26,7 @@ export function decodeBoundedPng(data: Buffer): PNG {
   return PNG.sync.read(data)
 }
 
-export function validateExclusions(
-  value: unknown,
-  width: number,
-  height: number,
-): VisualExclusion[] {
-  if (!Array.isArray(value) || value.length > 20) {
-    throw new Error('Exclusions must be an array of at most 20 rectangles.')
-  }
-  return value.map((item: unknown) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('Each exclusion must be an integer rectangle.')
-    }
-    const row = item as Record<string, unknown>
-    if (
-      Object.keys(row).sort().join(',') !== 'height,width,x,y' ||
-      !['x', 'y', 'width', 'height'].every((key) => Number.isSafeInteger(row[key]))
-    )
-      throw new Error('Each exclusion must contain only integer x, y, width and height.')
-    const rect = row as unknown as VisualExclusion
-    if (
-      rect.x < 0 ||
-      rect.y < 0 ||
-      rect.width <= 0 ||
-      rect.height <= 0 ||
-      rect.x + rect.width > width ||
-      rect.y + rect.height > height
-    ) {
-      throw new Error('Exclusion rectangles must fit entirely inside the screenshot.')
-    }
-    return { ...rect }
-  })
-}
-
-/** Offline only: raw screenshots stay untouched; exclusions affect pixel evidence alone. */
+/** Raw screenshots stay untouched; exclusions affect pixel evidence alone. */
 export function compareWithExclusions(baseline: Buffer, current: Buffer, input: unknown = []) {
   const before = decodeBoundedPng(baseline)
   const after = decodeBoundedPng(current)
@@ -73,16 +36,7 @@ export function compareWithExclusions(baseline: Buffer, current: Buffer, input: 
   const { width, height } = after
   const exclusions = validateExclusions(input, width, height)
   const totalPixels = width * height
-  const excluded = new Uint8Array(totalPixels)
-  for (const rect of exclusions) {
-    for (let y = rect.y; y < rect.y + rect.height; y++) {
-      excluded.fill(1, y * width + rect.x, y * width + rect.x + rect.width)
-    }
-  }
-  const excludedPixels = excluded.reduce((sum, value) => sum + value, 0)
-  if (excludedPixels > Math.floor(totalPixels * 0.2)) {
-    throw new Error('Exclusions may cover at most 20% of the screenshot, counting overlap once.')
-  }
+  const { mask: excluded, excludedPixels } = exclusionMask(exclusions, width, height)
   const diff = new PNG({ width, height })
   const rawChangedPixels = pixelmatch(before.data, after.data, diff.data, width, height, {
     threshold: 0.1,

@@ -1,7 +1,8 @@
 # Repair and visual evidence
 
 The hosted additions were deployed on 2026-11-22 from reviewed source
-`e35f2555d554b4432ee58a689877a743e17bd26a`; visual exclusions run locally.
+`e35f2555d554b4432ee58a689877a743e17bd26a`. Hosted visual exclusions are prepared
+in source and tested locally; they are not deployed by this change.
 HTTP remains primary. Prices, payment authorization and three viewports are unchanged.
 See [release evidence](QA-EVIDENCE-RELEASE.md) for verification and its limits.
 
@@ -87,8 +88,43 @@ changes red. Overlap is counted once. At most 20 integer rectangles and 20% of t
 image may be excluded; out-of-bounds rectangles are rejected. Original PNGs stay
 untouched. No accessibility, layout, assertion or browser-error finding is hidden.
 
-This first version is local only. Hosted `/v1/compare` does not accept exclusions.
 Zero filtered differences do not certify a safe release.
+
+## Hosted visual exclusions (prepared, not deployed)
+
+The prepared `POST /v1/compare` and MCP `compare_page` accept optional
+`visualExclusions` with the same explicit integer rectangles, grouped by viewport:
+
+```json
+{
+  "url": "https://example.com",
+  "baselineJobId": "550e8400-e29b-41d4-a716-446655440000",
+  "visualExclusions": {
+    "phonePortrait": [{ "x": 10, "y": 10, "width": 120, "height": 30 }]
+  }
+}
+```
+
+Only `phonePortrait`, `phoneLandscape` and `desktop` are accepted. Rectangles must
+fit that viewport, with at most 20 rectangles and 20% union coverage per viewport.
+These are shared protocol safety ceilings, not adjustable deployment settings.
+Invalid options are rejected before settlement. Omitted options, empty objects and
+empty viewport arrays are equivalent. Rectangle order, key order and duplicates
+do not change request identity. Changing the actual exclusions on an existing
+idempotency key or payment is a conflict; use a fresh request and budget for new work.
+Options persist with the admitted job and survive interruption and worker recovery.
+
+When regions are applied, each `comparison.visual[viewport]` also returns
+`exclusions`, `excludedPixels`, `includedPixels`, `rawChangedPixels` and
+`rawChangedPercent`. Existing `changedPixels`/`changedPercent` describe unexcluded
+pixels; their denominator is `includedPixels`. The derivative diff marks excluded
+regions blue. Original screenshots and hashes stay unchanged. Comparisons without
+regions retain the original pixel behavior and response shape.
+
+Accessibility, layout, assertions, browser errors and repair verification still
+use the full evidence. Changes inside exclusions remain disclosed and cause a
+review warning even if filtered changes are zero. An excluded visual change is
+not proof of a repair. Prices, payment schemes and approval requirements are unchanged.
 
 ## Understand performance observations
 

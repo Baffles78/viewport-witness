@@ -132,7 +132,7 @@ export const productPaths = {
       summary: 'Compare a page with a baseline job',
       operationId: 'comparePage',
       description:
-        'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Costs $0.12 USDC live on the production service; no payment required in test mode.',
+        'Produces pixel diff images and QA deltas against a completed, unexpired baseline. Optional visualExclusions contain explicit rectangles: at most 20 rectangles and 20% union coverage per viewport. Raw changes remain reported; other QA findings are unaffected. Costs $0.12 USDC live on the production service; no payment required in test mode.',
       security: x402Security,
       'x-payment-info': {
         protocols: [{ x402: {} }],

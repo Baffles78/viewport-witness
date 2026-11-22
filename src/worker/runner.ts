@@ -410,7 +410,12 @@ export class WorkerRunner {
         job.id,
         job.baselineJobId,
         publicViewportResults,
+        job.request.visualExclusions,
       )
+      if (Object.values(reportObj.comparison.visual).some((entry) => (entry?.excludedPixels ?? 0) > 0)) {
+        reportObj.limitations.push('Explicit visual exclusions were applied. Raw changes remain reported; zero filtered differences do not prove a repair or certify release safety. Nonvisual findings are unaffected.')
+        reportObj.checksPerformed.push('visual:explicit-exclusions')
+      }
       if (!reportObj.comparison.evidenceComplete) {
         reportObj.status = 'INCONCLUSIVE'
         reportObj.verdict = buildVerdict('INCONCLUSIVE', publicViewportResults)
@@ -424,6 +429,15 @@ export class WorkerRunner {
       const changed = Object.values(reportObj.comparison.visual).some(
         (entry) => entry && entry.changedPixels > 0,
       )
+      const excludedChanges = Object.values(reportObj.comparison.visual).some(
+        (entry) => (entry?.rawChangedPixels ?? 0) > (entry?.changedPixels ?? 0),
+      )
+      if (excludedChanges) {
+        reportObj.verdict.warnings += 1
+        reportObj.verdict.reasons.push('Visual changes exist inside excluded regions; inspect the raw screenshots before accepting a repair.')
+        reportObj.verdict.recommendedActions.push({ code: 'excluded_visual_change', priority: 'medium', detail: 'Review the declared exclusions and original screenshots; filtered zero is not evidence of a repair.' })
+        if (reportObj.verdict.decision === 'safe_to_ship') reportObj.verdict.decision = 'review'
+      }
       if (changed) {
         reportObj.verdict.warnings += 1
         reportObj.verdict.reasons.push('Visual changes were detected against the baseline.')
