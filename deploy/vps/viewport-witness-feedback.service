@@ -10,6 +10,7 @@ EnvironmentFile=/etc/apex-telegram-bot.env
 User=root
 UMask=0077
 StateDirectory=viewport-witness-feedback
+StateDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
