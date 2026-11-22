@@ -19,3 +19,39 @@ The public `/health` check (apex-vps-http-health) only proves the app answers. `
 Install from the pull-only `/opt/viewport-witness-operations` checkout: `systemd-analyze verify` both units, symlink them into `/etc/systemd/system`, `daemon-reload`, run the service once and check its output says `ok`, then `systemctl enable --now viewport-witness-watch.timer`. Remove: `systemctl disable --now viewport-witness-watch.timer`.
 
 Tests: `python3 operations/test_error_watch.py`.
+
+# New feedback notifications
+
+Owner-approved on 2026-11-22: check every 15 minutes and send new production feedback
+to Baffles's existing authorized Telegram DM. `feedback_notify.py` reads the live SQLite
+database with `mode=ro`; no Docker socket, app endpoint, payment or AI call is needed.
+It ignores test/testnet and expired feedback. Each message contains at most ten short,
+untrusted suggestions with product, purchase blocker, declared intent and optional price.
+No customer identity, job, wallet or payment record is read. There is no notification
+when nothing new arrives and no automatic roadmap or ticket changes.
+
+The existing `/etc/apex-telegram-bot.env` supplies the existing bot and owner destination;
+do not copy or print credentials or add recipients. Messages are plain text with link
+previews disabled. State in `/var/lib/viewport-witness-feedback` is root-only and keeps
+notified feedback IDs plus a bounded pending message, never the bot token. The pending
+message is committed before sending and cleared only after Telegram acknowledges the
+correct chat. Failures retain it for the next check. A crash/timeout after Telegram accepts
+but before the local receipt is saved can produce a duplicate; delivery is at least once,
+not a transactional exactly-once guarantee. Deleted/expired pending rows are not forwarded.
+State corruption fails closed rather than silently forgetting prior notifications.
+
+Install the independently accepted commit in `/opt/viewport-witness-operations`, validate
+`deploy/vps/viewport-witness-feedback.{service,timer}` with `systemd-analyze verify`, symlink
+only those units and run `daemon-reload`. Run the service once (quiet if empty), then enable
+the timer. First scheduled check occurs after 15 seconds, then every 15 minutes. Confirm
+an actual timer-triggered completion and its next run. `--test` sends one clearly labeled
+setup check to the same owner, without inserting synthetic feedback. Preserve the app image,
+protected app environment, database, existing timers and services; no app restart is needed.
+Stop with `systemctl disable --now viewport-witness-feedback.timer` and stop its oneshot
+if running; retain state to avoid duplicate alerts if resumed. Failure diagnostics use the
+existing sanitized error book; raw feedback and Telegram HTTP exception strings are not logged.
+
+Tests: `python3 operations/test_feedback_notify.py` (including readonly SQLite, retry,
+deduplication, same-timestamp arrival, bounded batches, secret-safe errors and quiet runs).
+Review the automation on 2026-12-22; retire if feedback is disabled or owner asks to stop.
+Registry: `vault/automations/registry.yaml`, entry `viewport-witness-feedback`.
