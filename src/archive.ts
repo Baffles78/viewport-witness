@@ -108,6 +108,9 @@ export class ArchiveManager {
           ...result,
         }
         delete publicResult.assertions
+        // Derivatives follow seven-day job retention, not the longer archive.
+        // Do not leak the source job ID or publish a link to an unarchived file.
+        delete publicResult.annotations
         let screenshotUrl = ''
         const shot = this.store.getScreenshot(job.id, viewport)
         if (shot && result.screenshotBytes > 0 && isPathInside(jobRoot, shot.path)) {

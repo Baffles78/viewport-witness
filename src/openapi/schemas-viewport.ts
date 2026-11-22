@@ -25,6 +25,7 @@ export const viewportSchemas = {
       },
       screenshotBytes: { type: 'integer' },
       screenshotSha256: { type: 'string' },
+      annotations: { $ref: '#/components/schemas/ScreenshotAnnotations' },
       consoleErrors: { type: 'array', items: { type: 'string' }, maxItems: 50 },
       pageCrash: { type: 'boolean' },
       failedRequests: {
@@ -44,7 +45,8 @@ export const viewportSchemas = {
       layoutObservation: {
         type: 'string',
         enum: ['measured', 'unavailable'],
-        description: 'Unavailable when the layout evaluation failed or timed out; zero overflow values then do not imply a clean layout.',
+        description:
+          'Unavailable when the layout evaluation failed or timed out; zero overflow values then do not imply a clean layout.',
       },
       layoutLocatorHints: {
         type: 'array',
@@ -56,6 +58,7 @@ export const viewportSchemas = {
         description:
           'Bounded timing and transfer evidence collected during the existing page load; no extra browsing is performed.',
         properties: {
+          resourceDetails: { $ref: '#/components/schemas/ResourceDetails' },
           navigation: {
             type: 'object',
             properties: {
@@ -109,12 +112,14 @@ export const viewportSchemas = {
           focusableControls: { type: 'integer' },
           keyboardReachable: {
             type: 'boolean',
-            description: 'Legacy compatibility field: potential focusability only, not verified Tab traversal or keyboard activation.',
+            description:
+              'Legacy compatibility field: potential focusability only, not verified Tab traversal or keyboard activation.',
           },
           keyboardObservation: {
             type: 'string',
             enum: ['focusability_heuristic', 'unavailable'],
-            description: 'The focusability heuristic does not verify keyboard traversal or activation.',
+            description:
+              'The focusability heuristic does not verify keyboard traversal or activation.',
           },
         },
       },

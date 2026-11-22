@@ -8,12 +8,9 @@ import { observeLayout } from './layout.js'
 import { runAccessibilityCheck } from './accessibility.js'
 import { evaluatePageAssertions } from './page-assertions.js'
 import { withTimeout } from './timeout.js'
-import type {
-  Viewport,
-  ViewportResult,
-  PageAssertion,
-  PerformanceEvidence,
-} from '../types.js'
+import { installPerformanceObservers, collectPerformanceEvidence } from './performance.js'
+import { createScreenshotAnnotations, type ScreenshotAnnotations } from './annotations.js'
+import type { Viewport, ViewportResult, PageAssertion } from '../types.js'
 import { VIEWPORTS as VP } from '../types.js'
 
 const MAX_REQUESTS = 100
@@ -59,38 +56,7 @@ export async function runViewportCheck(
 
   try {
     const page: Page = await context.newPage()
-    await page.addInitScript(() => {
-      const metrics = { largestContentfulPaintMs: 0, cumulativeLayoutShift: 0 }
-      ;(
-        window as Window & {
-          __viewportWitnessMetrics?: {
-            largestContentfulPaintMs: number
-            cumulativeLayoutShift: number
-          }
-        }
-      ).__viewportWitnessMetrics = metrics
-      try {
-        new PerformanceObserver((list) => {
-          const entries = list.getEntries()
-          const last = entries[entries.length - 1]
-          if (last) metrics.largestContentfulPaintMs = last.startTime
-        }).observe({ type: 'largest-contentful-paint', buffered: true })
-      } catch {
-        // Metric is not available in every browser/page.
-      }
-      try {
-        new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number }
-            if (!shift.hadRecentInput && typeof shift.value === 'number') {
-              metrics.cumulativeLayoutShift += shift.value
-            }
-          }
-        }).observe({ type: 'layout-shift', buffered: true })
-      } catch {
-        // Metric is not available in every browser/page.
-      }
-    })
+    await installPerformanceObservers(page)
     const consoleErrors: string[] = []
     let pageCrash = false
     const failedRequests: Array<{ url: string; status: number | null; reason: string }> = []
@@ -238,93 +204,21 @@ export async function runViewportCheck(
 
     // Layout checks
     const layoutData = await observeLayout(page)
-    const { overflowDetected, offscreenElements, layoutLocatorHints, layoutObservation } = layoutData
+    const { overflowDetected, offscreenElements, layoutLocatorHints, layoutObservation } =
+      layoutData
 
-    let performanceEvidence: PerformanceEvidence = {
-      navigation: {},
-      paint: {},
-      resources: {
-        requestCount: Math.min(requestCount, MAX_REQUESTS + 1),
-        transferredBytes: Math.min(MAX_RESPONSE_BYTES, Math.max(0, Math.round(responseBytes))),
-      },
-    }
-
-    try {
-      const measured = await withTimeout(
-        page.evaluate(() => {
-          const navigation = performance.getEntriesByType('navigation')[0] as
-            PerformanceNavigationTiming | undefined
-          const paints = performance.getEntriesByType('paint')
-          const paintValue = (name: string): number | undefined =>
-            paints.find((entry) => entry.name === name)?.startTime
-          const observed = (
-            window as Window & {
-              __viewportWitnessMetrics?: {
-                largestContentfulPaintMs: number
-                cumulativeLayoutShift: number
-              }
-            }
-          ).__viewportWitnessMetrics
-          return {
-            navigation: navigation
-              ? {
-                  dnsMs: navigation.domainLookupEnd - navigation.domainLookupStart,
-                  connectMs: navigation.connectEnd - navigation.connectStart,
-                  tlsMs:
-                    navigation.secureConnectionStart > 0
-                      ? navigation.connectEnd - navigation.secureConnectionStart
-                      : undefined,
-                  requestMs: navigation.responseStart - navigation.requestStart,
-                  responseMs: navigation.responseEnd - navigation.responseStart,
-                  timeToFirstByteMs: navigation.responseStart - navigation.requestStart,
-                  domInteractiveMs: navigation.domInteractive,
-                  domContentLoadedMs: navigation.domContentLoadedEventEnd,
-                  loadEventMs: navigation.loadEventEnd,
-                }
-              : {},
-            paint: {
-              firstPaintMs: paintValue('first-paint'),
-              firstContentfulPaintMs: paintValue('first-contentful-paint'),
-              largestContentfulPaintMs: observed?.largestContentfulPaintMs,
-              cumulativeLayoutShift: observed?.cumulativeLayoutShift,
-            },
-          }
-        }),
-        2_000,
-        'performance_timeout',
-      )
-      const boundedMs = (value: number | undefined): number | undefined =>
-        typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 300_000
-          ? Math.round(value)
-          : undefined
-      const boundedCls = (value: number | undefined): number | undefined =>
-        typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
-          ? Number(value.toFixed(4))
-          : undefined
-      const firstPaintMs = boundedMs(measured.paint.firstPaintMs)
-      const firstContentfulPaintMs = boundedMs(measured.paint.firstContentfulPaintMs)
-      const largestContentfulPaintMs = boundedMs(measured.paint.largestContentfulPaintMs)
-      const cumulativeLayoutShift = boundedCls(measured.paint.cumulativeLayoutShift)
-      performanceEvidence = {
-        navigation: Object.fromEntries(
-          Object.entries(measured.navigation)
-            .map(([key, value]) => [key, boundedMs(value)])
-            .filter((entry): entry is [string, number] => entry[1] !== undefined),
-        ),
-        paint: {
-          ...(firstPaintMs !== undefined ? { firstPaintMs } : {}),
-          ...(firstContentfulPaintMs !== undefined ? { firstContentfulPaintMs } : {}),
-          ...(largestContentfulPaintMs !== undefined ? { largestContentfulPaintMs } : {}),
-          ...(cumulativeLayoutShift !== undefined ? { cumulativeLayoutShift } : {}),
-        },
-        resources: performanceEvidence.resources,
-      }
-    } catch {
-      // Request and transfer totals remain available when page timing APIs are unavailable.
-    }
+    const performanceEvidence = await collectPerformanceEvidence(page, {
+      requestCount: Math.min(requestCount, MAX_REQUESTS + 1),
+      transferredBytes: Math.min(MAX_RESPONSE_BYTES, Math.max(0, Math.round(responseBytes))),
+    })
 
     // Declarative, read-only assertions (src/worker/page-assertions.ts).
-    const assertionResults = await evaluatePageAssertions(page, assertions, layoutData, consoleErrors)
+    const assertionResults = await evaluatePageAssertions(
+      page,
+      assertions,
+      layoutData,
+      consoleErrors,
+    )
 
     // Interaction observations
     let interactionObservations: ViewportResult['interactionObservations'] = {
@@ -360,6 +254,7 @@ export async function runViewportCheck(
     const screenshotFilename = `${viewport}-${Date.now()}.png`
     const screenshotPath = path.join(jobScreenshotsDir, screenshotFilename)
 
+    let annotations: ScreenshotAnnotations | undefined
     let screenshotBytes = 0
     let screenshotSha256 = ''
     let screenshotDimensions = { w: dimensions.width, h: dimensions.height }
@@ -377,6 +272,39 @@ export async function runViewportCheck(
 
       // Get actual dimensions from viewport
       screenshotDimensions = { w: dimensions.width, h: dimensions.height }
+      try {
+        const hints = [
+          ...layoutLocatorHints.map((selector) => ({
+            code: 'responsive-layout',
+            selector,
+            explanation: 'Content extends beyond the tested viewport.',
+          })),
+          ...accessibilityResult.violations.flatMap((violation) =>
+            violation.nodes.flatMap((node) =>
+              node.locator
+                ? [
+                    {
+                      code: `accessibility:${violation.id}`,
+                      selector: node.locator,
+                      explanation: violation.description,
+                    },
+                  ]
+                : [],
+            ),
+          ),
+        ]
+        if (hints.length > 0) {
+          annotations = await createScreenshotAnnotations(
+            page,
+            fileData,
+            path.join(jobScreenshotsDir, `annotations-${viewport}.png`),
+            `/v1/checks/${jobId}/annotations/${viewport}`,
+            hints,
+          )
+        }
+      } catch {
+        // Derivative failure never discards the original screenshot evidence.
+      }
     } catch {
       // Screenshot failed - create placeholder path
     }
@@ -393,6 +321,7 @@ export async function runViewportCheck(
       screenshotDimensions,
       screenshotBytes,
       screenshotSha256,
+      ...(annotations ? { annotations } : {}),
       consoleErrors,
       pageCrash,
       failedRequests,

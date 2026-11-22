@@ -82,7 +82,8 @@ export const reportSchemas = {
       },
       assertions: {
         type: 'object',
-        description: 'Verify result counts. Unavailable assertions were not measured and are excluded from failed.',
+        description:
+          'Verify result counts. Unavailable assertions were not measured and are excluded from failed.',
         properties: {
           passed: { type: 'integer' },
           failed: { type: 'integer' },
@@ -90,11 +91,29 @@ export const reportSchemas = {
           results: {
             type: 'object',
             properties: {
-              phonePortrait: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
-              phoneLandscape: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
+              phonePortrait: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/AssertionResult' },
+              },
+              phoneLandscape: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/AssertionResult' },
+              },
               desktop: { type: 'array', items: { $ref: '#/components/schemas/AssertionResult' } },
             },
           },
+        },
+      },
+      comparison: {
+        type: 'object',
+        properties: {
+          baselineJobId: { type: 'string' },
+          evidenceComplete: { type: 'boolean' },
+          evidenceLimitations: { type: 'array', items: { type: 'string' } },
+          visual: { type: 'object' },
+          accessibility: { type: 'object' },
+          errors: { type: 'object' },
+          repairVerification: { $ref: '#/components/schemas/RepairVerification' },
         },
       },
       viewports: {
@@ -182,8 +201,15 @@ export const reportSchemas = {
     required: ['assertion', 'passed', 'detail'],
     properties: {
       assertion: { type: 'object' },
-      passed: { type: 'boolean', description: 'True only when the assertion was measured and passed.' },
-      measured: { type: 'boolean', description: 'False means the assertion could not be measured; it is neither a pass nor a failure.' },
+      passed: {
+        type: 'boolean',
+        description: 'True only when the assertion was measured and passed.',
+      },
+      measured: {
+        type: 'boolean',
+        description:
+          'False means the assertion could not be measured; it is neither a pass nor a failure.',
+      },
       detail: { type: 'string' },
     },
   },
