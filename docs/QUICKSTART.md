@@ -20,21 +20,16 @@ in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator test
 `VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
 Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
 
-Prerequisites: Node.js 22 or later, npm, Git, and a checkout of this repository.
-Browser installation is unnecessary for the client. Run from the repository directory:
+Prerequisites: Node.js 22 or later and npm. Run the pinned client directly; no checkout,
+TypeScript build or browser installation is needed. This tarball is a GitHub release asset,
+not an npm registry listing. Runtime dependencies are pinned by its included shrinkwrap.
 
 ```sh
-git clone https://github.com/Baffles78/viewport-witness.git
-cd viewport-witness
-npm ci
-npm run build
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
-For one page, no handwritten configuration is needed:
-
-```sh
-npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
-```
+For one page, no handwritten configuration is needed. The existing repository command
+`npm run check:page --` accepts the same flags after `npm ci` and `npm run build`.
 
 This shows the quote, native-USDC asset, network and recipient in one step, plus any missing
 CDP environment variable **names**, without loading a wallet or paying. The machine-readable
@@ -58,7 +53,7 @@ seed phrases into commands or this service.
 Only after granting spending authority for that run:
 
 ```sh
-npm run check:page -- --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
 ```
 
 Replace `APPROVED_RECIPIENT` with the independently approved address, and keep the same run ID,
@@ -67,7 +62,7 @@ target, budget and directory. Do not rerun with changed policy to bypass an unce
 ## Retrieve an accepted job again without a wallet
 
 ```sh
-npm run check:page -- --resume --output out/my-deployment-001
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --resume --output out/my-deployment-001
 ```
 
 This uses the saved `first-check.json` reference and original checkpoint. It can poll or
