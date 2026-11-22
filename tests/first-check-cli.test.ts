@@ -122,4 +122,78 @@ describe('first-check real CLI safety', () => {
     expect(result.text).toContain('No saved checkpoint exists')
     expect(await fs.stat(path.join(output, 'checkpoint.json')).catch(() => null)).toBeNull()
   })
+
+  it('rejects a resumed junction to the original evidence directory before any network request', async () => {
+    const output = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-linked-recovery-'))
+    const manifest = path.join(output, 'manifest.json'),
+      state = path.join(output, 'checkpoint.json')
+    await fs.writeFile(
+      manifest,
+      JSON.stringify({ runId: 'linked', pages: ['https://example.com'], maxBudgetUsdc: '0.08' }),
+    )
+    await fs.writeFile(
+      state,
+      JSON.stringify({
+        schema: 'viewport-witness-release/v1',
+        pages: [{ state: 'accepted', jobId: '11111111-1111-4111-8111-111111111111' }],
+      }),
+    )
+    await fs.writeFile(path.join(output, 'report.md'), 'original evidence')
+    await fs.symlink(output, path.join(output, 'resumed'), 'junction')
+    const result = await cli('scripts/release-check.mjs', [
+      '--resume-only',
+      '--manifest',
+      manifest,
+      '--state',
+      state,
+      '--output',
+      path.join(output, 'resumed'),
+    ])
+    expect(result.code).toBe(2)
+    expect(result.text).toContain('not a link or junction')
+    expect(await fs.readFile(path.join(output, 'report.md'), 'utf8')).toBe('original evidence')
+  })
+
+  it('rejects linked report files before overwriting evidence', async (context) => {
+    const output = await fs.mkdtemp(path.join(os.tmpdir(), 'vw-linked-report-'))
+    const manifest = path.join(output, 'manifest.json'),
+      state = path.join(output, 'checkpoint.json')
+    const resumed = path.join(output, 'resumed')
+    await fs.mkdir(resumed)
+    await fs.writeFile(
+      manifest,
+      JSON.stringify({
+        runId: 'linked-file',
+        pages: ['https://example.com'],
+        maxBudgetUsdc: '0.08',
+      }),
+    )
+    await fs.writeFile(
+      state,
+      JSON.stringify({
+        schema: 'viewport-witness-release/v1',
+        pages: [{ state: 'accepted', jobId: '11111111-1111-4111-8111-111111111111' }],
+      }),
+    )
+    const original = path.join(output, 'report.md')
+    await fs.writeFile(original, 'original report')
+    try {
+      await fs.symlink(original, path.join(resumed, 'report.md'), 'file')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') context.skip()
+      throw error
+    }
+    const result = await cli('scripts/release-check.mjs', [
+      '--resume-only',
+      '--manifest',
+      manifest,
+      '--state',
+      state,
+      '--output',
+      resumed,
+    ])
+    expect(result.code).toBe(2)
+    expect(result.text).toContain('regular files, not links')
+    expect(await fs.readFile(original, 'utf8')).toBe('original report')
+  })
 })

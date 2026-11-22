@@ -19,6 +19,7 @@ import { resolve, dirname } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { runReleaseCheck } from '../dist/release-check.js'
 import { loadBoundedJson } from './lib/bounded-json.mjs'
+import { guardResumeOutput } from './first-check-resume.mjs'
 
 function parseArgs(argv) {
   const args = {}
@@ -78,7 +79,7 @@ class CliExit extends Error {
   }
 }
 
-async function atomicWriteJson(filePath, value) {
+async function atomicWriteText(filePath, text) {
   const abs = resolve(filePath)
   const tmp = `${abs}.tmp.${randomUUID()}`
   await fs.mkdir(dirname(abs), { recursive: true })
@@ -90,7 +91,7 @@ async function atomicWriteJson(filePath, value) {
     throw new Error('Checkpoint must be a regular file')
   const file = await fs.open(tmp, 'wx', 0o600)
   try {
-    await file.writeFile(JSON.stringify(value, null, 2), 'utf8')
+    await file.writeFile(text, 'utf8')
     await file.sync()
   } finally {
     await file.close()
@@ -110,6 +111,10 @@ async function atomicWriteJson(filePath, value) {
       await dir.close()
     }
   }
+}
+
+async function atomicWriteJson(filePath, value) {
+  return atomicWriteText(filePath, JSON.stringify(value, null, 2))
 }
 
 async function loadCheckpoint(statePath) {
@@ -225,6 +230,7 @@ async function main() {
       usage(
         'Resume-only requires accepted checkpoint jobs. Preserve and reconcile uncertain payments; no new payment is allowed',
       )
+    if (args.resumeOnly && args.output) await guardResumeOutput(args.output, statePath)
     checkpoint = {
       load: () => loaded,
       save: async (state) => {
@@ -297,10 +303,16 @@ async function main() {
   // Write outputs.
   if (args.output) {
     const outDir = resolve(args.output)
-    await fs.mkdir(outDir, { recursive: true })
-    await fs.writeFile(resolve(outDir, 'report.md'), result.markdown, 'utf8')
     const { markdown: _md, ...summary } = result
-    await fs.writeFile(resolve(outDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8')
+    if (args.resumeOnly) {
+      await guardResumeOutput(outDir, args.state)
+      await atomicWriteText(resolve(outDir, 'report.md'), result.markdown)
+      await atomicWriteJson(resolve(outDir, 'summary.json'), summary)
+    } else {
+      await fs.mkdir(outDir, { recursive: true })
+      await fs.writeFile(resolve(outDir, 'report.md'), result.markdown, 'utf8')
+      await fs.writeFile(resolve(outDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8')
+    }
     console.log(`Output written to ${outDir}`)
   }
 

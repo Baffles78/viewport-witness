@@ -7,6 +7,31 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const referenceSchema = 'viewport-witness-first-check/v1'
 const manifestName = /^manifest-[a-f0-9]{24}\.json$/
 
+export async function guardResumeOutput(outputPath, statePath) {
+  const output = path.resolve(outputPath)
+  const parent = path.dirname(path.resolve(statePath))
+  if (output !== path.join(parent, 'resumed'))
+    throw new Error('Recovery output must be the resumed subdirectory beside its checkpoint')
+  await fs.mkdir(output).catch((error) => {
+    if (error.code !== 'EEXIST') throw error
+  })
+  const folder = await fs.lstat(output)
+  if (
+    !folder.isDirectory() ||
+    folder.isSymbolicLink() ||
+    (await fs.realpath(output)) !== path.join(await fs.realpath(parent), 'resumed')
+  )
+    throw new Error('Recovery output must be a regular directory, not a link or junction')
+  for (const name of ['report.md', 'summary.json']) {
+    const file = await fs.lstat(path.join(output, name)).catch((error) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (file && (!file.isFile() || file.isSymbolicLink()))
+      throw new Error('Recovery report files must be regular files, not links')
+  }
+}
+
 export async function saveFirstCheckReference(output, manifestPath) {
   const reference = { schema: referenceSchema, manifest: path.basename(manifestPath) }
   if (!manifestName.test(reference.manifest))

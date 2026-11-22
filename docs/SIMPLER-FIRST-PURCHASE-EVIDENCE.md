@@ -19,9 +19,13 @@ can specify the original basename explicitly. Unaccepted/uncertain/missing check
 The child CLI rechecks accepted-only state after taking its original exclusive lock, then
 uses the fixed always-throw payment adapter. Existing checkpoint identity is preserved while
 terminal result fields may update; original reports remain, with refreshed output in `resumed/`.
+Recovery rejects directory junctions and linked/nonregular output files before fetching,
+rechecks output before writing, and replaces report files atomically instead of following links.
 
-Validation: 583 tests in 50 files passed, including real CLI refusal tests for missing CDP
-configuration and unsafe recovery. TypeScript, ESLint, build, diff and file-size checks pass.
+Validation: 585 tests in 50 files passed, including real CLI refusal tests for missing CDP
+configuration, unsafe recovery, directory junctions and linked reports. Independent review
+found the linked-output preservation defect; it was fixed with the two regression tests.
+TypeScript, ESLint, build, diff and file-size checks pass.
 The oversized release client shrank from 544 to 526 lines; its ceiling was lowered using
 the sanctioned script. New public helper modules remain below the normal size limit.
 
