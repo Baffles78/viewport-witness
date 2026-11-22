@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ViewportWitness first real purchases every five minutes
+
+[Timer]
+OnActiveSec=15s
+OnUnitActiveSec=5min
+AccuracySec=15s
+Unit=viewport-witness-purchases.service
+
+[Install]
+WantedBy=timers.target

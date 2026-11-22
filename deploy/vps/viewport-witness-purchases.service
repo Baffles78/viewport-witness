@@ -1,0 +1,22 @@
+[Unit]
+Description=Notify owner of first-observed real ViewportWitness purchases
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/viewport-witness-operations/operations/purchase_notify.py
+EnvironmentFile=/etc/apex-telegram-bot.env
+User=root
+UMask=0077
+StateDirectory=viewport-witness-purchases
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/docker/volumes/viewport-witness_vw-data/_data /var/lib/viewport-witness-controlled
+ReadWritePaths=/opt/apex-errors
+MemoryMax=128M
+CPUQuota=20%
+TimeoutStartSec=60
