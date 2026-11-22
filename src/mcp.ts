@@ -25,6 +25,7 @@ import type { PageAssertion } from './types.js'
 import type { WorkerRunner } from './worker/runner.js'
 import { assertionsSchema, jsonResult, publicPageUrlSchema, type ToolResult } from './mcp/tool-schemas.js'
 import { registerGetReportTool } from './mcp/get-report.js'
+import { mcpFeedbackInvitation } from './feedback/invitation.js'
 import { createProductJob, hasCompleteBaselineScreenshots } from './api/routes/products.js'
 import { sameJobIntent, type JobIntent } from './idempotency-replay.js'
 import { randomUUID } from 'node:crypto'
@@ -116,7 +117,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
   }
 
   async function buildServer(): Promise<McpServer> {
-    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' })
+    const mcp = new McpServer({ name: 'ViewportWitness', version: '0.2.1' }, { instructions: mcpFeedbackInvitation })
     const context = await getPaymentContext()
     const intentForTool = (
       tier: 'check' | 'verify' | 'compare' | 'extract' | 'security',
@@ -344,7 +345,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'check_page',
-      `Choose this for broad website testing when the caller wants screenshots, responsive layout checks, accessibility findings, console/network errors, performance evidence, and a release diagnosis across phone portrait, phone landscape, and desktop. For explicit pass/fail assertions use verify_page instead. Costs $${cfg.PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402.`,
+      `Choose this for broad website testing when the caller wants screenshots, responsive layout checks, accessibility findings, console/network errors, performance evidence, and a release diagnosis across phone portrait, phone landscape, and desktop. For explicit pass/fail assertions use verify_page instead. Costs $${cfg.PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorise payment; standard AI assistants cannot automatically sign x402. ${mcpFeedbackInvitation}`,
       { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('check', async ({ url }: { url: string }) => createToolJob('check', { url }, { url })),
@@ -352,7 +353,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'verify_page',
-      `Choose this only when the caller supplies explicit website assertions that need pass/fail results across three viewports. For broad exploratory browser QA use check_page instead. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      `Choose this only when the caller supplies explicit website assertions that need pass/fail results across three viewports. For broad exploratory browser QA use check_page instead. Assertion types: noHorizontalOverflow, noConsoleErrors, textVisible, titleIncludes, selectorExists, selectorVisible. Costs $${cfg.VERIFY_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402. ${mcpFeedbackInvitation}`,
       {
         url: publicPageUrlSchema,
         assertions: assertionsSchema,
@@ -367,7 +368,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'compare_page',
-      `Choose this for visual regression testing after check_page has produced a completed, unexpired baseline. Compares screenshots and QA evidence, returning pixel-diff percentages, new or resolved accessibility issues, error deltas, performance evidence, and diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website and existing baseline report are not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402.`,
+      `Choose this for visual regression testing after check_page has produced a completed, unexpired baseline. Compares screenshots and QA evidence, returning pixel-diff percentages, new or resolved accessibility issues, error deltas, performance evidence, and diagnosis. Costs $${cfg.COMPARE_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website and existing baseline report are not modified. Requires an x402-aware client; standard AI assistants cannot automatically sign x402. ${mcpFeedbackInvitation}`,
       {
         url: publicPageUrlSchema,
         baselineJobId: z
@@ -387,7 +388,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'extract_page',
-      `Choose this when an agent needs the readable content of a public webpage as deterministic clean Markdown, without screenshots or browser execution. Costs $${cfg.EXTRACT_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorize payment.`,
+      `Choose this when an agent needs the readable content of a public webpage as deterministic clean Markdown, without screenshots or browser execution. Costs $${cfg.EXTRACT_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorize payment. ${mcpFeedbackInvitation}`,
       {
         url: publicPageUrlSchema,
         maxOutputTokens: z
@@ -412,7 +413,7 @@ export function createMcpRouter(store: JobStore, runner: WorkerRunner, cfg: Conf
 
     mcp.tool(
       'web_release_gate',
-      `Choose this for a passive website release-security review of headers, cookie flags, mixed content, cross-origin script integrity, and server disclosure. It does not run browser QA, probe the site, execute code, or replace a security audit. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorize payment.`,
+      `Choose this for a passive website release-security review of headers, cookie flags, mixed content, cross-origin script integrity, and server disclosure. It does not run browser QA, probe the site, execute code, or replace a security audit. Costs $${cfg.SECURITY_PRICE_USDC} USDC via x402. Successful paid calls settle the authorized USDC payment and create a stored report; settlement reduces the payer's balance and cannot be undone by this tool. The target website is not modified. Requires an x402-aware client to authorize payment. ${mcpFeedbackInvitation}`,
       { url: publicPageUrlSchema },
       { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       wrap('security', async ({ url }: { url: string }) => createToolJob('security', { url }, { url })),

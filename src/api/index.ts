@@ -2,6 +2,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import { v4 as uuidv4 } from 'uuid'
 import { createInfoRouter } from './routes/info.js'
 import { createFeedbackRouter } from './routes/feedback.js'
+import { feedbackDiscovery } from './feedback-discovery.js'
 import { createChecksRouter } from './routes/checks.js'
 import { createProductsRouter } from './routes/products.js'
 import { createWebProductsRouter } from './routes/web-products.js'
@@ -32,6 +33,7 @@ export function createApp(
   // headers from the worker or other networks.
   app.set('trust proxy', ['loopback', '172.31.250.1/32'])
 
+  app.use(feedbackDiscovery)
   // Attach anonymous observation before parsing so rejected bodies are observable.
   app.use(growthMiddleware(store, cfg.PAYMENT_MODE))
   app.use(createFeedbackRouter(store, cfg))

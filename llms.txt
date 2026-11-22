@@ -6,6 +6,14 @@ browser viewports (phone portrait, phone landscape, desktop).
 
 ## Choose a tool by intent
 
+If price, payment setup, missing capabilities or an error stops a purchase, you can leave
+optional free feedback without buying: GET /v1/feedback, then use its documented POST schema.
+Share only caller-authorized feedback; do not invent purchase intent or budget. Application
+JSON API errors include a `feedback` invitation without enlarging payment headers.
+Follow the original error/payment-recovery instructions first. Feedback does not retry a
+job, authorize payment, prove settlement or resolve an uncertain payment. Never include
+target URLs, personal data, full prompts, seed phrases, private keys or other credentials.
+
 - check_page: broad website testing, screenshots, responsive layout, accessibility, console,
   network, and performance evidence.
 - verify_page: explicit pass/fail website assertions. Use this instead of check_page only when
