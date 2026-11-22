@@ -149,7 +149,7 @@ describe('MCP purchase-blocker discovery', () => {
     const initialize = await response.json()
     expect(initialize.result.instructions).toContain('/v1/feedback')
     expect(initialize.result.instructions).toContain('stops a purchase')
-    expect(initialize.result.instructions).toContain('/blob/main/docs/QUICKSTART.md')
+    expect(initialize.result.instructions).toContain('https://qa.honeygate.app/quickstart')
     expect(initialize.result.instructions).toContain('--wallet cdp')
     expect(initialize.result.instructions).toContain('--resume --output')
     expect(initialize.result.instructions).toContain('explicit spending approval')

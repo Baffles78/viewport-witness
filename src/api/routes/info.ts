@@ -5,7 +5,7 @@ import type { WorkerRunner } from '../../worker/runner.js'
 import type { JobStore } from '../../db.js'
 import type { Config } from '../../config.js'
 import { getPaymentDiscovery } from '../../payment/index.js'
-import { FEEDBACK_URL, PUBLIC_BASE_URL, QUICKSTART_URL } from '../../public.js'
+import { FEEDBACK_URL, PUBLIC_BASE_URL, QUICKSTART_URL, QUICKSTART_ENTRY_URL } from '../../public.js'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -91,7 +91,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
         'Check a deployed public website before sign-off: three-viewport screenshots, accessibility and layout evidence without setting up a browser. Also offers assertions, visual comparison, HTML extraction and passive release security.',
       docs: '/openapi.json',
       agentDocs: '/llms.txt',
-      quickstart: QUICKSTART_URL,
+      quickstart: QUICKSTART_ENTRY_URL,
       skillDocs: '/skill.md',
       agentLanding: '/agents',
       sampleReport: '/samples/example/',
@@ -113,6 +113,11 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
       feedback: FEEDBACK_URL,
       agentFeedback: '/v1/feedback',
     })
+  })
+
+  router.get('/quickstart', (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store')
+    res.redirect(302, QUICKSTART_URL)
   })
 
   router.get('/favicon.ico', (_req: Request, res: Response) => {

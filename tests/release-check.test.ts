@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { runReleaseCheck, usdcAtomic, safeDisplayUrl } from '../src/release-check.js'
 import {
   makeManifest,
@@ -34,6 +35,21 @@ describe('safeDisplayUrl', () => {
 })
 
 describe('runReleaseCheck — validation', () => {
+  it('carries quickstart attribution across preview and the explicit adapter without changing policy', async () => {
+    const runId = randomUUID(), id = '11111111-1111-4111-8111-111111111111'
+    const fetchFn = vi.fn().mockResolvedValueOnce(challengeResponse('https://qa.honeygate.app/v1/checks'))
+      .mockResolvedValueOnce(jsonResponse(terminalReport(id, 'https://example.com')))
+    const adapter = vi.fn(async (input) => {
+      expect(new Headers(input.request.headers).get('x-viewportwitness-quickstart-run')).toBe(runId)
+      expect(new Headers(input.request.headers).get('x-viewportwitness-source')).toBe('test-client')
+      expect(input.maximumAtomic).toBe('80000')
+      return jsonResponse({ id, status: 'queued' },202)
+    })
+    await runReleaseCheck(makeManifest({ allowedNetwork:'eip155:8453', allowedPayTo:'0xRevenue' }), { execute: true, usage: { runId, source:'test-client' },
+      checkpoint: makeCheckpoint(), fetchFn, adapter, validateTarget: noValidation, pollIntervalMs:0 })
+    expect(new Headers(fetchFn.mock.calls[0]![1]?.headers).get('x-viewportwitness-quickstart-run')).toBe(runId)
+    expect(adapter).toHaveBeenCalledTimes(1)
+  })
   it('rejects manifest with too many pages (>5)', async () => {
     const pages = [
       'https://a.com',

@@ -68,3 +68,13 @@ Tests: `python3 operations/test_feedback_notify.py` (including readonly SQLite, 
 deduplication, same-timestamp arrival, bounded batches, secret-safe errors and quiet runs).
 Review the automation on 2026-12-22; retire if feedback is disabled or owner asks to stop.
 Registry: `vault/automations/registry.yaml`, entry `viewport-witness-feedback`.
+
+## Quickstart conversion report
+
+Run `python3 operations/quickstart_summary.py` on the VPS for the private last-30-day setup
+funnel. It reads the app database through the existing read-only summary and loads controlled
+job exclusions from `/var/lib/viewport-witness-controlled/*.json`. No service, timer or wallet
+is changed. Monitor/test-client sources and nonproduction modes are excluded. It refuses
+missing/broken exclusion evidence or unavailable analytics instead of claiming zero sales.
+Tests: `python3 operations/test_quickstart_summary.py`. Interpretation and retention:
+`docs/GROWTH-ACTIVATION.md`, quickstart funnel section.

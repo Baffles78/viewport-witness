@@ -13,6 +13,13 @@ It is a saved demonstration, not current target health. Its files also live in
 
 ## Preview a budget without paying
 
+The client saves a random `quickstart-usage.json` in your output directory to measure setup
+and purchase completion without identifying an agent. Reusing the directory deduplicates
+the run. The service stores only a hash of this ID, not the raw ID, target URL or credentials
+in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator tests must set
+`VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
+Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
+
 Prerequisites: Node.js 22 or later, npm, Git, and a checkout of this repository.
 Browser installation is unnecessary for the client. Run from the repository directory:
 

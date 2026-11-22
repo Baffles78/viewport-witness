@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import { validatePublicHttpsUrl } from './ssrf.js'
 import { buildAgentResult } from './agent-result.js'
 import { VIEWPORT_NAMES, type QAReport } from './types.js'
+import { usdcAtomic } from './release-budget.js'
+export { usdcAtomic } from './release-budget.js'
 import { buildReleasePreview } from './release-preview.js'
+import { quickstartClientHeaders } from './quickstart-attribution.js'
 
 type Decision = 'PASS' | 'FAIL' | 'INCONCLUSIVE'
 export type Requirement = {
@@ -55,6 +58,7 @@ interface Options {
   testMode?: boolean
   adapter?: PaymentAdapter
   fetchFn?: typeof fetch
+  usage?: { runId?: string; source?: string }
   pollAttempts?: number
   pollIntervalMs?: number
   validateTarget?: typeof validatePublicHttpsUrl
@@ -65,11 +69,6 @@ interface Options {
   sleep?: (ms: number) => Promise<void>
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
-export function usdcAtomic(value: string): bigint {
-  if (!/^\d{1,8}(\.\d{1,6})?$/.test(value)) throw new Error('Invalid USDC budget')
-  const [whole, fraction = ''] = value.split('.')
-  return BigInt(whole!) * 1000000n + BigInt(fraction.padEnd(6, '0'))
-}
 const allowedAssets: Record<string, string> = {
   'eip155:8453': '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   'eip155:84532': '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
@@ -303,7 +302,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
       headers: {
         'content-type': 'application/json',
         'idempotency-key': `release-${manifestHash.slice(0, 16)}-${manifest.runId}-${index}`,
-        'x-viewportwitness-source': 'agent-client',
+        ...quickstartClientHeaders(options.usage?.runId, options.usage?.source),
       },
       body: JSON.stringify({ url }),
     })
@@ -373,7 +372,7 @@ export async function runReleaseCheck(manifest: ReleaseManifest, options: Option
             headers: {
               'content-type': 'application/json',
               'idempotency-key': `release-${manifestHash.slice(0, 16)}-${manifest.runId}-${index}`,
-              'x-viewportwitness-source': 'agent-client',
+              ...quickstartClientHeaders(options.usage?.runId, options.usage?.source),
             },
             body: JSON.stringify({ url }),
             redirect: 'error',

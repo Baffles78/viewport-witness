@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { FeedbackStore, initializeFeedback } from './db/feedback.js'
+import { QuickstartStore } from './db/quickstart.js'
+import { initializeGrowth } from './db/growth-schema.js'
 import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
 import {
   growthContext,
@@ -15,6 +17,7 @@ export class JobStore {
   private db: DatabaseSync | null = null
   private growthWriteFailures = 0
   get feedback(): FeedbackStore { return new FeedbackStore(this.conn) }
+  get quickstart(): QuickstartStore { return new QuickstartStore(this.conn) }
   constructor(private readonly dbPath: string) {}
 
   init({ readOnly = false }: { readOnly?: boolean } = {}): void {
@@ -26,15 +29,7 @@ export class JobStore {
     this.createSchema()
     initializeFeedback(this.db)
     try {
-      this.db.exec(`CREATE TABLE IF NOT EXISTS growth_daily (
-        day TEXT NOT NULL, product TEXT NOT NULL, source TEXT NOT NULL, event TEXT NOT NULL,
-        mode TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(day,product,source,event,mode));
-        CREATE TABLE IF NOT EXISTS growth_jobs (
-        job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
-        source TEXT NOT NULL, mode TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS growth_job_events (
-        job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, event TEXT NOT NULL,
-        PRIMARY KEY(job_id,event));`)
+      initializeGrowth(this.db)
     } catch {
       console.warn('Growth measurement unavailable; job service remains authoritative.')
       this.growthWriteFailures++
@@ -185,6 +180,7 @@ export class JobStore {
       this.conn
         .prepare('INSERT OR IGNORE INTO growth_jobs(job_id,source,mode) VALUES(?,?,?)')
         .run(params.id, context?.source ?? 'unknown', context?.mode ?? 'unknown')
+      this.quickstart.bindJob(params.id, context)
       this.recordJobGrowth(params.id, 'job_created')
       if (params.paymentId && (params.initialStatus ?? 'queued') !== 'payment_pending')
         this.recordJobGrowth(params.id, 'accepted_paid_job')
@@ -230,6 +226,7 @@ export class JobStore {
   private recordJobGrowth(id: string, event: GrowthEvent): void {
     let savepoint = false
     try {
+      this.quickstart.observe(id, event)
       const row = this.conn.prepare(`SELECT j.kind,j.payment_id,g.source,g.mode FROM jobs j
         JOIN growth_jobs g ON g.job_id=j.id WHERE j.id=?`).get(id) as
         { kind: GrowthProduct; source: GrowthSource; mode: PaymentMode; payment_id: string | null } | undefined
@@ -256,6 +253,7 @@ export class JobStore {
   }
 
   pruneGrowthDaily(now = Date.now()): void {
+    this.quickstart.prune(now)
     try {
       this.conn
         .prepare('DELETE FROM growth_daily WHERE day < ? OR day > ?')
@@ -371,6 +369,7 @@ export class JobStore {
     }
     return {
       schema: 'viewport-witness-growth/v1',
+      quickstart: this.quickstart.summary({ now, excludedJobIds }),
       observedAt: new Date(now).toISOString(),
       windowDays: 30,
       documents,
@@ -645,6 +644,7 @@ export class JobStore {
         this.conn
           .prepare('INSERT OR IGNORE INTO growth_jobs(job_id,source,mode) VALUES(?,?,?)')
           .run(params.id, context?.source ?? 'unknown', context?.mode ?? 'unknown')
+        this.quickstart.bindJob(params.id, context)
         this.recordJobGrowth(params.id, 'job_created')
       } catch {
         this.growthWriteFailures++

@@ -1,5 +1,5 @@
 import { createCheckRequestSchema } from './shared.js'
-import { FEEDBACK_URL, QUICKSTART_URL } from '../public.js'
+import { FEEDBACK_URL, QUICKSTART_ENTRY_URL } from '../public.js'
 
 // OpenAPI section: Request bodies and service/status responses.
 export const serviceSchemas = {
@@ -85,7 +85,7 @@ export const serviceSchemas = {
       version: { type: 'string', example: '0.1.0' },
       docs: { type: 'string', example: '/openapi.json' },
       agentDocs: { type: 'string', example: '/llms.txt' },
-      quickstart: { type: 'string', format: 'uri', example: QUICKSTART_URL },
+      quickstart: { type: 'string', format: 'uri', example: QUICKSTART_ENTRY_URL },
       skillDocs: { type: 'string', example: '/skill.md' },
       health: { type: 'string', example: '/health' },
       paymentDiscovery: { type: 'string', example: '/.well-known/x402' },
