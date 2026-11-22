@@ -20,9 +20,13 @@ in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator test
 `VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
 Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
 
-Prerequisites: Node.js 22.12.0 or later and npm. Run the pinned client directly; no checkout,
+Prerequisites for the published client: Node.js 22 or later and npm. Run the pinned client directly; no checkout,
 TypeScript build or browser installation is needed. This tarball is a GitHub release asset,
 not an npm registry listing. Runtime dependencies are pinned by its included shrinkwrap.
+
+The dependency migration in this checkout is prepared and unpublished. Its client requires
+Node.js 22.12.0 or newer; it does not change the published `client-v0.1.0` tarball.
+Any future publication must use a fresh package version, tag and asset name, preserving v0.1.0.
 
 ```sh
 npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
