@@ -7,8 +7,8 @@ evidence across three screen sizes without setting up a browser. Public HTTPS pa
 
 The sample is a static local-test demonstration.
 
-Prepared source additions: [repair verification, annotated screenshots, local visual
-exclusions and resource evidence](docs/QA-EVIDENCE.md). These are not yet deployed.
+Released additions: [repair verification, annotated screenshots, local visual
+exclusions and resource evidence](docs/QA-EVIDENCE.md). Visual exclusions run locally.
 
 The [first-purchase quickstart](docs/QUICKSTART.md) shows a no-wallet preview with network,
 recipient and price, the `--wallet cdp` shortcut for an existing CDP Base account, and

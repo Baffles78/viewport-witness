@@ -1,7 +1,9 @@
 # Repair and visual evidence
 
-These additions are prepared in source, not deployed. HTTP remains the primary
-service. Existing prices, payment authorization and three viewports are unchanged.
+The hosted additions were deployed on 2026-11-22 from reviewed source
+`e35f2555d554b4432ee58a689877a743e17bd26a`; visual exclusions run locally.
+HTTP remains primary. Prices, payment authorization and three viewports are unchanged.
+See [release evidence](QA-EVIDENCE-RELEASE.md) for verification and its limits.
 
 ## Check whether a repair worked
 
