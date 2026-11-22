@@ -59,11 +59,11 @@ all received 200 for /openapi.json, /llms.txt and /.well-known/x402 and 402 for 
 unsigned POST /v1/checks. HTTP redirects with 308. The reported #31 behavior was
 not reproduced from this host. These requests did not sign or settle a payment.
 
-The owner quickstart summary at 21:15 UTC reports 14 redirect opens and zero
-tracked setup starts/purchases/completions, with measurement beginning today at
-17:08 UTC. One controlled job is excluded. Conversion rates are null, not 0%.
-Older clients, disabled telemetry and direct GitHub visits are unobserved. This
-does not establish zero external customers or historical revenue.
+The owner-only demand summary was checked with controlled-job exclusions. The
+matched funnel is too young and sparse to establish conversion or historical
+revenue; detailed counts stay in local owner evidence. Older clients, disabled
+telemetry and direct GitHub visits are unobserved. Missing coverage must not be
+presented as zero customers or zero revenue.
 
 ## Learning and review
 
@@ -85,3 +85,8 @@ regression test confirms no source job annotation URLs survive archive capture.
 Learning observation: derivatives inherit job retention, so copying their links
 into longer-lived archives would create stale links and retain source job IDs.
 Archive capture now deliberately strips the optional derivative metadata.
+
+Additional live discovery check: the public service/registry documents respond,
+but Coinbase Bazaar search did not surface verify, compare or security-gate in
+the checker’s selected searches. Checks/extract were found. This is an external
+index-coverage observation, not a new-code test failure or proof of buyer demand.
