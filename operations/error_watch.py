@@ -50,7 +50,8 @@ def header_bytes(status, reason, headers):
 def probe_route(route):
     req = urllib.request.Request(f'{BASE_URL}/v1/{route}', method='POST',
                                  data=b'{"url":"https://example.com"}',
-                                 headers={'content-type': 'application/json'})
+                                 headers={'content-type': 'application/json',
+                                          'X-ViewportWitness-Source': 'monitor'})
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return resp.status, header_bytes(resp.status, resp.reason, resp.getheaders())
