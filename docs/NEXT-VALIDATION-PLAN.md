@@ -55,6 +55,10 @@ The advisory requires a compatibility assessment rather than a blind forced
 upgrade. A published patched v4 exists, but current CDP constraints retain v3;
 an aligned parent update must disclose residual exposure.
 
+The unpaid client pilot rehearsal passed with the current 0.08-USDC quote, no
+wallet/payment adapter, and no fabricated report. A real buyer, paid workflow
+and voluntary later reuse remain unobserved.
+
 Learning: applied shared lesson-independent-test-evidence and
 lesson-preserve-shared-work (current files updated 2026-10-05), without treating
 historical tests as current certification. The prior rollout showed that search

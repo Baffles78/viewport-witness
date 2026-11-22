@@ -5,6 +5,11 @@ Owner: Aria/Codex. Goal: observe whether a buyer can purchase useful evidence,
 repair their own site, verify the result and choose to use the service again.
 Do not contact prospects, create accounts or send a payment from this guide.
 
+Operator rehearsal on 2026-11-22: the existing client preview for example.com
+returned the live 0.08-USDC Base quote with `spendingApproved: false`; no wallet
+code or payment adapter was loaded and no verdict was claimed. It was labeled
+`test-client` and is not an external buyer or a completed paid workflow.
+
 ## Bounded run
 
 Use one caller-owned public HTTPS page with a real, known repair opportunity.
