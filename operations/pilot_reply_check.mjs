@@ -26,6 +26,7 @@ export function notices(report, state, contacts) {
   const events = [];
   for (const item of report.builders) {
     const contact = contacts.find(c => c.code === item.code);
+    if (contact.notification_owner === 'vps-public') continue;
     for (const id of new Set(item.incoming_ids)) {
       const key = `${item.code}:${id}`;
       if (!state.seen.includes(key)) events.push({key, text: `ViewportWitness pilot: new incoming activity in the ${contact.recipient} conversation. This may be an automated response or an unverified public commenter; verify the author before treating it as builder interest.\nReview: ${contact.thread_url || 'https://mail.google.com/mail/u/0/#all/' + contact.thread_id}\nReview interest, public HTTPS task, wallet compatibility and voluntary $0.08 approval before enrollment. No reply or enrollment was sent automatically.`});

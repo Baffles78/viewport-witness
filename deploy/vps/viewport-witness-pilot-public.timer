@@ -1,0 +1,11 @@
+[Unit]
+Description=Check public Daydreams pilot conversation hourly through pilot review
+
+[Timer]
+OnActiveSec=15s
+OnUnitActiveSec=1h
+AccuracySec=30s
+Unit=viewport-witness-pilot-public.service
+
+[Install]
+WantedBy=timers.target

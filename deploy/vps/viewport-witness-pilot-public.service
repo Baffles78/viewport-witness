@@ -1,0 +1,21 @@
+[Unit]
+Description=Always-on public pilot conversation checks (not Gmail or X)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/viewport-witness-pilot/operations/pilot_public_reply_notify.py
+EnvironmentFile=/etc/apex-telegram-bot.env
+User=root
+UMask=0077
+StateDirectory=viewport-witness-pilot-public
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=96M
+CPUQuota=10%
+TimeoutStartSec=90
+

@@ -23,6 +23,12 @@ test('access failure and recovery alerts occur only on transitions', () => {
   r.builders[1].status = 'ok';
   assert.equal(notices(r, s, contacts).length, 1);
 });
+test('server-owned public channel cannot generate duplicate desktop alerts', () => {
+  const r = report();
+  r.builders[2].incoming_ids = ['new-comment'];
+  const configured = contacts.map(c => c.code === 'B03' ? {...c, notification_owner: 'vps-public'} : c);
+  assert.deepEqual(notices(r, state(), configured), []);
+});
 test('rejects incomplete, duplicate, invalid-id and ambiguous results', () => {
   for (const mutate of [r => r.builders.pop(), r => r.builders[1].code = 'B01', r => r.builders[0].incoming_ids = ['<script>'], r => {r.builders[0].status = 'unavailable'; r.builders[0].incoming_ids = ['id'];}]) {
     const r = report(); mutate(r);
