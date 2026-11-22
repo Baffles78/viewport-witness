@@ -20,6 +20,19 @@ This policy describes how the ViewportWitness service handles data submitted to 
 
 **Anonymous usage counts.** The application records bounded daily counts of successful documentation requests and unpaid payment challenges, using only predefined product, mode and caller-declared source labels. These counters contain no IP addresses, referrers, target URLs, arbitrary headers or payment credentials. Retained jobs carry a predefined source/mode label for offline product and repeat-use summaries. Source labels do not prove acquisition origin, and request counts do not identify unique visitors. There is no public analytics endpoint.
 
+## Optional product feedback
+
+The free `/v1/feedback` endpoint accepts a product category, purchase-blocker category,
+short feature label (up to 80 characters and 8 words), caller-declared purchase intent and
+optional price suggestion. It does not ask for a target URL, job ID, wallet, payment proof,
+contact details or a full prompt. Do not submit personal data or secrets. Restricted text
+validation rejects URLs, long key-like strings and wallet-phrase-length input; this is not
+a general personal-data detector. Feedback bodies are not logged or publicly listed.
+Operators can read them locally. Identical retained payloads within a payment mode are
+deduplicated using a hash of those fields. No feedback customer identity or request IP is
+stored in this table. Infrastructure may still process ordinary request metadata as described
+above. Submit only with caller authorization. Suggestions do not prove purchases or demand.
+
 ## What we do not collect
 
 - Private keys or seed phrases
@@ -32,6 +45,13 @@ This policy describes how the ViewportWitness service handles data submitted to 
 The archive is off on the live service. If an operator enables it, completed browser QA reports and screenshots are also copied into a separate archive kept for 90 days by default. The archived copy contains the checked URL and the public page evidence only; it does not contain the job ID, payment identifiers or customer labels, or any assertions you supplied. Anyone who knows the exact URL can see how many archived snapshots exist and pay to retrieve them. Extraction and security gate reports are not archived.
 
 ## Retention
+
+Product feedback is kept for 90 days by default, independently of seven-day reports, with
+a default ceiling of 5,000 retained submissions and 100 new submissions per UTC day. Expired
+feedback is deleted on new submissions and hourly cleanup while the service is running.
+When full, new submissions are rejected instead of removing unexpired feedback. Local/testnet
+feedback is labeled separately. The operator summary includes only the last 30 days. Encrypted
+backups can retain copies for their separate recovery lifecycle described below.
 
 Job records, screenshots, and reports are retained on the active service volume for seven days by default, then deleted. A configurable storage ceiling triggers oldest-first cleanup before the seven-day period if disk space is exhausted. Infrastructure backups or provider snapshots may retain encrypted or access-controlled copies for their own backup lifecycle; they are not available through the service API.
 

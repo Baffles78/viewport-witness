@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response, type NextFunction } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { createInfoRouter } from './routes/info.js'
+import { createFeedbackRouter } from './routes/feedback.js'
 import { createChecksRouter } from './routes/checks.js'
 import { createProductsRouter } from './routes/products.js'
 import { createWebProductsRouter } from './routes/web-products.js'
@@ -33,6 +34,7 @@ export function createApp(
 
   // Attach anonymous observation before parsing so rejected bodies are observable.
   app.use(growthMiddleware(store, cfg.PAYMENT_MODE))
+  app.use(createFeedbackRouter(store, cfg))
   // Body parsing - strict 10KB limit
   app.use(express.json({ limit: '10kb' }))
 

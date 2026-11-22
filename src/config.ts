@@ -67,6 +67,9 @@ const configSchema = z.object({
     .transform((v) => parseInt(v ?? '120000', 10))
     .pipe(z.number().int().min(1000)),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  FEEDBACK_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+  FEEDBACK_MAX_RECORDS: z.coerce.number().int().min(1).max(100000).default(5000),
+  FEEDBACK_DAILY_LIMIT: z.coerce.number().int().min(1).max(10000).default(100),
   ARCHIVE_ENABLED: z
     .string()
     .optional()
@@ -131,6 +134,9 @@ export type Config = {
   MAX_STORAGE_GB: number
   WORKER_TIMEOUT_MS: number
   LOG_LEVEL: 'debug' | 'info' | 'warn' | 'error'
+  FEEDBACK_RETENTION_DAYS?: number
+  FEEDBACK_MAX_RECORDS?: number
+  FEEDBACK_DAILY_LIMIT?: number
   ARCHIVE_ENABLED: boolean
   ARCHIVE_DIR: string
   ARCHIVE_RETENTION_DAYS: number
@@ -146,6 +152,14 @@ export type Config = {
 
 export const DEFAULT_PAYMENT_UNRESOLVED_LIMIT = 20
 export const DEFAULT_PAYMENT_UNRESOLVED_PER_PAYER = 3
+
+export function feedbackLimits(cfg: Config) {
+  return {
+    retentionDays: cfg.FEEDBACK_RETENTION_DAYS ?? 90,
+    maxRecords: cfg.FEEDBACK_MAX_RECORDS ?? 5000,
+    dailyLimit: cfg.FEEDBACK_DAILY_LIMIT ?? 100,
+  }
+}
 
 function loadConfig(): Config {
   const result = configSchema.safeParse(process.env)

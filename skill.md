@@ -4,6 +4,13 @@ Paid agent tools include `extract_page` ($0.005 USDC), which converts one public
 
 Base URL: https://qa.honeygate.app
 
+Optional product feedback: discover `GET /v1/feedback`, then use the free
+`POST /v1/feedback` API described in `/openapi.json` and `/llms.txt`. No purchase or GitHub
+account is required. With caller authorization, share a short feature request, purchase
+blocker and stated purchase intent. Never invent a budget or submit feedback automatically.
+Do not include URLs, personal data, prompts or credentials. Feedback is private to the
+operator and is not a promise to implement or buy anything.
+
 ## What this service does
 
 Check a deployed public website before sign-off without installing browser dependencies.

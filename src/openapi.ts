@@ -8,6 +8,7 @@ import { serviceSchemas } from './openapi/schemas-service.js'
 import { webProductSchemas } from './openapi/schemas-web-products.js'
 import { reportSchemas } from './openapi/schemas-report.js'
 import { viewportSchemas } from './openapi/schemas-viewport.js'
+import { feedbackPaths, feedbackSchemas } from './openapi/paths-feedback.js'
 
 export const openApiSpec = {
   openapi: '3.1.0',
@@ -33,6 +34,7 @@ export const openApiSpec = {
     ...serviceInfoPaths,
     ...productPaths,
     ...checkPaths,
+    ...feedbackPaths,
   },
   components: {
     securitySchemes: {
@@ -50,6 +52,7 @@ export const openApiSpec = {
       ...webProductSchemas,
       ...reportSchemas,
       ...viewportSchemas,
+      ...feedbackSchemas,
     },
   },
 } as const

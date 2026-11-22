@@ -110,6 +110,7 @@ export function createInfoRouter(store: JobStore, runner: WorkerRunner, cfg: Con
         security: { endpoint: 'POST /v1/security-gate', price: '$0.05 USDC' },
       },
       feedback: FEEDBACK_URL,
+      agentFeedback: '/v1/feedback',
     })
   })
 
