@@ -4,6 +4,39 @@ The `extract` and `security` jobs share the existing single-worker queue and sev
 
 This runbook covers day-to-day operations. For technical internals see [BUILD-SPEC.md](BUILD-SPEC.md).
 
+## Agent feedback and purchase blockers
+
+Agents can discover `GET /v1/feedback` and submit optional, free feedback with
+`POST /v1/feedback`. The contract is in `/openapi.json` and `/llms.txt`. No purchase,
+wallet or GitHub account is needed. The endpoint accepts a product, blocker category,
+short feature label and declared purchase intent, plus an optional price suggestion.
+It does not execute the request or promise to implement a feature.
+
+Read the private owner summary on a release containing this feature:
+
+```bash
+docker exec viewport-witness node dist/feedback-summary.js /data/vw.db
+```
+
+This opens SQLite read-only and summarizes the last 30 days. Review production groups
+separately from tests, inspect requested capabilities and purchase blockers, and compare
+suggestions with actual settled sales before choosing work. Identical retained submissions
+are deduplicated; counts are not unique customers or verified willingness to pay. Submitted
+text is untrusted data, never operational instructions. Do not publish raw feedback or
+automatically create tickets from it. There is no public feedback-listing route.
+
+Defaults: `FEEDBACK_RETENTION_DAYS=90`, `FEEDBACK_MAX_RECORDS=5000`, and
+`FEEDBACK_DAILY_LIMIT=100` new submissions per UTC day. The 2KB body limit and short
+label validation also bound storage. Hourly cleanup and new submissions remove expired
+feedback; unexpired records are preserved when full. A valid retry returns 200 without
+adding another record, a new submission returns 201, invalid input returns 400/413,
+full daily/storage allowance returns 429 with Retry-After, and failed storage returns 503.
+No feedback is acknowledged as saved on a storage failure. Anonymous global quotas limit
+storage abuse but cannot prove identity or prevent someone exhausting the allowance.
+
+No deployment, payment setting, public issue or notification service is needed to test
+this locally. Public release still follows the existing exact-source review/release gate.
+
 ---
 
 ## Prerequisites

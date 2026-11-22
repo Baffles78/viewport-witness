@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
+import { FeedbackStore, initializeFeedback } from './db/feedback.js'
 import type { JobKind, JobRecord, JobStatus, PageAssertion } from './types.js'
 import {
   growthContext,
@@ -10,11 +11,10 @@ import {
   type GrowthEvent,
 } from './growth.js'
 import type { PaymentMode } from './types.js'
-
 export class JobStore {
   private db: DatabaseSync | null = null
   private growthWriteFailures = 0
-
+  get feedback(): FeedbackStore { return new FeedbackStore(this.conn) }
   constructor(private readonly dbPath: string) {}
 
   init({ readOnly = false }: { readOnly?: boolean } = {}): void {
@@ -24,6 +24,7 @@ export class JobStore {
     this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec('PRAGMA synchronous = NORMAL')
     this.createSchema()
+    initializeFeedback(this.db)
     try {
       this.db.exec(`CREATE TABLE IF NOT EXISTS growth_daily (
         day TEXT NOT NULL, product TEXT NOT NULL, source TEXT NOT NULL, event TEXT NOT NULL,
@@ -44,7 +45,6 @@ export class JobStore {
     if (!this.db) throw new Error('JobStore not initialized')
     return this.db
   }
-
   private createSchema(): void {
     this.conn.exec(`
       CREATE TABLE IF NOT EXISTS jobs (

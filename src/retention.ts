@@ -23,6 +23,7 @@ export class RetentionManager {
   }
 
   async runCleanup(): Promise<{ deletedJobs: number; freedBytes: number }> {
+    this.store.feedback?.prune()
     let deletedJobs = 0
     let freedBytes = 0
 
