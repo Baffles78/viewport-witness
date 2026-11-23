@@ -71,13 +71,22 @@ await fs.writeFile(
   `
 import assert from 'node:assert/strict';
 import {promises as dns} from 'node:dns';
+import {Resolver} from 'node:dns/promises';
 dns.lookup=async()=>[{address:'93.184.216.34',family:4}];
+dns.resolve4=async()=>['93.184.216.34'];
+dns.resolve6=async()=>[];
+Resolver.prototype.resolve4=async function(){assert.deepEqual(this.getServers(),['1.1.1.1']); return ['93.184.216.34'];};
+Resolver.prototype.resolve6=async()=>[];
 globalThis.fetch=async(url,init)=>{
+ if(String(url)==='https://qa.honeygate.app/health') return Response.json({status:'ok'});
  assert.equal(String(url),'https://qa.honeygate.app/v1/checks');
  assert.equal(init.method,'POST');
  const headers=new Headers(init.headers);
+ if(process.env.VW_FIXTURE_DOCTOR) { assert.equal(headers.get('x-viewportwitness-source'),'test-client'); assert.equal(headers.has('x-viewportwitness-quickstart-run'),false); }
+ else {
  assert.equal(headers.get('x-viewportwitness-source'),'test-client');
  assert.ok(headers.get('x-viewportwitness-quickstart-run'));
+ }
  assert.equal(headers.has('payment-signature'),false);
  const quote={x402Version:2,resource:{url:String(url)},accepts:[{scheme:'exact',network:'eip155:8453',asset:'0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',amount:'80000',payTo:'0xe5fa9502bd9f32a0fc90f2c809296b4835c2c400'}]};
  return new Response(null,{status:402,headers:{'payment-required':Buffer.from(JSON.stringify(quote)).toString('base64')}});
@@ -98,6 +107,8 @@ const preview = run(
     'base',
     '--wallet',
     'cdp',
+    '--dns-servers',
+    '1.1.1.1',
   ],
   {
     ...process.env,
@@ -115,6 +126,49 @@ assert.equal(summary.quotedAtomic, '80000')
 assert.ok(preview.includes('Wallet code will not be loaded'))
 assert.ok(preview.includes('CDP_API_KEY_SECRET'))
 assert.equal(await fs.stat(path.join(output, 'checkpoint.json')).catch(() => null), null)
+const beforeDoctor = (await fs.readdir(dir)).sort()
+const doctorOutput = run(
+  [
+    path.join(installed, 'bin/viewport-witness.mjs'),
+    'doctor',
+    '--url',
+    'https://example.com',
+    '--json',
+    '--dns-servers',
+    '1.1.1.1',
+  ],
+  {
+    ...process.env,
+    NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
+    VW_FIXTURE_DOCTOR: '1',
+    VW_USAGE_SOURCE: 'test-client',
+    CDP_API_KEY_ID: 'SENTINEL_ID',
+    CDP_API_KEY_SECRET: 'SENTINEL_API',
+    CDP_WALLET_SECRET: 'SENTINEL_WALLET',
+    VW_PAYER_ADDRESS: '',
+  },
+)
+const doctor = JSON.parse(doctorOutput)
+assert.equal(doctor.readyForPreview, true)
+assert.equal(doctor.spendingApproved, false)
+assert.equal(doctor.signingTested, false)
+assert.equal(doctor.paymentTerms[0].amountAtomicUsdc, '80000')
+assert.doesNotMatch(doctorOutput, /SENTINEL/)
+assert.deepEqual((await fs.readdir(dir)).sort(), beforeDoctor)
+const setupHelp = run([path.join(installed, 'bin/viewport-witness.mjs'), 'setup', '--help'])
+assert.ok(setupHelp.includes('Default: public doctor') && setupHelp.includes('--resume'))
+const invalidDoctor = spawnSync(
+  process.execPath,
+  [path.join(installed, 'bin/viewport-witness.mjs'), 'doctor', '--json', '--SENTINEL'],
+  { encoding: 'utf8', cwd: dir },
+)
+assert.equal(invalidDoctor.status, 2)
+assert.equal(JSON.parse(invalidDoctor.stdout).stages[0].code, 'DOCTOR_OPTIONS_OR_CHECK_FAILED')
+assert.doesNotMatch(invalidDoctor.stdout + invalidDoctor.stderr, /SENTINEL/)
+assert.ok(
+  evidence.files.includes('scripts/windows-setup.ps1') &&
+    evidence.files.includes('scripts/setup-bridge.mjs'),
+)
 console.log(
   'PASS clean npm exec install, CLI help, connector dependency imports and unsigned synthetic preview; no checkout/build/browser/wallet/payment.',
 )

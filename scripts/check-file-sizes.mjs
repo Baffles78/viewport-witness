@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const HARD_LIMIT = 500
 export const TARGET = 300
-const CODE_FILE = /\.(ts|mts|cts|js|mjs|cjs|py|sh)$/
+const CODE_FILE = /\.(ts|mts|cts|js|mjs|cjs|py|sh|ps1)$/
 // Build output and generated evidence are never hand-edited, so they are not size-checked.
 const SKIP = [/^dist\//, /^node_modules\//, /^coverage\//, /^samples\//]
 
