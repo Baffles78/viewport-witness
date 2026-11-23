@@ -57,13 +57,13 @@ test('expiry precedes state, resolver and notifier access', () => {
 test('actual dry-run entry works outside checkout, without state access or subprocesses', () => {
   const entry = new URL('./pilot_reply_check.mjs', import.meta.url);
   const code = `import fs from 'node:fs'; import cp from 'node:child_process';
-    import {syncBuiltinESMExports} from 'node:module';
+    import {syncBuiltinESMExports} from 'node:module'; import {fileURLToPath} from 'node:url';
     for (const name of ['writeFileSync','renameSync','unlinkSync','existsSync'])
       fs[name] = () => {throw Error('STATE_ACCESS');};
     const open = fs.openSync;
     const codePath = ${JSON.stringify(fileURLToPath(entry))};
     fs.openSync = (file, flags, ...rest) => {
-      if (String(file) !== codePath || flags !== 'r') throw Error('STATE_ACCESS');
+      if ((file instanceof URL ? fileURLToPath(file) : String(file)) !== codePath || flags !== 'r') throw Error('STATE_ACCESS');
       return open(file, flags, ...rest);
     };
     // Linux's ESM loader resolves the code file through public realpathSync.
