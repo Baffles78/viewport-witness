@@ -1,6 +1,6 @@
 {
   "name": "viewport-witness-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Preview, approve and retrieve a hosted ViewportWitness browser QA report without installing a browser",
   "type": "module",
   "license": "UNLICENSED",

@@ -3,6 +3,7 @@ import type { ClientEvmSigner } from '@x402/evm'
 import { createCdpAuth, createCdpWalletAuth, type WalletCredentials } from './auth.js'
 import { serializeCdpJson } from './json.js'
 import { CDP_API_ORIGIN, requestCdpJson } from './request.js'
+import { lookupCdpAccount } from './account-lookup.js'
 
 export type CdpExistingAccount = ClientEvmSigner
 export interface CdpLookupClient {
@@ -14,6 +15,7 @@ export function createCdpLookupClient(
   credentials: WalletCredentials,
   options: { fetchFn?: typeof fetch; timeoutMs?: number } = {},
 ): CdpLookupClient {
+  credentials = { ...credentials }
   const { fetchFn, timeoutMs } = options
   const apiAuth = createCdpAuth(credentials)
   const walletAuth = createCdpWalletAuth(credentials.walletSecret)
@@ -32,12 +34,7 @@ export function createCdpLookupClient(
       getAccount: async ({ address }) => {
         if (!/^0x[a-fA-F0-9]{40}$/.test(address)) throw new Error('CDP account address is invalid.')
         const endpoint = new URL(`/platform/v2/evm/accounts/${address}`, CDP_API_ORIGIN)
-        const account = await call(endpoint, 'GET')
-        if (
-          typeof account.address !== 'string' ||
-          account.address.toLowerCase() !== address.toLowerCase()
-        )
-          throw new Error('CDP returned a different account; signing refused')
+        await lookupCdpAccount(credentials, address, options)
         return {
           address,
           signTypedData: async (parameters) => {

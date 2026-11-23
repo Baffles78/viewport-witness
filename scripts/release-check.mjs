@@ -20,6 +20,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 import { runReleaseCheck } from '../dist/release-check.js'
 import { loadBoundedJson } from './lib/bounded-json.mjs'
 import { guardResumeOutput } from './first-check-resume.mjs'
+import { parseDnsServers, clientTargetValidator } from '../dist/client/dns.js'
 
 function parseArgs(argv) {
   const args = {}
@@ -42,7 +43,7 @@ function parseArgs(argv) {
     const key = eqIdx >= 0 ? arg.slice(2, eqIdx) : arg.slice(2)
     if (
       !arg.startsWith('--') ||
-      !['manifest', 'state', 'output', 'adapter', 'wallet-module', 'service-url'].includes(key) ||
+      !['manifest', 'state', 'output', 'adapter', 'wallet-module', 'service-url', 'dns-servers'].includes(key) ||
       Object.hasOwn(args, key)
     )
       throw new Error('Unknown or repeated argument')
@@ -139,6 +140,7 @@ async function main() {
   }
 
   if (!args.manifest) usage('--manifest is required')
+  const servers = parseDnsServers(args['dns-servers'])
 
   const execute = args.execute === true || args.resumeOnly === true
   const testMode = args.testMode === true
@@ -295,6 +297,7 @@ async function main() {
       ...(args['service-url'] ? { serviceUrl: args['service-url'] } : {}),
       ...(checkpoint ? { checkpoint } : {}),
       ...(adapter ? { adapter } : {}),
+      ...(servers ? { validateTarget: clientTargetValidator(servers) } : {}),
     })
   } catch (err) {
     console.error(`Release check failed: ${err.message}`)

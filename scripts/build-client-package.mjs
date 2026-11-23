@@ -32,10 +32,23 @@ async function compiled(relative) {
     await compiled(dependency)
   }
 }
-for (const entry of ['release-check', 'x402-adapter', 'customer-cdp', 'customer-cdp-settings'])
+for (const entry of [
+  'release-check',
+  'x402-adapter',
+  'customer-cdp',
+  'customer-cdp-settings',
+  'client/doctor',
+  'client/options',
+  'client/setup-options',
+])
   await compiled(`dist/${entry}.js`)
 for (const input of [
   'bin/viewport-witness.mjs',
+  'scripts/doctor.mjs',
+  'scripts/setup.mjs',
+  'scripts/setup-bridge.mjs',
+  'scripts/lib/setup-checkpoint.mjs',
+  'scripts/windows-setup.ps1',
   'scripts/first-check.mjs',
   'scripts/first-check-resume.mjs',
   'scripts/release-check.mjs',

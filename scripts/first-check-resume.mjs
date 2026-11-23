@@ -52,10 +52,10 @@ export async function saveFirstCheckReference(output, manifestPath) {
 export async function prepareFirstCheckResume(args) {
   if (
     !args['--output'] ||
-    Object.keys(args).some((key) => !['resume', '--output', '--manifest'].includes(key))
+    Object.keys(args).some((key) => !['resume', '--output', '--manifest', '--dns-servers'].includes(key))
   )
     throw new Error(
-      'Resume requires --output and accepts only optional --manifest for a legacy run; no wallet, URL, budget or execution options',
+      'Resume requires --output and accepts optional --dns-servers or --manifest for a legacy run; no wallet, URL, budget or execution options',
     )
   const output = path.resolve(args['--output'])
   const folder = await fs.lstat(output)
@@ -121,6 +121,7 @@ export async function prepareFirstCheckResume(args) {
       '--output',
       path.join(output, 'resumed'),
       '--resume-only',
+      ...(args['--dns-servers'] ? ['--dns-servers', args['--dns-servers']] : []),
     ],
   }
 }

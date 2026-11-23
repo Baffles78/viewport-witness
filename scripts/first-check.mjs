@@ -21,7 +21,8 @@ Retrieve an accepted job without a wallet or new payment:
   viewport-witness --resume --output <same-output-directory>
 
 Options: --url, --run-id, --output, --budget (default 0.08 USDC), --network base|solana,
---recipient, --fee-payer (required for Solana), --wallet-module, --wallet cdp, --execute, --resume.
+--recipient, --fee-payer (required for Solana), --wallet-module, --wallet cdp, --execute, --resume,
+--dns-servers <IP,IP> (explicit client-only resolver; never an OS lookup fallback).
 Keep the same run ID, arguments and output directory to resume. Use a new ID only for a new deployment.
 Never paste a key or seed phrase. Connecting an MCP client alone does not provide a signer.`
 
@@ -47,6 +48,7 @@ export async function prepareFirstCheck(argv) {
         '--wallet-module',
         '--wallet',
         '--manifest',
+        '--dns-servers',
       ].includes(flag) ||
       Object.hasOwn(args, flag)
     )
@@ -147,6 +149,7 @@ export async function prepareFirstCheck(argv) {
     '--output',
     output,
   ]
+  if (args['--dns-servers']) clientArgs.push('--dns-servers', args['--dns-servers'])
   if (args.execute || checkpoint) clientArgs.push('--state', statePath)
   if (args.execute) {
     await saveFirstCheckReference(output, manifestPath)
