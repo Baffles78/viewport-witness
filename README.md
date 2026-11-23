@@ -7,9 +7,9 @@ evidence across three screen sizes without setting up a browser. Public HTTPS pa
 
 The sample is a static local-test demonstration.
 
-Client **0.3.1 is prepared, not yet published**, with clearer safe doctor diagnostics.
-The currently published [client 0.3.0](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0)
-and its pinned commands remain available in the [setup guide](docs/CLIENT-SETUP.md).
+Published [client 0.3.1](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.1)
+adds clearer safe doctor diagnostics. Copy its pinned command from the [setup guide](docs/CLIENT-SETUP.md).
+Report clarity is deployed; see the [release receipt](docs/CLARITY-RELEASE-20261122.md) for checks and limits.
 
 Released additions: [repair verification, annotated screenshots, local visual
 exclusions and resource evidence](docs/QA-EVIDENCE.md). Visual exclusions run locally.
