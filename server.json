@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Baffles78/viewport-witness",
   "title": "ViewportWitness by Apex Labs",
-  "description": "Agent website testing: browser QA, visual regression, Markdown extraction, and security checks.",
-  "version": "0.2.1",
+  "description": "Browser QA: screenshots, accessibility and layout findings; free diagnostics, explicit paid checks.",
+  "version": "0.2.2",
   "repository": {
     "url": "https://github.com/Baffles78/viewport-witness",
     "source": "github",
