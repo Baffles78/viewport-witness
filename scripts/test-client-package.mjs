@@ -82,7 +82,8 @@ globalThis.fetch=async(url,init)=>{
  assert.equal(String(url),'https://qa.honeygate.app/v1/checks');
  assert.equal(init.method,'POST');
  const headers=new Headers(init.headers);
- if(!process.env.VW_FIXTURE_DOCTOR) {
+ if(process.env.VW_FIXTURE_DOCTOR) { assert.equal(headers.get('x-viewportwitness-source'),'test-client'); assert.equal(headers.has('x-viewportwitness-quickstart-run'),false); }
+ else {
  assert.equal(headers.get('x-viewportwitness-source'),'test-client');
  assert.ok(headers.get('x-viewportwitness-quickstart-run'));
  }
@@ -140,6 +141,7 @@ const doctorOutput = run(
     ...process.env,
     NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
     VW_FIXTURE_DOCTOR: '1',
+    VW_USAGE_SOURCE: 'test-client',
     CDP_API_KEY_ID: 'SENTINEL_ID',
     CDP_API_KEY_SECRET: 'SENTINEL_API',
     CDP_WALLET_SECRET: 'SENTINEL_WALLET',

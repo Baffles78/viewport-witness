@@ -109,7 +109,16 @@ export async function runDoctor(
           allowedNetwork: 'eip155:8453',
           ...(options.recipient ? { allowedPayTo: options.recipient } : {}),
         },
-        { fetchFn: send, validateTarget: validate },
+        {
+          fetchFn: send,
+          validateTarget: validate,
+          usage: {
+            source:
+              env.VW_USAGE_SOURCE === 'monitor' || env.VW_USAGE_SOURCE === 'test-client'
+                ? env.VW_USAGE_SOURCE
+                : 'agent-client',
+          },
+        },
       )
       if ('paymentTerms' in preview) {
         const term = preview.paymentTerms[0]
