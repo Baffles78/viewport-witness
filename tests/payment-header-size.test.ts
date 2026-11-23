@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import express from 'express'
 import { feedbackDiscovery } from '../src/api/feedback-discovery.js'
 
-vi.mock('@coinbase/cdp-sdk/x402', () => ({
+vi.mock('../src/cdp/facilitator.js', () => ({
   createCdpFacilitatorClient: () => ({
     async getSupported() {
       return {

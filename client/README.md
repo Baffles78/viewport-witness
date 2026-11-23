@@ -1,6 +1,11 @@
 # ViewportWitness ready-to-run client
 
-Node.js 22+ and npm are required. No checkout, TypeScript build or local browser installation.
+This README includes the prepared, unpublished v0.2.0 dependency migration source requiring Node.js
+22.12.0 or newer and npm. The published `client-v0.1.0` asset below is unchanged and keeps
+its original Node.js 22+ guidance. Publishing the migration requires a fresh package version,
+tag and asset name; never overwrite the existing v0.1.0 release.
+
+The published client needs no checkout, TypeScript build or local browser installation.
 This package calls the hosted service; it does not run a server or browser worker.
 
 Preview one public HTTPS page without loading a wallet or paying:

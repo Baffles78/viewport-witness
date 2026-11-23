@@ -10,6 +10,11 @@ is not authenticated; this distribution needs no npm account or new credentials.
 the existing service and needs Node.js 22/npm, but no checkout, build or browser installation.
 Do not replace the service's existing latest release label or redeploy the application.
 
+**Later migration note (not part of the release above):**
+The dependency migration in this checkout is prepared and unpublished. Its client requires
+Node.js 22.12.0 or newer; it does not change the published `client-v0.1.0` tarball.
+Any future publication must use a fresh package version, tag and asset name, preserving v0.1.0.
+
 The package contains selected compiled client modules, the existing CLI scripts, CDP connector,
 one bin entrypoint and client README. It excludes source/server/worker, browser dependencies,
 private artifacts, sample outputs and credentials. A committed npm-generated shrinkwrap pins

@@ -42,7 +42,20 @@ assert.ok(help.includes('--resume') && help.includes('--execute'))
 const entries = await fs.readdir(path.join(cache, '_npx'))
 const installed = path.join(cache, '_npx', entries[0], 'node_modules', 'viewport-witness-client')
 const manifest = JSON.parse(await fs.readFile(path.join(installed, 'package.json'), 'utf8'))
-assert.equal(manifest.version, '0.1.0')
+const expectedVersion = JSON.parse(
+  await fs.readFile(path.join(root, 'client/package.json'), 'utf8'),
+).version
+assert.equal(manifest.version, expectedVersion)
+assert.equal(manifest.dependencies['@coinbase/cdp-sdk'], undefined)
+const installedInventory = JSON.parse(
+  await fs.readFile(path.join(path.dirname(installed), '.package-lock.json'), 'utf8'),
+).packages
+assert.ok(
+  !Object.keys(installedInventory).some((name) => name.includes('node_modules/@coinbase/cdp-sdk')),
+)
+const installedZod = Object.entries(installedInventory).filter(([name]) => name.endsWith('/zod'))
+assert.ok(installedZod.length > 0)
+for (const [, pkg] of installedZod) assert.equal(pkg.version, '4.6.7')
 assert.equal(manifest.scripts, undefined)
 assert.ok(
   !Object.keys(manifest.dependencies).some((name) => /playwright|express|axe-core/.test(name)),

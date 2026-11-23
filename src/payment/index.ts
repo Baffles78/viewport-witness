@@ -12,7 +12,7 @@
 
 import { createHash, createHmac } from 'node:crypto'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
+import { createCdpFacilitatorClient } from '../cdp/facilitator.js'
 import { paymentMiddleware } from '@x402/express'
 import { x402ResourceServer } from '@x402/core/server'
 import type { PaymentOption } from '@x402/core/http'

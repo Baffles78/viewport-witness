@@ -4,6 +4,10 @@ For one page, use the pinned [ready-to-run package](../client/README.md) with No
 and npm; no source checkout, TypeScript build or browser installation is required.
 The repository workflow below remains available for programmatic and multi-page callers.
 
+The dependency migration in this checkout is prepared and unpublished. Its client requires
+Node.js 22.12.0 or newer; it does not change the published `client-v0.1.0` tarball.
+Any future publication must use a fresh package version, tag and asset name, preserving v0.1.0.
+
 The release client uses the existing Base and Solana x402 rails. It checks one to five public HTTPS pages, persists a checkpoint before signing, polls the original jobs, and emits JSON plus Markdown. Existing customer wallet connectors supply signing capabilities; the service never receives a private key or seed phrase.
 
 Build once with `npm ci` and `npm run build`. Put the customer's existing connector in a local module that exports `signer`. Base signers expose `address` and `signTypedData`; Solana signers expose `address` and signing-only `signTransactions` (partial transaction signing, never sending). For Solana an optional HTTPS `rpcUrl` may be exported without embedded credentials or query secrets. No wallet creation or key import is required by this client.
