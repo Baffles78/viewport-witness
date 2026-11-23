@@ -62,7 +62,8 @@ export function parseClientOptions(argv: string[], setup = false): ClientOptions
     resume = values['--resume'] === true
   if (
     resume &&
-    (!output || Object.keys(values).some((key) => !['--resume', '--output', '--dns-servers'].includes(key)))
+    (!output ||
+      Object.keys(values).some((key) => !['--resume', '--output', '--dns-servers'].includes(key)))
   )
     throw new Error('RESUME_OPTIONS_INVALID')
   if (

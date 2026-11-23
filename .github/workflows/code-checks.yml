@@ -34,6 +34,7 @@ jobs:
       - run: npm test
       - run: node --test scripts/registry-publish-guard.test.mjs scripts/check-file-sizes.test.mjs
       - run: node --test scripts/bazaar-coverage.test.mjs
+      - run: node --test scripts/setup-checkpoint.test.mjs scripts/windows-setup.test.mjs
       - run: python3 operations/test_feedback_notify.py
       - run: python3 operations/test_error_watch.py
       - run: python3 operations/test_quickstart_summary.py

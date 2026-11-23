@@ -1,4 +1,24 @@
 import { parseClientOptions } from './options.js'
+import path from 'node:path'
+
+export function executionOutput(
+  options: { output?: string; runId?: string },
+  localAppData: string | undefined,
+  home: string,
+): string {
+  if (!options.runId) throw new Error('EXECUTION_POLICY_REQUIRED')
+  return path.resolve(
+    options.output ??
+      path.join(
+        localAppData && path.isAbsolute(localAppData)
+          ? localAppData
+          : path.join(home, 'AppData', 'Local'),
+        'ViewportWitness',
+        'runs',
+        options.runId,
+      ),
+  )
+}
 
 export function setupStageArgs(
   mode: 'public' | 'account' | 'execute' | 'resume',
@@ -7,7 +27,12 @@ export function setupStageArgs(
   const value = parseClientOptions(argv, true)
   if (mode === 'resume') {
     if (!value.resume || !value.output) throw new Error('RESUME_OPTIONS_INVALID')
-    return ['--resume', '--output', value.output, ...(value.dnsServers ? ['--dns-servers', value.dnsServers.join(',')] : [])]
+    return [
+      '--resume',
+      '--output',
+      value.output,
+      ...(value.dnsServers ? ['--dns-servers', value.dnsServers.join(',')] : []),
+    ]
   }
   if (value.resume || !value.url) throw new Error('TARGET_URL_REQUIRED')
   const result = ['--url', value.url, '--budget', value.budget]

@@ -35,9 +35,25 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       )
     return report.readyForPreview && accountReady ? 0 : 2
   } catch {
-    const failure = { schema: 'viewport-witness-doctor/v1', stages: [{ stage: 'options', status: 'fail', code: 'DOCTOR_OPTIONS_OR_CHECK_FAILED', fix: 'Use doctor --help. No payment or signing was attempted.' }], readyForPreview: false, spendingApproved: false, signingTested: false }
+    const failure = {
+      schema: 'viewport-witness-doctor/v1',
+      stages: [
+        {
+          stage: 'options',
+          status: 'fail',
+          code: 'DOCTOR_OPTIONS_OR_CHECK_FAILED',
+          fix: 'Use doctor --help. No payment or signing was attempted.',
+        },
+      ],
+      readyForPreview: false,
+      spendingApproved: false,
+      signingTested: false,
+    }
     if (argv.includes('--json')) console.log(JSON.stringify(failure))
-    else console.error('DOCTOR_OPTIONS_OR_CHECK_FAILED: use doctor --help. No payment or signing was attempted.')
+    else
+      console.error(
+        'DOCTOR_OPTIONS_OR_CHECK_FAILED: use doctor --help. No payment or signing was attempted.',
+      )
     return 2
   }
 }

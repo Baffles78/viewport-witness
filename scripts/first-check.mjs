@@ -13,6 +13,10 @@ const networks = { base: 'eip155:8453', solana: 'solana:5eykt4UsFv8P8NJdTREpY1vz
 const help = `Preview one deployed page without paying:
   viewport-witness --url https://example.com --run-id deploy-123
 
+Read-only diagnostics: viewport-witness doctor --url https://example.com --json
+Secure Windows entry point: viewport-witness setup --url https://example.com
+Use doctor --help or setup --help for the prepared 0.3.0 onboarding commands.
+
 After approving a payment, repeat with:
   --execute --wallet-module <existing-connector.mjs> --network base --recipient <approved-address>
 Or select the supplied existing-account connector with --wallet cdp instead of --wallet-module.

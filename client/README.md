@@ -1,5 +1,9 @@
 # ViewportWitness ready-to-run client
 
+Prepared client 0.3.0 adds read-only `doctor` and secure Windows `setup`. It is not
+published; the current public archive below remains 0.2.0. See the [setup guide](../docs/CLIENT-SETUP.md)
+in the source repository for this candidate's commands and limits. Never overwrite an older asset.
+
 Published client 0.2.0 requires Node.js 22.12.0 or newer and npm. This pilot release removes
 the Coinbase SDK and affected Zod 3 dependency. The older client-v0.1.0 archive is preserved
 unchanged. Each new publication requires a fresh version, tag and asset; never overwrite a release.

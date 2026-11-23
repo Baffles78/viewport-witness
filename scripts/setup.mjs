@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseClientOptions } from '../dist/client/options.js'
-import { safeSetupEnvironment } from '../dist/client/setup-options.js'
+import { safeSetupEnvironment, executionOutput } from '../dist/client/setup-options.js'
 import os from 'node:os'
 import { guardSetupCheckpoint } from './lib/setup-checkpoint.mjs'
 
@@ -26,16 +26,7 @@ export async function main(argv = process.argv.slice(2)) {
     const options = parseClientOptions(argv, true)
     if (!options.resume && !options.url) throw new Error('target_required')
     if (options.execute) {
-      const local = process.env.LOCALAPPDATA
-      const output = path.resolve(
-        options.output ??
-          path.join(
-            local && path.isAbsolute(local) ? local : path.join(os.homedir(), 'AppData', 'Local'),
-            'ViewportWitness',
-            'runs',
-            options.runId,
-          ),
-      )
+      const output = executionOutput(options, process.env.LOCALAPPDATA, os.homedir())
       if (!options.output) argv = [...argv, '--output', output]
       await guardSetupCheckpoint(output)
       console.log(`Execution output directory: ${output}`)
