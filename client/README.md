@@ -1,14 +1,13 @@
 # ViewportWitness ready-to-run client
 
-This package is the **prepared, unpublished 0.3.1 release candidate**, requiring Node.js
-22.12.0 or newer. It adds specific safe doctor input diagnostics. Publication must use
-the fresh `client-v0.3.1` tag and `viewport-witness-client-0.3.1.tgz` asset.
-The commands below still point to the currently published 0.3.0 archive until publication.
+Published client **0.3.1** adds specific safe doctor input diagnostics and requires Node.js
+22.12.0 or newer. Its fresh tag is `client-v0.3.1` and asset is
+`viewport-witness-client-0.3.1.tgz`; earlier assets remain unchanged.
 
-Published [client 0.3.0](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0) adds read-only `doctor` and secure Windows `setup`.
+Published [client 0.3.1](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.1) adds read-only `doctor` and secure Windows `setup`.
 See the [setup guide](../docs/CLIENT-SETUP.md) for commands and limits. Earlier assets remain unchanged.
 
-Published client 0.3.0 requires Node.js 22.12.0 or newer and npm. The 0.2.0 update removed
+Published client 0.3.1 requires Node.js 22.12.0 or newer and npm. The 0.2.0 update removed
 the Coinbase SDK and affected Zod 3 dependency. The older client-v0.1.0 archive is preserved
 unchanged. Each new publication requires a fresh version, tag and asset; never overwrite a release.
 
@@ -18,7 +17,7 @@ This package calls the hosted service; it does not run a server or browser worke
 Preview one public HTTPS page without loading a wallet or paying:
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.0/viewport-witness-client-0.3.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
 The versioned GitHub release tarball is the distribution. It is not an npm registry listing.
@@ -40,7 +39,7 @@ report and unpaid recovery. See [funded proof and limits](https://github.com/Baf
 Retrieve an already accepted job without a wallet or a permitted new payment:
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.0/viewport-witness-client-0.3.0.tgz -- viewport-witness --resume --output out/my-deployment-001
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness --resume --output out/my-deployment-001
 ```
 
 Keep the output/checkpoint for recovery. Uncertain payment attempts require reconciliation;

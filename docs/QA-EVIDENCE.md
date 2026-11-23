@@ -1,6 +1,10 @@
 # Repair and visual evidence
 
-## Prepared report clarity (not deployed)
+## Deployed report clarity
+
+Deployed runtime source: `3cfd37915f2771bf3a77e927cab58c3cc2fd33b1`.
+Image SHA256: `01ed3379663d5728b92708f2fd497dabfb762e03da63e84c970fb13cfb1a2314`.
+See the [clarity release receipt](CLARITY-RELEASE-20261122.md) for verification limits.
 
 The current source adds optional `summary.accessibilityCoverage` alongside existing
 fields. Earlier reports remain valid without it. `summary.totalViolations` retains
@@ -20,7 +24,8 @@ warning-free or complete accessibility certification. Moderate/minor findings no
 review actions, and inconclusive checks have explicit manual-review guidance. Existing
 status enums, severity thresholds and warning/blocking counters are unchanged. High-priority
 blocking actions remain ahead of warning actions when the twelve-action limit applies.
-These source changes have not replaced the deployed report format or published client archive.
+These additive changes are deployed. Client 0.3.1 is published as a fresh archive;
+earlier client assets remain unchanged.
 
 ## Deployed evidence features
 

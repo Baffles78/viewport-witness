@@ -1,21 +1,20 @@
 # Client doctor and secure Windows setup
 
-These commands are published in [client **0.3.0**](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0).
+These commands are published in [client **0.3.1**](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.1).
 Earlier archives remain unchanged. You need Node.js 22.12.0 or newer and npm.
 Start with this copyable pinned command; no checkout, build, manual installation or credentials
 are needed:
 
 ```powershell
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.0/viewport-witness-client-0.3.0.tgz -- viewport-witness doctor --url https://example.com
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness doctor --url https://example.com
 ```
 
 The remaining `viewport-witness` examples assume the client is already installed. For a
 one-off command, use the same pinned `npx ... -- viewport-witness` prefix instead.
-Client **0.3.1 is prepared for release, not yet published**. It includes the improved
-unsafe-input diagnostics; this candidate is not a replacement of the published 0.3.0
-archive above, which remains unchanged.
-After publication, use the fresh `client-v0.3.1` tag and `viewport-witness-client-0.3.1.tgz`
-asset. Source development requires Node.js 22.13.0 or newer,
+Published client **0.3.1** includes clearer diagnostics for unsafe URL input.
+Earlier archives remain unchanged; this is not a replacement of those assets.
+See the [release receipt](CLARITY-RELEASE-20261122.md) for checks and limits.
+Source development requires Node.js 22.13.0 or newer,
 `npm ci` and `npm run build`; then use `node bin/viewport-witness.mjs` as the command prefix.
 
 ## Start without credentials

@@ -158,7 +158,7 @@ describe('specific unsafe target diagnosis and onboarding guide', () => {
     const guide = readFileSync(new URL('../docs/CLIENT-SETUP.md', import.meta.url), 'utf8')
     const firstCommand = guide.match(/```powershell\s+([^`]+)```/)?.[1]?.trim()
     expect(firstCommand).toBe(
-      'npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.0/viewport-witness-client-0.3.0.tgz -- viewport-witness doctor --url https://example.com',
+      'npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness doctor --url https://example.com',
     )
     expect(guide.indexOf(firstCommand!)).toBeLessThan(guide.indexOf('npm ci'))
     expect(guide).toContain('no checkout, build, manual installation or credentials')
