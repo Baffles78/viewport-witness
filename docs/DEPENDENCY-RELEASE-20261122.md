@@ -40,8 +40,9 @@ binds the exact endpoint and canonical body; customer REST calls have streamed b
   execution, CLI help and live unsigned preview passed on Windows Node 22.12.0 and Linux Node 22.23.3.
   Recovery of an existing accepted report passed on Windows without another payment.
 
-No funded payment was signed or settled during this release. Funded customer CDP acceptance remains
-unverified. The build's development dependency audit reported six moderate advisories; the production
+No funded payment was signed or settled during the deployment itself. A later explicitly approved
+[CDP Base funded proof](CDP-FUNDED-PROOF-20261122.md) completed one $0.08 purchase, report and unpaid
+recovery using this exact published client. The build's development dependency audit reported six moderate advisories; the production
 audits were zero. This release closes the affected dependency path, not every possible resource risk.
 
 ## Recovery and retained state
