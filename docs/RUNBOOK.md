@@ -382,11 +382,18 @@ Activating them requires:
 2. Create a Coinbase CDP API key at the Coinbase Developer Platform dashboard.
    - Restrict it to the ViewportWitness project and the VPS public IP.
    - Leave Trade, Transfer, Receive, private-key Export, and policy Manage disabled.
-   - Prefer Ed25519 unless the pinned SDK explicitly requires the legacy ECDSA format.
+   - Prefer Ed25519; the prepared local authentication helper also accepts legacy ES256 PKCS8 PEM.
    - Download the one-time key file and store it securely; it is not recoverable.
-3. The official CDP SDK uses Coinbase's hosted facilitator at
+3. The prepared SDK-removal source uses Coinbase's hosted facilitator at
    `https://api.cdp.coinbase.com/platform/v2/x402` and binds authentication to each
-   operation path. Do not hand-build or reuse a static bearer token.
+   operation path using its local authentication helper and the official x402 transport.
+   The already published service/client remain unchanged until their separate release gates.
+   Do not hand-build or reuse a static bearer token.
+   The prepared v0.2.0 customer client uses fixed-origin CDP REST account lookup and
+   typed-data signing only, with 64 KiB request/response limits and a 10-second network
+   deadline including response consumption. Signing JSON is limited to 20 levels and
+   4,096 values. It never creates accounts or submits transactions. A signing timeout
+   is uncertain: reconcile the existing checkpoint before any further signing attempt.
 4. Create/edit `.env` (never `docker-compose.yml`):
    ```
    PAYMENT_MODE=production
@@ -397,7 +404,7 @@ Activating them requires:
    CDP_API_KEY_SECRET=YOUR_BASE64_ED25519_PRIVATE_KEY
    CUSTOMER_HASH_SECRET=AT_LEAST_32_RANDOM_CHARACTERS
    ```
-   The pinned CDP SDK also accepts the legacy PEM ECDSA format. Never commit either
+   The local helper also accepts the legacy ES256 PKCS8 PEM format. Never commit either
    credential format or the customer hash secret to git or print them in logs. Generate the
    customer hash secret independently from the CDP key and wallet material. Keep it stable so the
    same payer receives the same anonymous label; rotating it intentionally starts a new series.

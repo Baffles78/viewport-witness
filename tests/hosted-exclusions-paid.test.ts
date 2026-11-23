@@ -12,7 +12,7 @@ import { makeConfig } from './helpers/mcp-server.js'
 
 const facilitator = vi.hoisted(() => ({ verify: 0, settle: 0, failSettlement: false }))
 vi.mock('../src/ssrf.js', () => ({ validatePublicHttpsUrl: async () => ({ valid: true }) }))
-vi.mock('@coinbase/cdp-sdk/x402', () => ({
+vi.mock('../src/cdp/facilitator.js', () => ({
   createCdpFacilitatorClient: () => ({
     async getSupported() { return { kinds: [{ x402Version: 2, scheme: 'exact', network: 'eip155:8453' }], extensions: [], signers: {} } },
     async verify() { facilitator.verify++; return { isValid: true } },

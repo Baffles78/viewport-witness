@@ -32,7 +32,7 @@ vi.mock('../src/ssrf.js', () => ({
   validatePublicHttpsUrl: vi.fn(async () => ({ valid: true })),
 }))
 
-vi.mock('@coinbase/cdp-sdk/x402', () => ({
+vi.mock('../src/cdp/facilitator.js', () => ({
   createCdpFacilitatorClient: () => ({
     async getSupported() {
       return {

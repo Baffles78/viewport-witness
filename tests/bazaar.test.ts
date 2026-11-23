@@ -11,7 +11,7 @@
 import { vi, afterEach, describe, it, expect } from 'vitest'
 
 // Mock the CDP facilitator client — only instantiated, never called for 402 challenges.
-vi.mock('@coinbase/cdp-sdk/x402', () => ({
+vi.mock('../src/cdp/facilitator.js', () => ({
   createCdpFacilitatorClient: vi.fn(() => ({
     getSupported: vi.fn(async () => ({
       kinds: [

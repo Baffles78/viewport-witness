@@ -31,7 +31,6 @@
   },
   "dependencies": {
     "@axe-core/playwright": "^4.10.1",
-    "@coinbase/cdp-sdk": "1.56.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@solana/kit": "8.6.0",
     "@x402/core": "2.32.0",
@@ -42,11 +41,13 @@
     "@x402/svm": "2.32.0",
     "cheerio": "1.1.2",
     "express": "^4.21.2",
+    "jose": "6.2.18",
     "pixelmatch": "^7.1.0",
     "playwright": "1.63.0",
     "pngjs": "^7.0.0",
     "turndown": "7.2.1",
     "uuid": "^11.0.3",
+    "viem": "2.56.8",
     "zod": "4.6.7"
   },
   "devDependencies": {

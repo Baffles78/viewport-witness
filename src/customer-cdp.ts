@@ -1,18 +1,18 @@
-import { CdpClient } from '@coinbase/cdp-sdk'
-import { fromCdpEvmAccount, type CdpEvmAccount } from '@coinbase/cdp-sdk/x402'
-import type { Address } from 'viem'
-import type { ClientEvmSigner } from '@x402/evm'
+import { toClientEvmSigner, type ClientEvmSigner } from '@x402/evm'
+import {
+  createCdpLookupClient,
+  type CdpLookupClient,
+  type CdpExistingAccount,
+} from './cdp/existing-account.js'
 import { missingCdpCustomerSettings } from './customer-cdp-settings.js'
 
 type CustomerEnvironment = Record<string, string | undefined>
-type LookupClient = { evm: { getAccount(options: { address: Address }): Promise<CdpEvmAccount> } }
 type Credentials = { apiKeyId: string; apiKeySecret: string; walletSecret: string }
 
 /** Customer-side helper. Resolves an existing account; never provisions, funds or submits a transaction. */
 export async function connectExistingCdpBaseAccount(
   env: CustomerEnvironment = process.env,
-  createClient: (credentials: Credentials) => LookupClient = (credentials) =>
-    new CdpClient(credentials),
+  createClient: (credentials: Credentials) => CdpLookupClient = createCdpLookupClient,
 ): Promise<ClientEvmSigner> {
   if (missingCdpCustomerSettings(env).length > 0)
     throw new Error(
@@ -26,9 +26,9 @@ export async function connectExistingCdpBaseAccount(
     apiKeySecret: env.CDP_API_KEY_SECRET!,
     walletSecret: env.CDP_WALLET_SECRET!,
   })
-  let account: CdpEvmAccount
+  let account: CdpExistingAccount
   try {
-    account = await client.evm.getAccount({ address: address as Address })
+    account = await client.evm.getAccount({ address: address as `0x${string}` })
   } catch {
     throw new Error(
       'Could not access that existing CDP account. Check its address, credentials and account permissions; no new wallet was created.',
@@ -36,5 +36,5 @@ export async function connectExistingCdpBaseAccount(
   }
   if (account.address.toLowerCase() !== address.toLowerCase())
     throw new Error('CDP returned a different account; signing refused')
-  return fromCdpEvmAccount(account)
+  return toClientEvmSigner(account)
 }

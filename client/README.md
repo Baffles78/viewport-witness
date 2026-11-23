@@ -1,6 +1,6 @@
 # ViewportWitness ready-to-run client
 
-This README includes prepared, unpublished dependency migration source requiring Node.js
+This README includes the prepared, unpublished v0.2.0 dependency migration source requiring Node.js
 22.12.0 or newer and npm. The published `client-v0.1.0` asset below is unchanged and keeps
 its original Node.js 22+ guidance. Publishing the migration requires a fresh package version,
 tag and asset name; never overwrite the existing v0.1.0 release.

@@ -4,7 +4,7 @@ import { Router as createRouter } from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { createPaymentWrapper, MCP_PAYMENT_META_KEY, type MCPToolContext } from '@x402/mcp'
-import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402'
+import { createCdpFacilitatorClient } from './cdp/facilitator.js'
 import { x402ResourceServer } from '@x402/core/server'
 import type { Network, PaymentRequirements } from '@x402/core/types'
 import {
