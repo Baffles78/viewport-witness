@@ -21,6 +21,11 @@ The coordinator checked the production SQLite settlement record, live report, Ba
 successful transaction receipt, token contract, sender, recipient, amount and remaining balance.
 Detailed payer, transaction and job identifiers are retained privately, not published here.
 
+A nonimplementing reviewer independently confirmed the settlement and exact transfer, production
+report, unchanged reviewed source/image and healthy service. The reviewer downloaded all three
+screenshots and matched their hashes and required dimensions. Local unpaid recovery is evidenced
+by the owner's successful launcher output, rather than an independent read of that computer's files.
+
 ## DNS interruption and reconciliation
 
 The first attempt stopped during target validation, before the durable payment checkpoint or

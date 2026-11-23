@@ -27,7 +27,7 @@ CDP_API_KEY_SECRET, CDP_WALLET_SECRET and VW_PAYER_ADDRESS locally. Never paste 
 into commands, this service, feedback or reports. Account creation/funding is not provided.
 An existing custom connector can use `--wallet-module /absolute/path/to/connector.mjs`.
 The CDP connector completed a controlled $0.08 native-USDC purchase on Base, a three-viewport
-report and unpaid recovery. See [funded proof and limits](../docs/CDP-FUNDED-PROOF-20261122.md).
+report and unpaid recovery. See [funded proof and limits](https://github.com/Baffles78/viewport-witness/blob/main/docs/CDP-FUNDED-PROOF-20261122.md).
 
 Retrieve an already accepted job without a wallet or a permitted new payment:
 
