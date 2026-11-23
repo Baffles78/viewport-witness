@@ -1,7 +1,7 @@
 # Client doctor and secure Windows setup
 
-These commands are prepared for client **0.3.0**, not published. The current published
-client-v0.2.0 archive is unchanged and does not include them. Client runtime: Node.js
+These commands are published in [client **0.3.0**](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0).
+Earlier archives remain unchanged. Client runtime: Node.js
 22.12.0 or newer. Building this source checkout requires Node.js 22.13.0 or newer.
 After `npm ci` and `npm run build`, use `node bin/viewport-witness.mjs` in place of
 `viewport-witness` in the examples below. No credentials are needed to build or preview.
