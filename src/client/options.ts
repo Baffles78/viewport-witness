@@ -1,5 +1,5 @@
 import { parseDnsServers } from './dns.js'
-import { validateUrl } from '../ssrf.js'
+import { assertClientTarget } from './option-errors.js'
 import { usdcAtomic } from '../release-budget.js'
 
 export interface ClientOptions {
@@ -49,8 +49,8 @@ export function parseClientOptions(argv: string[], setup = false): ClientOptions
   const budget = text('--budget') ?? '0.08',
     runId = text('--run-id'),
     output = text('--output')
+  if (url) assertClientTarget(url)
   if (
-    (url && !validateUrl(url).valid) ||
     (network && network !== 'base') ||
     (recipient && !/^0x[a-fA-F0-9]{40}$/.test(recipient)) ||
     (payer && !/^0x[a-fA-F0-9]{40}$/.test(payer))

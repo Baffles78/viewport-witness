@@ -1,5 +1,29 @@
 # Repair and visual evidence
 
+## Prepared report clarity (not deployed)
+
+The current source adds optional `summary.accessibilityCoverage` alongside existing
+fields. Earlier reports remain valid without it. `summary.totalViolations` retains
+its existing meaning: violation-rule occurrences summed across viewports, not distinct
+rules or affected elements. Three distinct rules repeated in all three viewports
+produce **nine occurrences**, even if each rule affects several elements.
+
+The additive fields are `distinctViolationRules`, `violationRuleOccurrences`,
+`incompleteRuleOccurrences`, `scanCompletedViewports`, `expectedViewports`,
+`scanUnavailableViewports` and `viewportsWithIncompleteChecks`. A completed scan can
+still contain inconclusive rule checks requiring manual review. Missing scans are
+unassessed; they do not establish zero violations. Incomplete checks are not confirmed
+violations, and their count does not identify unique rules or affected nodes.
+
+PASS and `safe_to_ship` preserve the existing blocking-check policy; they do not mean
+warning-free or complete accessibility certification. Moderate/minor findings now have
+review actions, and inconclusive checks have explicit manual-review guidance. Existing
+status enums, severity thresholds and warning/blocking counters are unchanged. High-priority
+blocking actions remain ahead of warning actions when the twelve-action limit applies.
+These source changes have not replaced the deployed report format or published client archive.
+
+## Deployed evidence features
+
 Hosted browser evidence, including visual exclusions, is deployed with the reviewed dependency update
 from source `44cad78aa9e8e26910beba7655fcc0dfd329c078` as of 2026-11-22.
 HTTP remains primary. Prices, payment authorization and three viewports are unchanged.

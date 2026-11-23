@@ -1,4 +1,5 @@
 import { VIEWPORT_NAMES, type QAReport, type Viewport, type ViewportResult } from './types.js'
+import { summarizeAccessibility } from './worker/accessibility-summary.js'
 
 const MAX_FINDINGS = 12
 const MAX_LOCATORS = 5
@@ -130,7 +131,9 @@ export function buildDiagnosis(
   }
 
   if (evidence.comparison && !evidence.comparison.evidenceComplete) {
-    const missingViewports = VIEWPORT_NAMES.filter((viewport) => !evidence.comparison?.visual[viewport])
+    const missingViewports = VIEWPORT_NAMES.filter(
+      (viewport) => !evidence.comparison?.visual[viewport],
+    )
     addFinding(findings, {
       code: 'incomplete-comparison-evidence',
       severity: 'high',
@@ -164,12 +167,21 @@ export function buildDiagnosis(
     return rank[a.severity] - rank[b.severity] || a.code.localeCompare(b.code)
   })
 
+  const coverage = summarizeAccessibility(viewports)
   const overview =
     findings.length === 0
       ? status === 'PASS'
-        ? 'No actionable problems were found in the collected evidence.'
+        ? coverage.incompleteRuleOccurrences > 0
+          ? 'No confirmed violations were found in the collected evidence.'
+          : 'No actionable problems were found in the collected evidence.'
         : 'The check did not collect enough evidence for a specific diagnosis. Retry it before shipping.'
-      : `${findings.length} actionable problem ${findings.length === 1 ? 'type was' : 'types were'} found. Start with the high-severity fixes and rerun the same check.`
+      : `${findings.length} actionable problem ${findings.length === 1 ? 'type was' : 'types were'} found. ${findings.some((finding) => finding.severity === 'high') ? 'Start with the high-severity fixes' : 'Review the warning guidance'} and rerun the same check.`
 
-  return { overview, findings: findings.slice(0, MAX_FINDINGS) }
+  return {
+    overview:
+      coverage.incompleteRuleOccurrences > 0
+        ? `${overview} ${coverage.incompleteRuleOccurrences} accessibility rule checks were inconclusive and need manual review; these are not confirmed violations.`
+        : overview,
+    findings: findings.slice(0, MAX_FINDINGS),
+  }
 }
