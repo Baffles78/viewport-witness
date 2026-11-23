@@ -31,7 +31,7 @@ describe('machine verdict', () => {
       decision: 'safe_to_ship',
       blockingIssues: 0,
       warnings: 0,
-      reasons: ['All required checks passed across all three viewports.'],
+      reasons: ['Accessibility scan coverage: 2 of 3 viewport scans completed. Missing scans are unassessed, not a zero-violation result.'],
       recommendedActions: [],
     })
   })
@@ -56,6 +56,7 @@ describe('machine verdict', () => {
       'accessibility',
       'browser_errors',
       'layout',
+      'accessibility_warnings',
     ])
     expect(verdict.recommendedActions.every((a) => a.viewport === 'phonePortrait')).toBe(true)
   })

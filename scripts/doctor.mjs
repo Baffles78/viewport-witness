@@ -1,5 +1,6 @@
 import { parseClientOptions } from '../dist/client/options.js'
 import { runDoctor } from '../dist/client/doctor.js'
+import { ClientTargetError } from '../dist/client/option-errors.js'
 
 export const doctorHelp = `Read-only preflight; no files, wallet authentication, signing or payment:
   viewport-witness doctor --url https://example.com [--json]
@@ -34,15 +35,18 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         report.stages.some((stage) => stage.stage === name && stage.status === 'pass'),
       )
     return report.readyForPreview && accountReady ? 0 : 2
-  } catch {
+  } catch (error) {
     const failure = {
       schema: 'viewport-witness-doctor/v1',
       stages: [
         {
           stage: 'options',
           status: 'fail',
-          code: 'DOCTOR_OPTIONS_OR_CHECK_FAILED',
-          fix: 'Use doctor --help. No payment or signing was attempted.',
+          code: error instanceof ClientTargetError ? error.code : 'DOCTOR_OPTIONS_OR_CHECK_FAILED',
+          fix:
+            error instanceof ClientTargetError
+              ? error.fix
+              : 'Use doctor --help. No payment or signing was attempted.',
         },
       ],
       readyForPreview: false,
@@ -50,10 +54,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       signingTested: false,
     }
     if (argv.includes('--json')) console.log(JSON.stringify(failure))
-    else
-      console.error(
-        'DOCTOR_OPTIONS_OR_CHECK_FAILED: use doctor --help. No payment or signing was attempted.',
-      )
+    else console.error(`${failure.stages[0].code}: ${failure.stages[0].fix}`)
     return 2
   }
 }

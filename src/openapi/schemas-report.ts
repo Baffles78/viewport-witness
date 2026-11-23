@@ -27,8 +27,52 @@ export const reportSchemas = {
       summary: {
         type: 'object',
         properties: {
-          totalViolations: { type: 'integer' },
-          criticalViolations: { type: 'integer' },
+          totalViolations: {
+            type: 'integer',
+            description:
+              'Legacy sum of violation rule entries across viewports; not distinct rule IDs or affected-node count.',
+          },
+          criticalViolations: {
+            type: 'integer',
+            description:
+              'Serious/critical rule occurrences summed across viewports; repeated rules count separately.',
+          },
+          accessibilityCoverage: {
+            type: 'object',
+            description:
+              'Optional additive counts. A completed scan may still contain inconclusive rule checks needing manual review. Incomplete checks are not confirmed violations and do not independently change PASS/FAIL policy.',
+            properties: {
+              distinctViolationRules: {
+                type: 'integer',
+                minimum: 0,
+                description: 'Distinct rule IDs among collected violation entries.',
+              },
+              violationRuleOccurrences: {
+                type: 'integer',
+                minimum: 0,
+                description:
+                  'Per-viewport rule entries; three rules repeated in three viewports produce nine occurrences.',
+              },
+              incompleteRuleOccurrences: {
+                type: 'integer',
+                minimum: 0,
+                description:
+                  'Known inconclusive rule checks summed across viewports; not affected nodes or confirmed violations.',
+              },
+              scanCompletedViewports: { type: 'integer', minimum: 0, maximum: 3 },
+              expectedViewports: { type: 'integer', const: 3 },
+              scanUnavailableViewports: {
+                type: 'array',
+                maxItems: 3,
+                items: { type: 'string', enum: ['phonePortrait', 'phoneLandscape', 'desktop'] },
+              },
+              viewportsWithIncompleteChecks: {
+                type: 'array',
+                maxItems: 3,
+                items: { type: 'string', enum: ['phonePortrait', 'phoneLandscape', 'desktop'] },
+              },
+            },
+          },
           totalErrors: { type: 'integer' },
           overallLoadStatus: { type: 'string' },
         },

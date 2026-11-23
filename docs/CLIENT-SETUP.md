@@ -1,10 +1,19 @@
 # Client doctor and secure Windows setup
 
 These commands are published in [client **0.3.0**](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0).
-Earlier archives remain unchanged. Client runtime: Node.js
-22.12.0 or newer. Building this source checkout requires Node.js 22.13.0 or newer.
-After `npm ci` and `npm run build`, use `node bin/viewport-witness.mjs` in place of
-`viewport-witness` in the examples below. No credentials are needed to build or preview.
+Earlier archives remain unchanged. You need Node.js 22.12.0 or newer and npm.
+Start with this copyable pinned command; no checkout, build, manual installation or credentials
+are needed:
+
+```powershell
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.0/viewport-witness-client-0.3.0.tgz -- viewport-witness doctor --url https://example.com
+```
+
+The remaining `viewport-witness` examples assume the client is already installed. For a
+one-off command, use the same pinned `npx ... -- viewport-witness` prefix instead.
+The improved unsafe-input diagnostics in the current source are not a replacement of
+the published 0.3.0 archive. Source development requires Node.js 22.13.0 or newer,
+`npm ci` and `npm run build`; then use `node bin/viewport-witness.mjs` as the command prefix.
 
 ## Start without credentials
 

@@ -12,6 +12,7 @@ import type {
 import { VIEWPORT_NAMES } from '../types.js'
 import { runViewportCheck } from './browser.js'
 import { buildVerdict, computeReportStatus } from './verdict.js'
+import { summarizeAccessibility } from './accessibility-summary.js'
 import { buildComparison } from './comparison.js'
 import { summarizeAssertions } from './assertions.js'
 import type { ArchiveManager } from '../archive.js'
@@ -378,6 +379,7 @@ export class WorkerRunner {
       limitations,
       viewports: publicViewportResults,
       summary: {
+        accessibilityCoverage: summarizeAccessibility(publicViewportResults),
         totalViolations,
         criticalViolations,
         totalErrors,

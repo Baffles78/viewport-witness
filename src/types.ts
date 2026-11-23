@@ -169,6 +169,16 @@ export interface MachineVerdict {
   }>
 }
 
+export interface AccessibilityCoverage {
+  distinctViolationRules: number
+  violationRuleOccurrences: number
+  incompleteRuleOccurrences: number
+  scanCompletedViewports: number
+  expectedViewports: number
+  scanUnavailableViewports: Viewport[]
+  viewportsWithIncompleteChecks: Viewport[]
+}
+
 export interface VisualComparisonResult {
   viewport: Viewport
   changedPixels: number
@@ -196,6 +206,7 @@ export interface QAReport {
   contentHash: string
   viewports: Partial<Record<Viewport, ViewportResult>>
   summary: {
+    accessibilityCoverage?: AccessibilityCoverage
     totalViolations: number
     criticalViolations: number
     totalErrors: number

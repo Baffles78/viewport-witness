@@ -42,5 +42,6 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build
+      - run: node --test scripts/doctor-errors.test.mjs
       - run: node --test scripts/compare-local.test.mjs
       - run: npm run test:client-package

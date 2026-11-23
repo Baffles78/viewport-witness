@@ -101,7 +101,11 @@ export const viewportSchemas = {
             items: { $ref: '#/components/schemas/AccessibilityViolation' },
           },
           passes: { type: 'integer' },
-          incomplete: { type: 'integer' },
+          incomplete: {
+            type: 'integer',
+            description:
+              'Rule checks axe could not conclude in this viewport; manual review is needed. Not a confirmed violation count or node count.',
+          },
           impact: { type: 'object', additionalProperties: { type: 'integer' } },
         },
       },

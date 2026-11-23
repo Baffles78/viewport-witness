@@ -1,5 +1,6 @@
 import type { MachineVerdict, QAReport, Viewport, ViewportResult } from '../types.js'
 import { VIEWPORT_NAMES } from '../types.js'
+import { summarizeAccessibility } from './accessibility-summary.js'
 
 // Decides PASS / FAIL / INCONCLUSIVE from the per-viewport results.
 export function computeReportStatus(
@@ -45,11 +46,10 @@ export function buildVerdict(
 ): MachineVerdict {
   const actions: MachineVerdict['recommendedActions'] = []
   const reasons: string[] = []
+  const coverage = summarizeAccessibility(viewports)
   let blockingIssues = 0
   let warnings = 0
-  for (const [viewport, result] of Object.entries(viewports) as Array<
-    [Viewport, ViewportResult]
-  >) {
+  for (const [viewport, result] of Object.entries(viewports) as Array<[Viewport, ViewportResult]>) {
     if (result.loadStatus !== 'success' || result.pageCrash) {
       blockingIssues++
       reasons.push(`${viewport}: page did not load cleanly.`)
@@ -65,7 +65,7 @@ export function buildVerdict(
     ).length
     if (severe > 0) {
       blockingIssues += severe
-      reasons.push(`${viewport}: ${severe} serious accessibility issue(s).`)
+      reasons.push(`${viewport}: ${severe} serious or critical accessibility rule finding(s).`)
       actions.push({
         code: 'accessibility',
         priority: 'high',
@@ -97,6 +97,15 @@ export function buildVerdict(
       (violation) => violation.impact === 'moderate' || violation.impact === 'minor',
     ).length
     warnings += moderate
+    if (moderate > 0) {
+      actions.push({
+        code: 'accessibility_warnings',
+        priority: 'medium',
+        viewport,
+        detail:
+          'Review moderate and minor accessibility findings. These warnings do not independently fail the current blocking-check policy.',
+      })
+    }
   }
   if (status === 'INCONCLUSIVE') {
     warnings++
@@ -107,7 +116,37 @@ export function buildVerdict(
       detail: 'Retry the check before shipping.',
     })
   }
-  if (reasons.length === 0) reasons.push('All required checks passed across all three viewports.')
+  if (coverage.violationRuleOccurrences > 0) {
+    reasons.push(
+      `Accessibility: ${coverage.distinctViolationRules} distinct violation rule(s), ${coverage.violationRuleOccurrences} rule occurrences across viewports. A rule repeated in three viewports counts as three occurrences, not three distinct rules or affected elements.`,
+    )
+  }
+  if (warnings > 0 && status === 'PASS')
+    reasons.unshift(
+      'Blocking checks passed, but accessibility warnings remain. Review the recommended actions; PASS does not mean warning-free.',
+    )
+  if (coverage.incompleteRuleOccurrences > 0) {
+    reasons.push(
+      `Accessibility manual review: ${coverage.incompleteRuleOccurrences} inconclusive rule checks across ${coverage.viewportsWithIncompleteChecks.length} viewport(s). These are not confirmed violations and do not independently change PASS/FAIL.`,
+    )
+    actions.push({
+      code: 'accessibility_manual_review',
+      priority: 'medium',
+      detail:
+        'Manually inspect accessibility checks marked incomplete in the affected viewports. A completed automated scan does not mean every rule was conclusively assessed.',
+    })
+  }
+  if (coverage.incompleteRuleOccurrences > 0 || coverage.scanUnavailableViewports.length > 0)
+    reasons.push(
+      `Accessibility scan coverage: ${coverage.scanCompletedViewports} of ${coverage.expectedViewports} viewport scans completed. Missing scans are unassessed, not a zero-violation result.`,
+    )
+  if (reasons.length === 0)
+    reasons.push(
+      'Blocking checks passed in the collected evidence; no confirmed accessibility warnings or incomplete rule checks were reported.',
+    )
+  // Warnings must not displace high-priority blockers when the output cap is reached.
+  const priority = { high: 0, medium: 1, low: 2 }
+  actions.sort((a, b) => priority[a.priority] - priority[b.priority])
   return {
     decision: status === 'PASS' ? 'safe_to_ship' : status === 'FAIL' ? 'failed' : 'review',
     blockingIssues,
