@@ -11,8 +11,11 @@ npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/downl
 
 The remaining `viewport-witness` examples assume the client is already installed. For a
 one-off command, use the same pinned `npx ... -- viewport-witness` prefix instead.
-The improved unsafe-input diagnostics in the current source are not a replacement of
-the published 0.3.0 archive. Source development requires Node.js 22.13.0 or newer,
+Client **0.3.1 is prepared for release, not yet published**. It includes the improved
+unsafe-input diagnostics; this candidate is not a replacement of the published 0.3.0
+archive above, which remains unchanged.
+After publication, use the fresh `client-v0.3.1` tag and `viewport-witness-client-0.3.1.tgz`
+asset. Source development requires Node.js 22.13.0 or newer,
 `npm ci` and `npm run build`; then use `node bin/viewport-witness.mjs` as the command prefix.
 
 ## Start without credentials

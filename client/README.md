@@ -1,5 +1,10 @@
 # ViewportWitness ready-to-run client
 
+This package is the **prepared, unpublished 0.3.1 release candidate**, requiring Node.js
+22.12.0 or newer. It adds specific safe doctor input diagnostics. Publication must use
+the fresh `client-v0.3.1` tag and `viewport-witness-client-0.3.1.tgz` asset.
+The commands below still point to the currently published 0.3.0 archive until publication.
+
 Published [client 0.3.0](https://github.com/Baffles78/viewport-witness/releases/tag/client-v0.3.0) adds read-only `doctor` and secure Windows `setup`.
 See the [setup guide](../docs/CLIENT-SETUP.md) for commands and limits. Earlier assets remain unchanged.
 
