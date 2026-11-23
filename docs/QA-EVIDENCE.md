@@ -1,9 +1,10 @@
 # Repair and visual evidence
 
-Hosted browser evidence, including visual exclusions, is deployed from reviewed
-source `c0ebd88c51d702f122fd9fd4eadf6bd48f5f5ae6` as of 2026-11-22.
+Hosted browser evidence, including visual exclusions, is deployed with the reviewed dependency update
+from source `44cad78aa9e8e26910beba7655fcc0dfd329c078` as of 2026-11-22.
 HTTP remains primary. Prices, payment authorization and three viewports are unchanged.
-See [hosted exclusion release evidence](HOSTED-EXCLUSIONS-RELEASE.md) and the
+See [current dependency release evidence](DEPENDENCY-RELEASE-20261122.md),
+[hosted exclusion release evidence](HOSTED-EXCLUSIONS-RELEASE.md) and the
 [earlier evidence release](QA-EVIDENCE-RELEASE.md) for verification and its limits.
 
 ## Check whether a repair worked

@@ -20,16 +20,15 @@ in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator test
 `VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
 Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
 
-Prerequisites for the published client: Node.js 22 or later and npm. Run the pinned client directly; no checkout,
+Prerequisites for the published client 0.2.0: Node.js 22.12.0 or newer and npm. Run the pinned client directly; no checkout,
 TypeScript build or browser installation is needed. This tarball is a GitHub release asset,
 not an npm registry listing. Runtime dependencies are pinned by its included shrinkwrap.
 
-The dependency migration in this checkout is prepared and unpublished. Its client requires
-Node.js 22.12.0 or newer; it does not change the published `client-v0.1.0` tarball.
-Any future publication must use a fresh package version, tag and asset name, preserving v0.1.0.
+The dependency update is deployed and client 0.2.0 is published. The older client-v0.1.0
+archive is preserved unchanged; never overwrite either published version.
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
 For one page, no handwritten configuration is needed. The existing repository command
@@ -57,7 +56,7 @@ seed phrases into commands or this service.
 Only after granting spending authority for that run:
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
 ```
 
 Replace `APPROVED_RECIPIENT` with the independently approved address, and keep the same run ID,
@@ -66,7 +65,7 @@ target, budget and directory. Do not rerun with changed policy to bypass an unce
 ## Retrieve an accepted job again without a wallet
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.1.0/viewport-witness-client-0.1.0.tgz -- viewport-witness --resume --output out/my-deployment-001
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --resume --output out/my-deployment-001
 ```
 
 This uses the saved `first-check.json` reference and original checkpoint. It can poll or
