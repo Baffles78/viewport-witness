@@ -58,8 +58,19 @@ test('actual dry-run entry works outside checkout, without state access or subpr
   const entry = new URL('./pilot_reply_check.mjs', import.meta.url);
   const code = `import fs from 'node:fs'; import cp from 'node:child_process';
     import {syncBuiltinESMExports} from 'node:module';
-    for (const name of ['openSync','writeFileSync','renameSync','unlinkSync','existsSync','realpathSync'])
+    for (const name of ['openSync','writeFileSync','renameSync','unlinkSync','existsSync'])
       fs[name] = () => {throw Error('STATE_ACCESS');};
+    // Linux's ESM loader resolves the code file through public realpathSync.
+    // Allow loading code, while rejecting any read/resolve of canonical private state.
+    const privateRoot = ${JSON.stringify(PRIVATE.toLowerCase())};
+    for (const name of ['realpathSync', 'readFileSync']) {
+      const original = fs[name];
+      fs[name] = (...args) => {
+        const target = String(args[0]).replaceAll('\\\\', '/').toLowerCase();
+        if (target.includes(privateRoot)) throw Error('STATE_ACCESS');
+        return original(...args);
+      };
+    }
     cp.spawnSync = () => {throw Error('SUBPROCESS_CALLED');}; syncBuiltinESMExports();
     process.argv = [process.execPath, ${JSON.stringify(fileURLToPath(entry))}, '--dry-run'];
     await import(${JSON.stringify(entry.href)});`;
