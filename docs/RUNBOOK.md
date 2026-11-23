@@ -382,14 +382,14 @@ Activating them requires:
 2. Create a Coinbase CDP API key at the Coinbase Developer Platform dashboard.
    - Restrict it to the ViewportWitness project and the VPS public IP.
    - Leave Trade, Transfer, Receive, private-key Export, and policy Manage disabled.
-   - Prefer Ed25519; the prepared local authentication helper also accepts legacy ES256 PKCS8 PEM.
+   - Prefer Ed25519; the local authentication helper also accepts legacy ES256 PKCS8 PEM.
    - Download the one-time key file and store it securely; it is not recoverable.
-3. The prepared SDK-removal source uses Coinbase's hosted facilitator at
+3. The deployed SDK-removal source uses Coinbase's hosted facilitator at
    `https://api.cdp.coinbase.com/platform/v2/x402` and binds authentication to each
    operation path using its local authentication helper and the official x402 transport.
-   The already published service/client remain unchanged until their separate release gates.
+   Source and client 0.2.0 release receipts are in [dependency release evidence](DEPENDENCY-RELEASE-20261122.md).
    Do not hand-build or reuse a static bearer token.
-   The prepared v0.2.0 customer client uses fixed-origin CDP REST account lookup and
+   The published v0.2.0 customer client uses fixed-origin CDP REST account lookup and
    typed-data signing only, with 64 KiB request/response limits and a 10-second network
    deadline including response consumption. Signing JSON is limited to 20 levels and
    4,096 values. It never creates accounts or submits transactions. A signing timeout
