@@ -4,6 +4,24 @@ ViewportWitness visits public HTTPS pages and returns screenshots, accessibility
 layout and browser-error evidence across three screen sizes. A standard check costs $0.08 USDC
 per page. It cannot inspect authenticated pages or private staging networks.
 
+## Start with the free doctor
+
+Install Node.js 22.12.0 or newer and npm, then copy this published client command:
+
+```sh
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness doctor --url https://example.com
+```
+
+No checkout, manual install, build, browser or credentials are needed. `npx` downloads
+the pinned package into its cache. Doctor checks public-target access and the unpaid
+quote; it does not create a report, sign or authorize payment. Readiness means preflight
+only. Account lookup and signing remain separate stages.
+
+On Windows, replace `doctor` with `setup` in the same pinned command for masked,
+stage-by-stage setup. Its default is doctor plus an unpaid preview. Account lookup is
+optional; wallet-secret entry and payment require explicit execute approval. See the
+[setup guide](CLIENT-SETUP.md) for DNS help, required approval flags and recovery.
+
 ## See the evidence first
 
 Open the [free static sample](https://qa.honeygate.app/samples/example/).
@@ -20,15 +38,14 @@ in funnel analytics. Set `VW_DISABLE_USAGE_TRACKING=1` to omit it. Operator test
 `VW_USAGE_SOURCE=test-client` before preview and execution (`monitor` for monitor probes).
 Neither label grants payment permission. See the [privacy policy](https://qa.honeygate.app/privacy).
 
-Prerequisites for the published client 0.2.0: Node.js 22.12.0 or newer and npm. Run the pinned client directly; no checkout,
+Prerequisites for the published client 0.3.1: Node.js 22.12.0 or newer and npm. Run the pinned client directly; no checkout,
 TypeScript build or browser installation is needed. This tarball is a GitHub release asset,
 not an npm registry listing. Runtime dependencies are pinned by its included shrinkwrap.
 
-The dependency update is deployed and client 0.2.0 is published. The older client-v0.1.0
-archive is preserved unchanged; never overwrite either published version.
+Client 0.3.1 is published. All earlier archives remain unchanged; never overwrite a published version.
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp
 ```
 
 For one page, no handwritten configuration is needed. The existing repository command
@@ -56,7 +73,7 @@ seed phrases into commands or this service.
 Only after granting spending authority for that run:
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness --url https://example.com --run-id my-deployment-001 --output out/my-deployment-001 --network base --wallet cdp --recipient APPROVED_RECIPIENT --execute
 ```
 
 Replace `APPROVED_RECIPIENT` with the independently approved address, and keep the same run ID,
@@ -65,7 +82,7 @@ target, budget and directory. Do not rerun with changed policy to bypass an unce
 ## Retrieve an accepted job again without a wallet
 
 ```sh
-npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.2.0/viewport-witness-client-0.2.0.tgz -- viewport-witness --resume --output out/my-deployment-001
+npx --yes --package=https://github.com/Baffles78/viewport-witness/releases/download/client-v0.3.1/viewport-witness-client-0.3.1.tgz -- viewport-witness --resume --output out/my-deployment-001
 ```
 
 This uses the saved `first-check.json` reference and original checkpoint. It can poll or
