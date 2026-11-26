@@ -1,13 +1,54 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateReport, notices, desktopPending, main, EXPIRES, PRIVATE, ROOT} from './pilot_reply_check.mjs';
+import {validateReport, validateCollection, notices, desktopPending, main, EXPIRES, PRIVATE, ROOT} from './pilot_reply_check.mjs';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const contacts = Array.from({length: 5}, (_, i) => ({code: `B0${i+1}`, recipient: `builder${i+1}`, channel: 'test', thread_url: 'https://example.com'}));
 const report = () => ({builders: contacts.map(c => ({code: c.code, status: 'ok', incoming_ids: []}))});
 const state = () => ({seen: [], health: {}, pending: []});
+
+test('desktop collection requires fresh evidence and rejects replay before committing', () => {
+  const now = Date.parse('2026-11-26T12:00:00Z');
+  const bundle = {collected_at: new Date(now - 1000).toISOString(), ...report()};
+  assert.equal(validateCollection(bundle, contacts, null, now), bundle);
+  for (const time of [now + 1, now - 600001, NaN]) {
+    assert.throws(() => validateCollection({...bundle, collected_at: String(time)}, contacts, null, now));
+  }
+  assert.throws(() => validateCollection(bundle, contacts, bundle.collected_at, now), /STALE_COLLECTION/);
+  assert.throws(() => validateCollection({...bundle, builders: []}, contacts, null, now), /INVALID_REPORT/);
+});
+
+test('app collection commits with shared deduplication, acknowledged outbox and lock', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vw-app-replies-'));
+  const now = Date.parse('2026-11-26T12:00:00Z');
+  const write = (file, data) => fs.writeFileSync(path.join(root, file), JSON.stringify(data));
+  const read = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+  const initial = state(); initial.health.B02 = 'unavailable';
+  const bundle = {...report(), collected_at: new Date(now - 1000).toISOString()};
+  bundle.builders[1].incoming_ids = ['incoming-id'];
+  write('OUTREACH-STATE.json', {contacts}); write('REPLY-WATCH-STATE.json', initial);
+  write('reply-app-result.json', bundle);
+  const sent = [];
+  const options = {stateRoot: root, applyCollection: true, now: () => now,
+    resolveCodexExecutable: () => {throw Error('MODEL_CALLED');}};
+  try {
+    assert.throws(() => main({...options, send: () => {throw Error('NO_ACK');}}), /NO_ACK/);
+    assert.equal(read('REPLY-WATCH-STATE.json').seen.length, 0);
+    assert.equal(read('REPLY-WATCH-STATE.json').pending.length, 2);
+    bundle.collected_at = new Date(now).toISOString(); write('reply-app-result.json', bundle);
+    main({...options, send: text => sent.push(text)});
+    assert.equal(sent.length, 2);
+    assert.deepEqual(read('REPLY-WATCH-STATE.json').seen, ['B02:incoming-id']);
+    assert.equal(read('REPLY-WATCH-STATE.json').pending.length, 0);
+    assert.equal(read('REPLY-WATCH-STATE.json').health.B02, 'ok');
+    assert.throws(() => main({...options, send: () => {throw Error('SHOULD_NOT_SEND');}}), /STALE_COLLECTION/);
+    assert.equal(fs.existsSync(path.join(root, 'reply-check.lock')), false);
+  } finally { fs.rmSync(root, {recursive: true}); }
+});
 test('quiet unchanged checks and reply deduplication', () => {
   const r = report(), s = state();
   assert.deepEqual(notices(validateReport(r, contacts), s, contacts), []);
